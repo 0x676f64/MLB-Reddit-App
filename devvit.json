@@ -1,0 +1,54 @@
+{
+  "name": "mlb-scores",
+  "permissions": {
+  "http": {
+    "enable": true,
+    "domains": [
+      "statsapi.mlb.com",
+      "img.mlbstatic.com",
+      "midfield.mlbstatic.com",
+      "prod-gameday.mlbstatic.com",
+      "content.mlb.com",
+      "fonts.googleapis.com",
+      "fonts.gstatic.com"
+    ]
+  }
+},
+  "post": {
+    "dir": "public",
+    "entrypoints": {
+      "default": {
+        "inline": true,
+        "entry": "splash.html"
+      },
+      "game": {
+        "entry": "game.html"
+      }
+    }
+  },
+  "server": {
+    "dir": "dist/server",
+    "entry": "index.js"
+  },
+  "menu": {
+    "items": [
+      {
+        "label": "Create a new post",
+        "description": "mlb-scores",
+        "location": "subreddit",
+        "forUserType": "moderator",
+        "endpoint": "/internal/menu/post-create"
+      }
+    ]
+  },
+  "triggers": {
+    "onAppInstall": "/internal/on-app-install"
+  },
+  "scripts": {
+    "dev": "node --experimental-strip-types ./tools/build.ts --watch",
+    "build": "node --experimental-strip-types ./tools/build.ts --minify"
+  },
+  "dev": {
+    "subreddit": "mlb_scores_dev"
+  }
+}
