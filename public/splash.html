@@ -6,24 +6,27 @@
     <meta name="viewport" content="initial-scale=1.0, maximum-scale=1.0, width=device-width" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Rubik:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Oswald:wght@500;600;700&family=Rubik:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
     <title>MLB Scoreboard</title>
   </head>
   <body class="scorebug">
     <div class="loading-state" id="loading-state">Loading game…</div>
 
     <div class="scorebug-content" id="scorebug-content" style="display:none;">
+
+      <!-- Header / meta strip -->
       <div class="scorebug-top">
         <header class="meta-strip">
           <span class="venue" id="venue-info">—</span>
           <span class="network" id="network-info"></span>
         </header>
 
+        <!-- Score row: away team | status block | home team -->
         <div class="score-row">
           <div class="team team-away">
             <img class="team-logo" id="away-logo" alt="" />
             <div class="team-info">
-              <div class="team-name" id="away-name">—</div>
+              <div class="team-name" id="away-name"></div>
               <div class="team-record" id="away-record">—</div>
             </div>
           </div>
@@ -42,40 +45,19 @@
           </div>
 
           <div class="team team-home">
-            <div class="team-info team-info-right">
-              <div class="team-name" id="home-name">—</div>
+            <img class="team-logo" id="home-logo" alt="" />
+            <div class="team-info">
+              <div class="team-name" id="home-name"></div>
               <div class="team-record" id="home-record">—</div>
             </div>
-            <img class="team-logo" id="home-logo" alt="" />
           </div>
         </div>
       </div>
 
+      <!-- Linescore -->
       <div class="linescore" id="linescore-container"></div>
 
-      <nav class="tabs">
-        <button class="tab tab-active" data-tab="dynamic">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4 L20 4 L20 13 L12 21 L4 13 Z"/></svg>
-          <span id="dynamic-tab-label">LIVE</span>
-        </button>
-        <button class="tab" data-tab="box">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
-          <span>BOX</span>
-        </button>
-        <button class="tab" data-tab="scoring">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M 12 7 L 16 12 L 12 17 Z" fill="currentColor"/></svg>
-          <span>SCORING</span>
-        </button>
-        <button class="tab" data-tab="plays">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="6" r="1.5" fill="currentColor"/><line x1="10" y1="6" x2="21" y2="6"/><circle cx="5" cy="12" r="1.5" fill="currentColor"/><line x1="10" y1="12" x2="21" y2="12"/><circle cx="5" cy="18" r="1.5" fill="currentColor"/><line x1="10" y1="18" x2="21" y2="18"/></svg>
-          <span>PLAYS</span>
-        </button>
-        <button class="tab" data-tab="winprob">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18 L9 12 L13 16 L21 6"/><polyline points="15 6 21 6 21 12"/></svg>
-          <span>WIN %</span>
-        </button>
-      </nav>
-
+      <!-- Tab content panes (dynamic state-aware) -->
       <div class="tab-content tab-content-active" id="tab-dynamic">
         <div id="pregame-content" class="state-pane">
           <div class="pregame-pitchers">
@@ -104,6 +86,7 @@
           <!-- Phase 2c will fill this -->
         </div>
       </div>
+
       <div class="tab-content" id="tab-box">
         <div class="placeholder">Box score — coming in Phase 2c</div>
       </div>
@@ -116,6 +99,31 @@
       <div class="tab-content" id="tab-winprob">
         <div class="placeholder">Win probability — coming in Phase 2e</div>
       </div>
+
+      <!-- Tab buttons — pinned at the bottom of the card -->
+      <nav class="tab-bar" id="tab-bar">
+        <button class="tab tab-active" data-tab="dynamic">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4 L20 4 L20 13 L12 21 L4 13 Z"/></svg>
+          <span id="dynamic-tab-label">LIVE</span>
+        </button>
+        <button class="tab" data-tab="box">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+          <span>BOX</span>
+        </button>
+        <button class="tab" data-tab="scoring">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M 12 7 L 16 12 L 12 17 Z" fill="currentColor"/></svg>
+          <span>SCORING</span>
+        </button>
+        <button class="tab" data-tab="plays">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="6" r="1.5" fill="currentColor"/><line x1="10" y1="6" x2="21" y2="6"/><circle cx="5" cy="12" r="1.5" fill="currentColor"/><line x1="10" y1="12" x2="21" y2="12"/><circle cx="5" cy="18" r="1.5" fill="currentColor"/><line x1="10" y1="18" x2="21" y2="18"/></svg>
+          <span>PLAYS</span>
+        </button>
+        <button class="tab" data-tab="winprob">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18 L9 12 L13 16 L21 6"/><polyline points="15 6 21 6 21 12"/></svg>
+          <span>WIN %</span>
+        </button>
+      </nav>
+
     </div>
 
     <script type="module" src="splash.js" defer></script>

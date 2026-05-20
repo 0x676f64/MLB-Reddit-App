@@ -13,11 +13,46 @@ var PRE_GAME_STATES = ["Pre-Game", "Scheduled", "Warmup"];
 var isFinalState = (s) => FINAL_STATES.includes(s);
 var isPreGameState = (s) => PRE_GAME_STATES.includes(s);
 var isLiveState = (s) => !isFinalState(s) && !isPreGameState(s) && !["Postponed", "Suspended", "Suspended: Rain", "Cancelled", "Cancelled: Rain", "Delayed"].includes(s);
+var MLB_TEAM_IDS = /* @__PURE__ */ new Set([
+  108,
+  109,
+  110,
+  111,
+  112,
+  113,
+  114,
+  115,
+  116,
+  117,
+  118,
+  119,
+  120,
+  121,
+  133,
+  134,
+  135,
+  136,
+  137,
+  138,
+  139,
+  140,
+  141,
+  142,
+  143,
+  144,
+  145,
+  146,
+  147,
+  158
+]);
 var gamePk = null;
 var pollInterval = null;
 var $ = (id) => document.getElementById(id);
+function getLogoPath(teamId) {
+  return MLB_TEAM_IDS.has(teamId) ? `/teams/dark/${teamId}.svg` : `/teams/${teamId}.svg`;
+}
 function loadLogo(imgEl, teamId) {
-  imgEl.src = `/teams/${teamId}.svg`;
+  imgEl.src = getLogoPath(teamId);
 }
 function formatGameTime(gameDate) {
   const d = new Date(gameDate);
@@ -61,8 +96,8 @@ function renderPregameContent(data, awayTeam, homeTeam) {
   const homePid = probables.home?.id;
   const awayLabel = $("pregame-away-pitcher-label");
   const homeLabel = $("pregame-home-pitcher-label");
-  if (awayLabel) awayLabel.textContent = `${(awayTeam.teamName || awayTeam.name).toUpperCase()} STARTER`;
-  if (homeLabel) homeLabel.textContent = `${(homeTeam.teamName || homeTeam.name).toUpperCase()} STARTER`;
+  if (awayLabel) awayLabel.textContent = `${getTeamShortName(awayTeam).toUpperCase()} STARTER`;
+  if (homeLabel) homeLabel.textContent = `${getTeamShortName(homeTeam).toUpperCase()} STARTER`;
   $("pregame-away-pitcher-name").textContent = probables.away?.fullName || "TBD";
   $("pregame-home-pitcher-name").textContent = probables.home?.fullName || "TBD";
   $("pregame-away-pitcher-stats").textContent = getPitcherSeasonStats(teamsBox.away, awayPid);
@@ -128,10 +163,10 @@ function render(data) {
   $("home-logo").alt = homeTeam.name;
   loadLogo($("away-logo"), awayTeam.id);
   loadLogo($("home-logo"), homeTeam.id);
-  const awayRec = awayTeam.record;
-  const homeRec = homeTeam.record;
   $("away-name").textContent = getTeamShortName(awayTeam);
   $("home-name").textContent = getTeamShortName(homeTeam);
+  const awayRec = awayTeam.record;
+  const homeRec = homeTeam.record;
   $("away-record").textContent = awayRec ? `${awayRec.wins}-${awayRec.losses}` : "";
   $("home-record").textContent = homeRec ? `${homeRec.wins}-${homeRec.losses}` : "";
   $("away-score").textContent = String(linescore?.teams?.away?.runs ?? 0);
@@ -191,22 +226,26 @@ function render(data) {
     countBlock.style.display = "none";
     $("dynamic-tab-label").textContent = statusText.toUpperCase();
   }
-  renderLinescore(linescore, awayTeam, homeTeam);
+  renderLinescore(linescore, awayTeam, homeTeam, isFinalState(statusText));
 }
-function renderLinescore(linescore, awayTeam, homeTeam) {
+function renderLinescore(linescore, awayTeam, homeTeam, isFinal) {
   if (!linescore) return;
   const innings = linescore.innings || [];
   const currentInning = linescore.currentInning;
   const maxInnings = Math.max(9, innings.length);
+  const awayRuns = linescore.teams?.away?.runs ?? 0;
+  const homeRuns = linescore.teams?.home?.runs ?? 0;
+  const awayIsLoser = isFinal && homeRuns > awayRuns;
+  const homeIsLoser = isFinal && awayRuns > homeRuns;
   let headerCells = '<th class="ls-team-col"></th>';
   for (let i = 1; i <= maxInnings; i++) {
     headerCells += `<th class="ls-inning-h${i === currentInning ? " ls-current" : ""}">${i}</th>`;
   }
-  headerCells += '<th class="ls-total ls-r-header">R</th><th class="ls-total ls-he-header">H</th><th class="ls-total ls-he-header">E</th>';
+  headerCells += '<th class="ls-total ls-r-header">R</th><th class="ls-total ls-h-header">H</th><th class="ls-total ls-e-header">E</th>';
   const buildRow = (teamKey, team) => {
     const abbr = team.abbreviation || team.teamName?.slice(0, 3).toUpperCase() || "\u2014";
     let cells = `<td class="ls-team-col">
-      <img class="ls-team-logo" src="/teams/${team.id}.svg" alt="${abbr}">
+      <img class="ls-team-logo" src="${getLogoPath(team.id)}" alt="${abbr}">
       <span class="ls-team-abbr">${abbr}</span>
     </td>`;
     for (let i = 1; i <= maxInnings; i++) {
@@ -221,17 +260,22 @@ function renderLinescore(linescore, awayTeam, homeTeam) {
       cells += `<td class="${cls}">${runs == null ? "\u2013" : runs}</td>`;
     }
     const t = linescore.teams[teamKey];
-    cells += `<td class="ls-total ls-r-value">${t?.runs ?? 0}</td>`;
-    cells += `<td class="ls-total ls-he-value">${t?.hits ?? 0}</td>`;
-    cells += `<td class="ls-total ls-he-value">${t?.errors ?? 0}</td>`;
+    const r = t?.runs ?? 0;
+    const h = t?.hits ?? 0;
+    const e = t?.errors ?? 0;
+    cells += `<td class="ls-total ls-r-value ${r === 0 ? "ls-zero" : "ls-nonzero"}">${r}</td>`;
+    cells += `<td class="ls-total ls-h-value ${h === 0 ? "ls-zero" : "ls-nonzero"}">${h}</td>`;
+    cells += `<td class="ls-total ls-e-value">${e}</td>`;
     return cells;
   };
+  const awayRowClass = awayIsLoser ? "ls-row-loser" : "";
+  const homeRowClass = homeIsLoser ? "ls-row-loser" : "";
   $("linescore-container").innerHTML = `
     <table class="linescore-compact">
       <thead><tr>${headerCells}</tr></thead>
       <tbody>
-        <tr class="ls-row-away">${buildRow("away", awayTeam)}</tr>
-        <tr class="ls-row-home">${buildRow("home", homeTeam)}</tr>
+        <tr class="ls-row-away ${awayRowClass}">${buildRow("away", awayTeam)}</tr>
+        <tr class="ls-row-home ${homeRowClass}">${buildRow("home", homeTeam)}</tr>
       </tbody>
     </table>`;
 }
