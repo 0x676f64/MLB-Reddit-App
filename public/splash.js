@@ -26,6 +26,17 @@ function formatGameTime(gameDate) {
   const ampm = h >= 12 ? "PM" : "AM";
   return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${ampm}`;
 }
+function getTeamShortName(team) {
+  if (!team) return "";
+  if (team.teamName) return team.teamName;
+  if (team.clubName) return team.clubName;
+  const name = team.name || "";
+  if (name.includes("Red Sox")) return "Red Sox";
+  if (name.includes("White Sox")) return "White Sox";
+  if (name.includes("Blue Jays")) return "Blue Jays";
+  const parts = name.split(" ");
+  return parts[parts.length - 1] || team.abbreviation || "";
+}
 function getPitcherSeasonStats(teamBox, pitcherId) {
   if (!teamBox || !pitcherId) return "\u2014";
   const player = teamBox.players?.[`ID${pitcherId}`];
@@ -119,6 +130,8 @@ function render(data) {
   loadLogo($("home-logo"), homeTeam.id);
   const awayRec = awayTeam.record;
   const homeRec = homeTeam.record;
+  $("away-name").textContent = getTeamShortName(awayTeam);
+  $("home-name").textContent = getTeamShortName(homeTeam);
   $("away-record").textContent = awayRec ? `${awayRec.wins}-${awayRec.losses}` : "";
   $("home-record").textContent = homeRec ? `${homeRec.wins}-${homeRec.losses}` : "";
   $("away-score").textContent = String(linescore?.teams?.away?.runs ?? 0);
@@ -187,35 +200,38 @@ function renderLinescore(linescore, awayTeam, homeTeam) {
   const maxInnings = Math.max(9, innings.length);
   let headerCells = '<th class="ls-team-col"></th>';
   for (let i = 1; i <= maxInnings; i++) {
-    headerCells += `<th${i === currentInning ? ' class="ls-current"' : ""}>${i}</th>`;
+    headerCells += `<th class="ls-inning-h${i === currentInning ? " ls-current" : ""}">${i}</th>`;
   }
-  headerCells += '<th class="ls-total ls-total-first">R</th><th class="ls-total">H</th><th class="ls-total">E</th>';
-  const buildRow = (teamKey, abbr) => {
-    let cells = `<td class="ls-team-col">${abbr}</td>`;
+  headerCells += '<th class="ls-total ls-r-header">R</th><th class="ls-total ls-he-header">H</th><th class="ls-total ls-he-header">E</th>';
+  const buildRow = (teamKey, team) => {
+    const abbr = team.abbreviation || team.teamName?.slice(0, 3).toUpperCase() || "\u2014";
+    let cells = `<td class="ls-team-col">
+      <img class="ls-team-logo" src="/teams/${team.id}.svg" alt="${abbr}">
+      <span class="ls-team-abbr">${abbr}</span>
+    </td>`;
     for (let i = 1; i <= maxInnings; i++) {
       const inn = innings.find((x) => x.num === i);
       const runs = inn?.[teamKey]?.runs;
       const isCurrent = i === currentInning;
-      if (runs == null) {
-        cells += `<td class="ls-empty${isCurrent ? " ls-current" : ""}">\u2013</td>`;
-      } else {
-        cells += `<td${isCurrent ? ' class="ls-current"' : ""}>${runs}</td>`;
-      }
+      let cls = "ls-inning";
+      if (runs == null) cls += " ls-empty";
+      else if (runs === 0) cls += " ls-zero";
+      else cls += " ls-nonzero";
+      if (isCurrent) cls += " ls-current";
+      cells += `<td class="${cls}">${runs == null ? "\u2013" : runs}</td>`;
     }
     const t = linescore.teams[teamKey];
-    cells += `<td class="ls-total ls-total-first">${t?.runs ?? 0}</td>`;
-    cells += `<td class="ls-total">${t?.hits ?? 0}</td>`;
-    cells += `<td class="ls-total">${t?.errors ?? 0}</td>`;
+    cells += `<td class="ls-total ls-r-value">${t?.runs ?? 0}</td>`;
+    cells += `<td class="ls-total ls-he-value">${t?.hits ?? 0}</td>`;
+    cells += `<td class="ls-total ls-he-value">${t?.errors ?? 0}</td>`;
     return cells;
   };
-  const awayAbbr = awayTeam.abbreviation || awayTeam.teamName?.slice(0, 3).toUpperCase() || "AWY";
-  const homeAbbr = homeTeam.abbreviation || homeTeam.teamName?.slice(0, 3).toUpperCase() || "HOM";
   $("linescore-container").innerHTML = `
-    <table>
+    <table class="linescore-compact">
       <thead><tr>${headerCells}</tr></thead>
       <tbody>
-        <tr class="ls-row-away">${buildRow("away", awayAbbr)}</tr>
-        <tr class="ls-row-home">${buildRow("home", homeAbbr)}</tr>
+        <tr class="ls-row-away">${buildRow("away", awayTeam)}</tr>
+        <tr class="ls-row-home">${buildRow("home", homeTeam)}</tr>
       </tbody>
     </table>`;
 }
