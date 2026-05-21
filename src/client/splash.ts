@@ -13,12 +13,138 @@ const isLiveState = (s: string): boolean =>
   !isFinalState(s) && !isPreGameState(s) &&
   !["Postponed", "Suspended", "Suspended: Rain", "Cancelled", "Cancelled: Rain", "Delayed"].includes(s);
 
-// MLB-only team IDs — kept for future dark-logo toggle
+// MLB-only team IDs — used by getLogoPath for the dark cap variants
 const MLB_TEAM_IDS: Set<number> = new Set([
   108, 109, 110, 111, 112, 113, 114, 115, 116, 117,
   118, 119, 120, 121, 133, 134, 135, 136, 137, 138,
   139, 140, 141, 142, 143, 144, 145, 146, 147, 158
 ]);
+
+// ── Pitch type catalog ────────────────────────────────────────────────────
+
+type PitchInfo = { label: string; abbr: string; color: string };
+
+const PITCH_MAP: Record<string, PitchInfo> = {
+  FF: { label: "4-Seam",    abbr: "FF", color: "#e63946" },
+  FA: { label: "4-Seam",    abbr: "FF", color: "#e63946" },
+  FT: { label: "2-Seam",    abbr: "FT", color: "#c1121f" },
+  SI: { label: "Sinker",    abbr: "SI", color: "#c1121f" },
+  FC: { label: "Cutter",    abbr: "FC", color: "#f4a261" },
+  SL: { label: "Slider",    abbr: "SL", color: "#2a9d8f" },
+  ST: { label: "Sweeper",   abbr: "ST", color: "#fb8500" },
+  SV: { label: "Slurve",    abbr: "SV", color: "#3a86ff" },
+  CU: { label: "Curve",     abbr: "CU", color: "#457b9d" },
+  KC: { label: "Knuck-Cur", abbr: "KC", color: "#457b9d" },
+  CS: { label: "Slow Cur",  abbr: "CS", color: "#457b9d" },
+  CH: { label: "Change",    abbr: "CH", color: "#8338ec" },
+  FS: { label: "Splitter",  abbr: "FS", color: "#06d6a0" },
+  FO: { label: "Forkball",  abbr: "FO", color: "#06d6a0" },
+  KN: { label: "Knuckle",   abbr: "KN", color: "#adb5bd" },
+  EP: { label: "Eephus",    abbr: "EP", color: "#adb5bd" },
+  PO: { label: "Pitchout",  abbr: "PO", color: "#6c757d" },
+  IN: { label: "Int. Ball", abbr: "IN", color: "#6c757d" },
+};
+
+function pitchInfo(code: string | undefined): PitchInfo {
+  return PITCH_MAP[code || ""] ||
+    { label: code || "?", abbr: code || "?", color: "#94a3b8" };
+}
+
+// ── Strike zone geometry ──────────────────────────────────────────────────
+
+const ZONE_W = 120, ZONE_H = 155;
+const SZ_LEFT = 22, SZ_RIGHT = 98, SZ_TOP = 24, SZ_BOT = 108;
+const SZ_CX: number = (SZ_LEFT + SZ_RIGHT) / 2;
+const PX_PER_FT: number = (SZ_RIGHT - SZ_LEFT) / 1.7;
+const PZ_TOP_FT = 3.5, PZ_BOT_FT = 1.5;
+const DZ_LEFT: number = SZ_LEFT + 6, DZ_RIGHT: number = SZ_RIGHT - 6;
+const DZ_TOP: number = SZ_TOP + 5, DZ_BOT: number = SZ_BOT - 12;
+
+function mapPx(pX: number): number {
+  return SZ_CX + pX * PX_PER_FT;
+}
+
+function mapPz(pZ: number): number {
+  return SZ_BOT - ((pZ - PZ_BOT_FT) / (PZ_TOP_FT - PZ_BOT_FT)) * (SZ_BOT - SZ_TOP);
+}
+
+function buildStrikeZoneSVG(pitches: any[]): string {
+  const dW = DZ_RIGHT - DZ_LEFT, dH = DZ_BOT - DZ_TOP;
+  const d3 = dW / 3, d3h = dH / 3;
+  const dots = pitches.map((p: any, i: number) => {
+    const px = p.pitchData?.coordinates?.pX;
+    const pz = p.pitchData?.coordinates?.pZ;
+    if (px == null || pz == null) return "";
+    const cx = mapPx(px), cy = mapPz(pz);
+    const info = pitchInfo(p.details?.type?.code);
+    const isLast = i === pitches.length - 1;
+    return `<circle cx="${cx}" cy="${cy}" r="${isLast ? 7 : 5}"
+      fill="${info.color}" stroke="${isLast ? "#fff" : "rgba(255,255,255,0.35)"}"
+      stroke-width="${isLast ? 2 : 1}" opacity="${isLast ? 1 : 0.65}"/>
+      <text x="${cx}" y="${cy + 0.5}" text-anchor="middle" dominant-baseline="middle"
+      font-size="${isLast ? 7 : 6}" font-weight="700" fill="white"
+      font-family="monospace" pointer-events="none">${i + 1}</text>`;
+  }).join("");
+  return `<svg viewBox="0 0 ${ZONE_W} ${ZONE_H}" xmlns="http://www.w3.org/2000/svg" style="overflow:visible;">
+    <rect x="${DZ_LEFT}" y="${DZ_TOP}" width="${dW}" height="${dH}"
+      fill="rgba(191,13,61,0.04)" stroke="rgba(191,13,61,0.75)" stroke-width="1.5" rx="1"/>
+    <line x1="${DZ_LEFT + d3}" y1="${DZ_TOP}" x2="${DZ_LEFT + d3}" y2="${DZ_BOT}"
+      stroke="rgba(191,13,61,0.22)" stroke-width="0.8" stroke-dasharray="3,2"/>
+    <line x1="${DZ_LEFT + d3 * 2}" y1="${DZ_TOP}" x2="${DZ_LEFT + d3 * 2}" y2="${DZ_BOT}"
+      stroke="rgba(191,13,61,0.22)" stroke-width="0.8" stroke-dasharray="3,2"/>
+    <line x1="${DZ_LEFT}" y1="${DZ_TOP + d3h}" x2="${DZ_RIGHT}" y2="${DZ_TOP + d3h}"
+      stroke="rgba(191,13,61,0.22)" stroke-width="0.8" stroke-dasharray="3,2"/>
+    <line x1="${DZ_LEFT}" y1="${DZ_TOP + d3h * 2}" x2="${DZ_RIGHT}" y2="${DZ_TOP + d3h * 2}"
+      stroke="rgba(191,13,61,0.22)" stroke-width="0.8" stroke-dasharray="3,2"/>
+    <polygon points="${DZ_LEFT},${DZ_BOT + 5} ${DZ_RIGHT},${DZ_BOT + 5} ${DZ_RIGHT},${DZ_BOT + 12} ${SZ_CX},${DZ_BOT + 20} ${DZ_LEFT},${DZ_BOT + 12}"
+      fill="rgba(255,255,255,0.55)" stroke="rgba(255,255,255,0.3)" stroke-width="1"/>
+    ${dots}
+  </svg>`;
+}
+
+// ── Bases + outs scorebug ─────────────────────────────────────────────────
+
+function buildBasesSVG(outs: number, onBase: any): string {
+  const outFill = (n: number): string =>
+    outs >= n ? "#bf0d3d" : "rgba(255,255,255,0.06)";
+  const baseFill = (b: any): string =>
+    b ? "#bf0d3d" : "rgba(255,255,255,0.06)";
+  return `<svg width="60" height="60" viewBox="0 0 58 79" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="13" cy="61" r="6" fill="${outFill(1)}" stroke="#bf0d3d" stroke-width="1.5"/>
+    <circle cx="30" cy="61" r="6" fill="${outFill(2)}" stroke="#bf0d3d" stroke-width="1.5"/>
+    <circle cx="47" cy="61" r="6" fill="${outFill(3)}" stroke="#bf0d3d" stroke-width="1.5"/>
+    <rect x="17.6" y="29.7" width="14" height="14" transform="rotate(45 17.6 29.7)"
+      fill="${baseFill(onBase?.third)}" stroke="#bf0d3d" stroke-width="1.5"/>
+    <rect x="29.4" y="17.7" width="14" height="14" transform="rotate(45 29.4 17.7)"
+      fill="${baseFill(onBase?.second)}" stroke="#bf0d3d" stroke-width="1.5"/>
+    <rect x="41.6" y="29.7" width="14" height="14" transform="rotate(45 41.6 29.7)"
+      fill="${baseFill(onBase?.first)}" stroke="#bf0d3d" stroke-width="1.5"/>
+  </svg>`;
+}
+
+// ── Stat line helpers ─────────────────────────────────────────────────────
+
+function getBatterSeasonStats(teamBox: any, batterId: number | undefined): string {
+  if (!teamBox || !batterId) return "—";
+  const stats = teamBox.players?.[`ID${batterId}`]?.seasonStats?.batting;
+  if (!stats) return "—";
+  const avg = stats.avg || "---";
+  const hr = stats.homeRuns ?? 0;
+  const rbi = stats.rbi ?? 0;
+  return `${avg} · ${hr} HR · ${rbi} RBI`;
+}
+
+function getPitcherInGameLine(teamBox: any, pitcherId: number | undefined): string {
+  if (!teamBox || !pitcherId) return "—";
+  const player = teamBox.players?.[`ID${pitcherId}`];
+  const game = player?.stats?.pitching;
+  const season = player?.seasonStats?.pitching;
+  if (!game && !season) return "—";
+  const ip = game?.inningsPitched ?? "0.0";
+  const k = game?.strikeOuts ?? 0;
+  const era = season?.era ?? "—";
+  return `${ip} IP · ${k} K · ${era} ERA`;
+}
 
 // ── State ─────────────────────────────────────────────────────────────────
 
@@ -37,6 +163,21 @@ function getLogoPath(teamId: number): string {
 
 function loadLogo(imgEl: HTMLImageElement, teamId: number): void {
   imgEl.src = getLogoPath(teamId);
+}
+
+async function loadHeadshot(
+  imgEl: HTMLImageElement | null,
+  playerId: number | undefined,
+): Promise<void> {
+  if (!imgEl || !playerId) return;
+  try {
+    const r = await fetch(`/api/headshot/${playerId}`);
+    if (!r.ok) return;
+    const data = await r.json();
+    if (data?.src) imgEl.src = data.src;
+  } catch (e) {
+    console.error("loadHeadshot error:", e);
+  }
 }
 
 function formatGameTime(gameDate: string): string {
@@ -78,6 +219,8 @@ function hideAllStatePanes(): void {
   });
 }
 
+// ── Pregame content ───────────────────────────────────────────────────────
+
 function renderPregameContent(data: any, awayTeam: any, homeTeam: any): void {
   const teamsBox = data.liveData?.boxscore?.teams || {};
   const probables = data.gameData?.probablePitchers || {};
@@ -98,6 +241,118 @@ function renderPregameContent(data: any, awayTeam: any, homeTeam: any): void {
   const dateStr = dt.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }).toUpperCase();
   const timeStr = formatGameTime(data.gameData.datetime?.dateTime || dt.toISOString());
   $("pregame-first-pitch")!.textContent = `${dateStr}  ·  ${timeStr}`;
+}
+
+// ── Live content ──────────────────────────────────────────────────────────
+
+function renderLiveContent(data: any): void {
+  const linescore = data.liveData?.linescore;
+  const currentPlay = data.liveData?.plays?.currentPlay;
+  if (!linescore || !currentPlay) return;
+
+  const teamsBox = data.liveData.boxscore?.teams || {};
+  const matchup = currentPlay.matchup || {};
+  const batter = matchup.batter;
+  const pitcher = matchup.pitcher;
+  const count = currentPlay.count || { balls: 0, strikes: 0, outs: 0 };
+
+  // Which team is at bat. Away always lands in left slot, home in right.
+  // Role (BATTER / PITCHER) flips based on inning half.
+  const awayBatting = linescore.inningHalf === "Top";
+  const awaySlotPlayer = awayBatting ? batter : pitcher;
+  const homeSlotPlayer = awayBatting ? pitcher : batter;
+  const awaySlotIsBatter = awayBatting;
+  const homeSlotIsBatter = !awayBatting;
+
+  // Toggle is-batter / is-pitcher classes for accent border on headshot
+  const awaySlotEl = $("live-player-away");
+  const homeSlotEl = $("live-player-home");
+  if (awaySlotEl) {
+    awaySlotEl.classList.toggle("is-batter", awaySlotIsBatter);
+    awaySlotEl.classList.toggle("is-pitcher", !awaySlotIsBatter);
+  }
+  if (homeSlotEl) {
+    homeSlotEl.classList.toggle("is-batter", homeSlotIsBatter);
+    homeSlotEl.classList.toggle("is-pitcher", !homeSlotIsBatter);
+  }
+
+  const awayTeamId = data.gameData?.teams?.away?.id;
+  const homeTeamId = data.gameData?.teams?.home?.id;
+
+  const getPlayerPos = (teamBox: any, playerId: number | undefined): string => {
+    if (!teamBox || !playerId) return "";
+    return teamBox.players?.[`ID${playerId}`]?.position?.abbreviation || "";
+  };
+
+  // Away slot (always away team's player — either batter or pitcher)
+  $("live-away-role")!.textContent = awaySlotIsBatter ? "BATTER" : "PITCHER";
+  $("live-away-pos")!.textContent = awaySlotIsBatter
+    ? getPlayerPos(teamsBox.away, awaySlotPlayer?.id)
+    : "";
+  $("live-away-name")!.textContent = awaySlotPlayer?.fullName || "—";
+  $("live-away-stats")!.textContent = awaySlotIsBatter
+    ? getBatterSeasonStats(teamsBox.away, awaySlotPlayer?.id)
+    : getPitcherInGameLine(teamsBox.away, awaySlotPlayer?.id);
+  const awayLogoEl = $("live-away-team-logo") as HTMLImageElement | null;
+  if (awayLogoEl && awayTeamId) loadLogo(awayLogoEl, awayTeamId);
+
+  // Home slot
+  $("live-home-role")!.textContent = homeSlotIsBatter ? "BATTER" : "PITCHER";
+  $("live-home-pos")!.textContent = homeSlotIsBatter
+    ? getPlayerPos(teamsBox.home, homeSlotPlayer?.id)
+    : "";
+  $("live-home-name")!.textContent = homeSlotPlayer?.fullName || "—";
+  $("live-home-stats")!.textContent = homeSlotIsBatter
+    ? getBatterSeasonStats(teamsBox.home, homeSlotPlayer?.id)
+    : getPitcherInGameLine(teamsBox.home, homeSlotPlayer?.id);
+  const homeLogoEl = $("live-home-team-logo") as HTMLImageElement | null;
+  if (homeLogoEl && homeTeamId) loadLogo(homeLogoEl, homeTeamId);
+  
+  // Scorebug
+  const onBase = linescore.offense || {};
+  $("live-bases")!.innerHTML = buildBasesSVG(count.outs ?? 0, onBase);
+  $("live-count")!.textContent = `${count.balls ?? 0}–${count.strikes ?? 0}`;
+
+  // Strike zone + pitch log
+  const pitches = (currentPlay.playEvents || []).filter((e: any) => e.isPitch);
+  $("live-zone-container")!.innerHTML = buildStrikeZoneSVG(pitches);
+
+  const pitchRows = [...pitches].reverse().map((p: any, idx: number) => {
+    const info = pitchInfo(p.details?.type?.code);
+    const num = pitches.length - idx;
+    const velo = p.pitchData?.startSpeed?.toFixed(1) ?? "—";
+    const isInPlay = p.details?.isInPlay;
+    const isStrike = p.details?.isStrike;
+    const isFoul = (p.details?.description || "").toLowerCase().includes("foul");
+    let resCls = "live-pr-ball";
+    let resLbl = "BALL";
+    if (isInPlay) { resCls = "live-pr-contact"; resLbl = "IN PLAY"; }
+    else if (isFoul) { resCls = "live-pr-foul"; resLbl = "FOUL"; }
+    else if (isStrike) { resCls = "live-pr-strike"; resLbl = "STR"; }
+    return `<div class="live-pitch-row">
+      <span class="live-pitch-num">${num}</span>
+      <span class="live-pitch-badge" style="background:${info.color}">${info.abbr}</span>
+      <span class="live-pitch-type">${info.label}</span>
+      <span class="live-pitch-velo">${velo} mph</span>
+      <span class="live-pitch-result ${resCls}">${resLbl}</span>
+    </div>`;
+  }).join("");
+
+  $("live-pitchlog")!.innerHTML = pitchRows ||
+    '<div style="font-family:var(--font-mono);font-size:10px;color:var(--text-muted);padding:4px 0;">Waiting for first pitch…</div>';
+
+  // Result section
+  const resultEvent = currentPlay.result?.event || "";
+  const resultDesc = currentPlay.result?.description || "";
+  const resultEl = $("live-result")!;
+  if (resultEvent || resultDesc) {
+    resultEl.innerHTML = `
+      ${resultEvent ? `<div class="live-event">${resultEvent}</div>` : ""}
+      ${resultDesc ? `<div class="live-desc">${resultDesc}</div>` : ""}
+    `;
+  } else {
+    resultEl.innerHTML = "";
+  }
 }
 
 // ── Game selection (temporary — pick first game today) ────────────────────
@@ -230,6 +485,7 @@ function render(data: any): void {
     $("dynamic-tab-label")!.textContent = "LIVE";
     const liveEl = $("live-content");
     if (liveEl) liveEl.style.display = "block";
+    renderLiveContent(data);
   } else {
     badge.textContent = statusText.toUpperCase();
     badge.style.background = "rgba(255,255,255,0.15)";
@@ -240,6 +496,8 @@ function render(data: any): void {
 
   renderLinescore(linescore, awayTeam, homeTeam, isFinalState(statusText));
 }
+
+// ── Linescore ─────────────────────────────────────────────────────────────
 
 function renderLinescore(linescore: any, awayTeam: any, homeTeam: any, isFinal: boolean): void {
   if (!linescore) return;
