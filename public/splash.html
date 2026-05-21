@@ -79,8 +79,47 @@
         </div>
 
         <div id="live-content" class="state-pane" style="display:none;">
-          <!-- Phase 2b will fill this -->
+        <!-- Matchup row: away player | scorebug | home player -->
+        <div class="live-matchup">
+          <div class="live-slot live-slot-away" id="live-player-away">
+            <img class="live-team-logo" id="live-away-team-logo" alt="">
+            <div class="live-slot-info">
+              <div class="live-slot-meta">
+                <span class="live-slot-role" id="live-away-role">—</span>
+                <span class="live-slot-pos" id="live-away-pos"></span>
+              </div>
+              <div class="live-slot-name" id="live-away-name">—</div>
+              <div class="live-slot-stats" id="live-away-stats">—</div>
+            </div>
+          </div>
+
+          <div class="live-scorebug">
+            <div class="live-bases" id="live-bases"></div>
+            <div class="live-count" id="live-count">0–0</div>
+          </div>
+
+          <div class="live-slot live-slot-home" id="live-player-home">
+            <img class="live-team-logo" id="live-home-team-logo" alt="">
+            <div class="live-slot-info">
+              <div class="live-slot-meta">
+                <span class="live-slot-role" id="live-home-role">—</span>
+                <span class="live-slot-pos" id="live-home-pos"></span>
+              </div>
+              <div class="live-slot-name" id="live-home-name">—</div>
+              <div class="live-slot-stats" id="live-home-stats">—</div>
+            </div>
+          </div>
         </div>
+
+        <!-- Strike zone + pitch log -->
+        <div class="live-zonelog">
+          <div class="live-zone" id="live-zone-container"></div>
+          <div class="live-pitchlog" id="live-pitchlog"></div>
+        </div>
+
+        <!-- Result -->
+        <div class="live-result" id="live-result"></div>
+      </div>
 
         <div id="final-content" class="state-pane" style="display:none;">
           <!-- Phase 2c will fill this -->
