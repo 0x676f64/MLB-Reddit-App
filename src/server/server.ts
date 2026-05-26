@@ -1,19 +1,10 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { context, reddit, redis } from "@devvit/web/server";
-import type {
-  PartialJsonValue,
-  TriggerResponse,
-  UiResponse,
-} from "@devvit/web/shared";
-import {
-  ApiEndpoint,
-  type DecrementRequest,
-  type DecrementResponse,
-  type IncrementRequest,
-  type IncrementResponse,
-  type InitResponse,
-} from "../shared/api.ts";
-import { once } from "node:events";
+import { context, reddit, redis, settings } from "@devvit/web/server";
+import type { PartialJsonValue, UiResponse } from "@devvit/web/shared";
+
+// ════════════════════════════════════════════════════════════════════════
+// Entry point
+// ════════════════════════════════════════════════════════════════════════
 
 export async function serverOnRequest(
   req: IncomingMessage,
@@ -33,15 +24,15 @@ async function onRequest(
   rsp: ServerResponse,
 ): Promise<void> {
   const url = req.url;
-
   if (!url || url === "/") {
     writeJSON<ErrorResponse>(404, { error: "not found", status: 404 }, rsp);
     return;
   }
 
-  // ── MLB Stats API proxy ─────────────────────────────────────────────────
   const urlObj = new URL(url, "http://localhost");
   const pathname = urlObj.pathname;
+
+  // ── Public read endpoints (called by the splash) ──────────────────────
   if (pathname === "/api/schedule") {
     await onSchedule(urlObj, rsp);
     return;
@@ -55,110 +46,38 @@ async function onRequest(
     await onLogo(teamId, rsp);
     return;
   }
-
-  const endpoint = url as ApiEndpoint;
-
-  let body: ApiResponse | UiResponse | ErrorResponse;
-  switch (endpoint) {
-    case ApiEndpoint.Init:
-      body = await onInit();
-      break;
-    case ApiEndpoint.Increment:
-      body = await onIncrement(req);
-      break;
-    case ApiEndpoint.Decrement:
-      body = await onDecrement(req);
-      break;
-    case ApiEndpoint.OnPostCreate:
-      body = await onMenuNewPost();
-      break;
-    case ApiEndpoint.OnAppInstall:
-      body = await onAppInstall();
-      break;
-    default:
-      endpoint satisfies never;
-      body = { error: "not found", status: 404 };
-      break;
+  if (pathname.startsWith("/api/winprob/")) {
+    await onWinProb(pathname.slice("/api/winprob/".length), rsp);
+    return;
+  }
+  if (pathname === "/api/post-game") {
+    await onPostGame(rsp);
+    return;
   }
 
-  writeJSON<PartialJsonValue>("status" in body ? body.status : 200, body, rsp);
-}
+  // ── Moderator menu endpoints ──────────────────────────────────────────
+  if (pathname === "/internal/menu/post-all-today") {
+    const result = await onMenuPostAllGames();
+    writeJSON<PartialJsonValue>(200, result as unknown as PartialJsonValue, rsp);
+    return;
+  }
+  if (pathname === "/internal/menu/clear-today-dedup") {
+    const result = await onMenuClearTodayDedup();
+    writeJSON<PartialJsonValue>(200, result as unknown as PartialJsonValue, rsp);
+    return;
+  }
 
-type ApiResponse = InitResponse | IncrementResponse | DecrementResponse;
+  writeJSON<ErrorResponse>(404, { error: "not found", status: 404 }, rsp);
+}
 
 type ErrorResponse = {
   error: string;
   status: number;
 };
 
-function getPostId(): string {
-  if (!context.postId) {
-    throw Error("no post ID");
-  }
-  return context.postId;
-}
-
-function getPostCountKey(postId: string): string {
-  return `count:${postId}`;
-}
-
-async function onInit(): Promise<InitResponse> {
-  const postId = getPostId();
-  const count = Number((await redis.get(getPostCountKey(postId))) ?? 0);
-  return {
-    type: "init",
-    postId,
-    count,
-    username: context.username ?? "user",
-  };
-}
-
-async function onIncrement(req: IncomingMessage): Promise<IncrementResponse> {
-  const postId = getPostId();
-  const { amount } = await readJSON<IncrementRequest>(req).catch(() => ({
-    amount: 1,
-  }));
-  const incrementBy = Number.isFinite(amount) ? amount : 1;
-  const count = await redis.incrBy(getPostCountKey(postId), incrementBy);
-  return {
-    type: "increment",
-    postId,
-    count,
-  };
-}
-
-async function onDecrement(req: IncomingMessage): Promise<DecrementResponse> {
-  const postId = getPostId();
-  const { amount } = await readJSON<DecrementRequest>(req).catch(() => ({
-    amount: 1,
-  }));
-  const parsedAmount = typeof amount === "number" ? amount : Number(amount);
-  const decrementBy = Number.isFinite(parsedAmount) ? parsedAmount : 1;
-  const count = Number(
-    await redis.incrBy(getPostCountKey(postId), -decrementBy),
-  );
-  return {
-    type: "decrement",
-    postId,
-    count,
-  };
-}
-
-async function onMenuNewPost(): Promise<UiResponse> {
-  const post = await reddit.submitCustomPost({ title: context.appName });
-  return {
-    showToast: { text: `Post ${post.id} created.`, appearance: "success" },
-    navigateTo: post.url,
-  };
-}
-
-async function onAppInstall(): Promise<TriggerResponse> {
-  await reddit.submitCustomPost({
-    title: "mlb-scores",
-  });
-
-  return {};
-}
+// ════════════════════════════════════════════════════════════════════════
+// HTTP helpers
+// ════════════════════════════════════════════════════════════════════════
 
 function writeJSON<T extends PartialJsonValue>(
   status: number,
@@ -174,24 +93,14 @@ function writeJSON<T extends PartialJsonValue>(
   rsp.end(body);
 }
 
-async function readJSON<T>(req: IncomingMessage): Promise<T> {
-  const chunks: Uint8Array[] = [];
-  req.on("data", (chunk) => chunks.push(chunk));
-  await once(req, "end");
-  return JSON.parse(`${Buffer.concat(chunks)}`);
-}
+// ════════════════════════════════════════════════════════════════════════
+// MLB Stats API proxies (called by the splash)
+// ════════════════════════════════════════════════════════════════════════
 
-async function onSchedule(
-  urlObj: URL,
-  rsp: ServerResponse,
-): Promise<void> {
+async function onSchedule(urlObj: URL, rsp: ServerResponse): Promise<void> {
   const date = urlObj.searchParams.get("date");
   if (!date) {
-    writeJSON<ErrorResponse>(
-      400,
-      { error: "Missing date param", status: 400 },
-      rsp,
-    );
+    writeJSON<ErrorResponse>(400, { error: "Missing date param", status: 400 }, rsp);
     return;
   }
   try {
@@ -219,11 +128,7 @@ async function onGame(pk: string, rsp: ServerResponse): Promise<void> {
 
 async function onLogo(teamId: string, rsp: ServerResponse): Promise<void> {
   if (!/^\d+$/.test(teamId)) {
-    writeJSON<ErrorResponse>(
-      400,
-      { error: "Invalid team ID", status: 400 },
-      rsp,
-    );
+    writeJSON<ErrorResponse>(400, { error: "Invalid team ID", status: 400 }, rsp);
     return;
   }
   try {
@@ -232,11 +137,7 @@ async function onLogo(teamId: string, rsp: ServerResponse): Promise<void> {
     );
     if (!r.ok) {
       console.error(`Logo upstream ${teamId}: ${r.status} ${r.statusText}`);
-      writeJSON<ErrorResponse>(
-        404,
-        { error: `Upstream ${r.status}`, status: 404 },
-        rsp,
-      );
+      writeJSON<ErrorResponse>(404, { error: `Upstream ${r.status}`, status: 404 }, rsp);
       return;
     }
     const svg = await r.text();
@@ -245,4 +146,220 @@ async function onLogo(teamId: string, rsp: ServerResponse): Promise<void> {
     console.error(`onLogo error for ${teamId}:`, e);
     writeJSON<ErrorResponse>(500, { error: String(e), status: 500 }, rsp);
   }
+}
+
+async function onWinProb(pk: string, rsp: ServerResponse): Promise<void> {
+  if (!/^\d+$/.test(pk)) {
+    writeJSON<ErrorResponse>(400, { error: "Invalid gamePk", status: 400 }, rsp);
+    return;
+  }
+  try {
+    const r = await fetch(
+      `https://statsapi.mlb.com/api/v1/game/${pk}/winProbability`,
+    );
+    const data = (await r.json()) as PartialJsonValue;
+    writeJSON<PartialJsonValue>(200, data, rsp);
+  } catch (e) {
+    console.error(`onWinProb error for ${pk}:`, e);
+    writeJSON<ErrorResponse>(500, { error: String(e), status: 500 }, rsp);
+  }
+}
+
+// Per-post game lookup — the splash calls this to find which game to render
+async function onPostGame(rsp: ServerResponse): Promise<void> {
+  if (!context.postId) {
+    writeJSON<PartialJsonValue>(200, { gamePk: null } as PartialJsonValue, rsp);
+    return;
+  }
+  try {
+    const val = await redis.get(`post-game:${context.postId}`);
+    const gamePk = val ? Number(val) : null;
+    writeJSON<PartialJsonValue>(200, { gamePk } as PartialJsonValue, rsp);
+  } catch (e) {
+    console.error("onPostGame error:", e);
+    writeJSON<PartialJsonValue>(200, { gamePk: null } as PartialJsonValue, rsp);
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════
+// Settings helpers
+// ════════════════════════════════════════════════════════════════════════
+
+/**
+ * Read the per-subreddit teamId setting.
+ * Returns null if unset, blank, or non-numeric so the schedule call falls
+ * back to fetching all games instead of erroring out.
+ *
+ * Handles both the array shape (select with multi-select default) and the
+ * plain string shape, since Devvit's schema can return either depending on
+ * the field type.
+ */
+async function getTeamIdFilter(): Promise<string | null> {
+  try {
+    const raw = await settings.get<string>("teamId");
+    const value = (raw ?? "").trim();
+    if (!value) return null;
+    if (!/^\d+$/.test(value)) {
+      console.warn(`Invalid teamId setting: "${value}" — falling back to all games`);
+      return null;
+    }
+    return value;
+  } catch (e) {
+    console.error("getTeamIdFilter error:", e);
+    return null;
+  }
+}
+
+function scheduleUrl(date: string, teamId: string | null): string {
+  const base = `https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${date}`;
+  return teamId ? `${base}&teamId=${teamId}` : base;
+}
+
+// ════════════════════════════════════════════════════════════════════════
+// Date / title helpers
+// ════════════════════════════════════════════════════════════════════════
+
+/**
+ * Anchor "today" to US Eastern Time so the date matches MLB's scheduling day.
+ * The Devvit server runs in UTC, which would otherwise treat evening ET
+ * as "tomorrow". sv-SE locale conveniently outputs ISO YYYY-MM-DD.
+ */
+function todayDateStr(): string {
+  return new Date().toLocaleDateString("sv-SE", { timeZone: "America/New_York" });
+}
+
+function formatGameTimeET(iso: string): string {
+  const d = new Date(iso);
+  return d.toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: "America/New_York",
+    timeZoneName: "short",
+  });
+}
+
+/**
+ * Build the game-thread title.
+ *
+ * If the configured team filter matches the HOME team, format the title with
+ * the home team leading ("Reds vs Mets") — the team-sub's perspective.
+ * Otherwise use the standard "Away @ Home" format.
+ */
+function buildGameThreadTitle(game: any, teamId: string | null): string {
+  const away = game?.teams?.away?.team?.name || "Away";
+  const home = game?.teams?.home?.team?.name || "Home";
+  const homeId = String(game?.teams?.home?.team?.id ?? "");
+  const time = formatGameTimeET(game?.gameDate || new Date().toISOString());
+
+  if (teamId && teamId === homeId) {
+    return `Game Thread: ${home} vs ${away} - ${time}`;
+  }
+  return `Game Thread: ${away} @ ${home} - ${time}`;
+}
+
+// ════════════════════════════════════════════════════════════════════════
+// Moderator menu handlers
+// ════════════════════════════════════════════════════════════════════════
+
+async function onMenuPostAllGames(): Promise<UiResponse> {
+  const subredditId = context.subredditId;
+  if (!subredditId) {
+    return { showToast: { text: "No subreddit context.", appearance: "neutral" } };
+  }
+
+  const teamId = await getTeamIdFilter();
+
+  let games: any[] = [];
+  try {
+    const r = await fetch(scheduleUrl(todayDateStr(), teamId));
+    const data: any = await r.json();
+    games = data?.dates?.[0]?.games || [];
+  } catch (e) {
+    console.error("schedule fetch failed:", e);
+    return { showToast: { text: "Couldn't fetch schedule.", appearance: "neutral" } };
+  }
+
+  if (!games.length) {
+    const note = teamId ? " for the configured team" : "";
+    return { showToast: { text: `No games today${note}.`, appearance: "neutral" } };
+  }
+
+  let created = 0;
+  let skipped = 0;
+  let failed = 0;
+
+  for (const game of games) {
+    const pk = game?.gamePk;
+    if (!pk) continue;
+
+    const dedupKey = `posted:${subredditId}:${pk}`;
+    if (await redis.get(dedupKey)) {
+      skipped++;
+      continue;
+    }
+
+    try {
+      const post = await reddit.submitCustomPost({
+        title: buildGameThreadTitle(game, teamId),
+      });
+      const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 3);
+      await redis.set(`post-game:${post.id}`, String(pk), { expiration: expiresAt });
+      await redis.set(dedupKey, post.id, { expiration: expiresAt });
+      created++;
+    } catch (e) {
+      console.error(`Failed posting game ${pk}:`, e);
+      failed++;
+    }
+  }
+
+  const msg = `Posted ${created}, skipped ${skipped}${failed ? `, failed ${failed}` : ""}.`;
+  return {
+    showToast: {
+      text: msg,
+      appearance: created > 0 ? "success" : "neutral",
+    },
+  };
+}
+
+async function onMenuClearTodayDedup(): Promise<UiResponse> {
+  const subredditId = context.subredditId;
+  if (!subredditId) {
+    return { showToast: { text: "No subreddit context.", appearance: "neutral" } };
+  }
+
+  const teamId = await getTeamIdFilter();
+
+  let games: any[] = [];
+  try {
+    const r = await fetch(scheduleUrl(todayDateStr(), teamId));
+    const data: any = await r.json();
+    games = data?.dates?.[0]?.games || [];
+  } catch (e) {
+    console.error("schedule fetch (clear-dedup) failed:", e);
+    return { showToast: { text: "Couldn't fetch schedule.", appearance: "neutral" } };
+  }
+
+  if (!games.length) {
+    return { showToast: { text: "No games today to clear.", appearance: "neutral" } };
+  }
+
+  let cleared = 0;
+  for (const game of games) {
+    const pk = game?.gamePk;
+    if (!pk) continue;
+    const dedupKey = `posted:${subredditId}:${pk}`;
+    const linkedPostId = await redis.get(dedupKey);
+    if (linkedPostId) {
+      await redis.del(dedupKey);
+      await redis.del(`post-game:${linkedPostId}`);
+      cleared++;
+    }
+  }
+
+  return {
+    showToast: {
+      text: `Cleared ${cleared} dedup key(s).`,
+      appearance: cleared > 0 ? "success" : "neutral",
+    },
+  };
 }
