@@ -59,6 +59,8 @@
 
       <!-- Tab content panes (dynamic state-aware) -->
       <div class="tab-content tab-content-active" id="tab-dynamic">
+
+        <!-- ─────────────── PREGAME STATE ─────────────── -->
         <div id="pregame-content" class="state-pane">
           <div class="pregame-pitchers">
             <div class="pregame-pitcher">
@@ -78,63 +80,130 @@
           </div>
         </div>
 
+        <!-- ─────────────── LIVE STATE ─────────────── -->
         <div id="live-content" class="state-pane" style="display:none;">
-        <!-- Matchup row: away player | scorebug | home player -->
-        <div class="live-matchup">
-          <div class="live-slot live-slot-away" id="live-player-away">
-            <img class="live-team-logo" id="live-away-team-logo" alt="">
-            <div class="live-slot-info">
-              <div class="live-slot-meta">
-                <span class="live-slot-role" id="live-away-role">—</span>
-                <span class="live-slot-pos" id="live-away-pos"></span>
+
+          <!-- Matchup row: away player | scorebug | home player -->
+          <div class="live-matchup">
+            <div class="live-slot live-slot-away" id="live-player-away">
+              <img class="live-team-logo" id="live-away-team-logo" alt="">
+              <div class="live-slot-info">
+                <div class="live-slot-meta">
+                  <span class="live-slot-role" id="live-away-role">—</span>
+                  <span class="live-slot-pos" id="live-away-pos"></span>
+                </div>
+                <div class="live-slot-name" id="live-away-name">—</div>
+                <div class="live-slot-stats" id="live-away-stats">—</div>
               </div>
-              <div class="live-slot-name" id="live-away-name">—</div>
-              <div class="live-slot-stats" id="live-away-stats">—</div>
+            </div>
+
+            <div class="live-scorebug">
+              <div class="live-bases" id="live-bases"></div>
+              <div class="live-count" id="live-count">0–0</div>
+            </div>
+
+            <div class="live-slot live-slot-home" id="live-player-home">
+              <img class="live-team-logo" id="live-home-team-logo" alt="">
+              <div class="live-slot-info">
+                <div class="live-slot-meta">
+                  <span class="live-slot-role" id="live-home-role">—</span>
+                  <span class="live-slot-pos" id="live-home-pos"></span>
+                </div>
+                <div class="live-slot-name" id="live-home-name">—</div>
+                <div class="live-slot-stats" id="live-home-stats">—</div>
+              </div>
             </div>
           </div>
 
-          <div class="live-scorebug">
-            <div class="live-bases" id="live-bases"></div>
-            <div class="live-count" id="live-count">0–0</div>
-          </div>
-
-          <div class="live-slot live-slot-home" id="live-player-home">
-            <img class="live-team-logo" id="live-home-team-logo" alt="">
-            <div class="live-slot-info">
-              <div class="live-slot-meta">
-                <span class="live-slot-role" id="live-home-role">—</span>
-                <span class="live-slot-pos" id="live-home-pos"></span>
-              </div>
-              <div class="live-slot-name" id="live-home-name">—</div>
-              <div class="live-slot-stats" id="live-home-stats">—</div>
+          <!-- K-zone (left) + pitch chip & result (right) -->
+          <div class="live-ab">
+            <div class="live-zone" id="live-zone-container"></div>
+            <div class="live-ab-side">
+              <div class="live-pitch-latest" id="live-pitch-latest"></div>
+              <div class="live-result" id="live-result"></div>
             </div>
           </div>
+
         </div>
 
-        <!-- Strike zone + pitch log -->
-        <div class="live-zonelog">
-          <div class="live-zone" id="live-zone-container"></div>
-          <div class="live-pitchlog" id="live-pitchlog"></div>
-        </div>
-
-        <!-- Result -->
-        <div class="live-result" id="live-result"></div>
-      </div>
-
+        <!-- ─────────────── FINAL / WRAP STATE ─────────────── -->
         <div id="final-content" class="state-pane" style="display:none;">
-          <!-- Phase 2c will fill this -->
+
+          <!-- W/L pitchers row: away team left, home right -->
+          <div class="final-decisions">
+            <div class="final-slot final-slot-away" id="final-pitcher-away">
+              <img class="final-team-logo" id="final-away-team-logo" alt="">
+              <div class="final-slot-info">
+                <div class="final-slot-meta">
+                  <span class="final-slot-decision" id="final-away-decision">—</span>
+                  <span class="final-slot-role">PITCHER</span>
+                </div>
+                <div class="final-slot-name" id="final-away-pitcher-name">—</div>
+                <div class="final-slot-stats" id="final-away-pitcher-stats">—</div>
+              </div>
+            </div>
+
+            <div class="final-slot final-slot-home" id="final-pitcher-home">
+              <img class="final-team-logo" id="final-home-team-logo" alt="">
+              <div class="final-slot-info">
+                <div class="final-slot-meta">
+                  <span class="final-slot-decision" id="final-home-decision">—</span>
+                  <span class="final-slot-role">PITCHER</span>
+                </div>
+                <div class="final-slot-name" id="final-home-pitcher-name">—</div>
+                <div class="final-slot-stats" id="final-home-pitcher-stats">—</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Top performers row -->
+          <div class="final-section-header">TOP PERFORMERS</div>
+          <div class="final-performers">
+            <div class="final-performer" id="final-performer-1">
+              <div class="final-performer-name">—</div>
+              <div class="final-performer-stats">—</div>
+            </div>
+            <div class="final-performer" id="final-performer-2">
+              <div class="final-performer-name">—</div>
+              <div class="final-performer-stats">—</div>
+            </div>
+            <div class="final-performer" id="final-performer-3">
+            <div class="final-performer-name">—</div>
+            <div class="final-performer-stats">—</div>
+          </div>
         </div>
+
       </div>
+
+      </div>
+      <!-- end tab-dynamic -->
 
       <div class="tab-content" id="tab-box">
-        <div class="placeholder">Box score — coming in Phase 2c</div>
+        <div class="bs-team-tabs">
+          <button class="bs-team-tab active" data-bs-team="away">
+            <img class="bs-team-tab-logo" id="bs-away-tab-logo" alt="">
+            <span class="bs-team-tab-abbr" id="bs-away-tab-abbr">—</span>
+          </button>
+          <button class="bs-team-tab" data-bs-team="home">
+            <img class="bs-team-tab-logo" id="bs-home-tab-logo" alt="">
+            <span class="bs-team-tab-abbr" id="bs-home-tab-abbr">—</span>
+          </button>
+        </div>
+        <div class="bs-panel-wrap">
+          <div class="bs-panel active" id="bs-away-panel"></div>
+          <div class="bs-panel" id="bs-home-panel"></div>
+        </div>
       </div>
+
       <div class="tab-content" id="tab-scoring">
-        <div class="placeholder">Scoring plays — coming in Phase 2d</div>
+        <div class="plays-list" id="scoring-plays-list"></div>
       </div>
       <div class="tab-content" id="tab-plays">
-        <div class="placeholder">All plays — coming in Phase 2d</div>
+        <div class="plays-list" id="all-plays-list"></div>
       </div>
+
+      <!-- ─────────────── OTHER TABS (placeholders) ─────────────── -->
+
       <div class="tab-content" id="tab-winprob">
         <div class="placeholder">Win probability — coming in Phase 2e</div>
       </div>
