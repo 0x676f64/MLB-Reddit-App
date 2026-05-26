@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { context, reddit, redis, settings } from "@devvit/web/server";
-import type { PartialJsonValue, UiResponse } from "@devvit/web/shared";
+import type { PartialJsonValue, TriggerResponse, UiResponse } from "@devvit/web/shared";
 
 // ════════════════════════════════════════════════════════════════════════
 // Entry point
@@ -63,6 +63,13 @@ async function onRequest(
   }
   if (pathname === "/internal/menu/clear-today-dedup") {
     const result = await onMenuClearTodayDedup();
+    writeJSON<PartialJsonValue>(200, result as unknown as PartialJsonValue, rsp);
+    return;
+  }
+
+  // ── Trigger endpoints ─────────────────────────────────────────────────
+  if (pathname === "/internal/triggers/on-app-install") {
+    const result = await onAppInstall();
     writeJSON<PartialJsonValue>(200, result as unknown as PartialJsonValue, rsp);
     return;
   }
@@ -190,14 +197,22 @@ async function onPostGame(rsp: ServerResponse): Promise<void> {
  * Returns null if unset, blank, or non-numeric so the schedule call falls
  * back to fetching all games instead of erroring out.
  *
- * Handles both the array shape (select with multi-select default) and the
- * plain string shape, since Devvit's schema can return either depending on
- * the field type.
+ * Devvit's select setting returns an array at runtime even though the
+ * schema's defaultValue is typed as a plain string, so we handle both.
  */
 async function getTeamIdFilter(): Promise<string | null> {
   try {
-    const raw = await settings.get<string>("teamId");
-    const value = (raw ?? "").trim();
+    const raw = await settings.get<string | string[]>("teamId");
+
+    let value: string;
+    if (Array.isArray(raw)) {
+      value = (raw[0] ?? "").toString().trim();
+    } else if (typeof raw === "string") {
+      value = raw.trim();
+    } else {
+      value = "";
+    }
+
     if (!value) return null;
     if (!/^\d+$/.test(value)) {
       console.warn(`Invalid teamId setting: "${value}" — falling back to all games`);
@@ -362,4 +377,66 @@ async function onMenuClearTodayDedup(): Promise<UiResponse> {
       appearance: cleared > 0 ? "success" : "neutral",
     },
   };
+}
+
+// ════════════════════════════════════════════════════════════════════════
+// Triggers
+// ════════════════════════════════════════════════════════════════════════
+
+const WELCOME_POST_BODY = `# Welcome to MLB Scoreboards
+
+Thanks for installing **MLB Scoreboards** — a live Game Thread experience built for Major League Baseball communities, from team-focused subreddits to league-wide aggregators.
+
+## What it does
+
+MLB Scoreboards turns each Game Thread into a real-time, data-rich scoreboard. Once a thread is posted, the bot does the rest:
+
+- **Pregame** — Probable starters, season stat lines, first pitch time
+- **Live** — Score, count, base/outs scorebug, K-zone with numbered pitch dots, latest pitch chip with velocity and result
+- **Box Score** — Batting and pitching tables for both teams, toggleable team view
+- **Scoring Plays** and **All Plays** — Every event with mini-scorebug, RBI, and Statcast chips (exit velocity, launch angle, distance)
+- **Win Probability** — Inning-by-inning chart, hover or tap any swing to see the play that drove it
+- **Final / Wrap** — W/L pitcher decisions, top performers, completed linescore
+
+Threads refresh every 10 seconds while a game is in progress. No further moderator action required after posting.
+
+## Quick setup
+
+1. Open **Mod Tools → Community Apps → mlb-scores → Settings**.
+2. Under **MLB Team Filter**, choose one of:
+   - **Your team** — for team subreddits like r/Reds, r/Yankees, or r/Dodgers. Game Threads will only post for that team's games.
+   - **All Teams (post every game)** — for league-wide subreddits that cover the full slate. The bot will post a Game Thread for every MLB game on today's schedule.
+3. Click **Save**.
+4. When you're ready to post today's threads, open the moderator menu on your subreddit and select **"Post today's MLB game threads."** The bot reads your team setting and posts only what applies.
+
+You can change the team filter at any time — each existing Game Thread is locked to its own game's data, so switching teams later doesn't affect threads already posted.
+
+## On duplicate prevention
+
+If you click the menu twice on the same day, the bot will skip games it has already posted and only add new ones (such as the second game of a doubleheader added mid-day). Tomorrow's games carry their own IDs and will post normally without any cleanup on your end.
+
+## Questions or feedback
+
+Reach out to u/0xgod with anything — feature requests, bug reports, suggestions. This is built for your community; it should work the way you want it to.
+
+---
+
+*Built on Devvit Web. Data provided by the MLB Stats API. Not affiliated with Major League Baseball Properties, Inc.*`;
+
+async function onAppInstall(): Promise<TriggerResponse> {
+  const subredditName = context.subredditName;
+  if (!subredditName) {
+    console.warn("onAppInstall: no subredditName in context");
+    return {};
+  }
+  try {
+    await reddit.submitPost({
+      subredditName,
+      title: "Welcome to MLB Scoreboards — setup and overview",
+      text: WELCOME_POST_BODY,
+    });
+  } catch (e) {
+    console.error("onAppInstall welcome post failed:", e);
+  }
+  return {};
 }
