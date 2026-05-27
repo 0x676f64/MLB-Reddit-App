@@ -57,6 +57,11 @@ async function onRequest(
     writeJSON<PartialJsonValue>(200, result as unknown as PartialJsonValue, rsp);
     return;
   }
+  if (pathname === "/internal/menu/clear-today-dedup") {
+    const result = await onMenuClearTodayDedup();
+    writeJSON<PartialJsonValue>(200, result as unknown as PartialJsonValue, rsp);
+    return;
+  }
 
   // ── Trigger endpoints ─────────────────────────────────────────────────
   if (pathname === "/internal/triggers/on-app-install") {
@@ -66,6 +71,11 @@ async function onRequest(
   }
   if (pathname === "/internal/triggers/on-post-delete") {
     const result = await onPostDelete(req);
+    writeJSON<PartialJsonValue>(200, result as unknown as PartialJsonValue, rsp);
+    return;
+  }
+  if (pathname === "/internal/triggers/on-mod-action") {
+    const result = await onModAction(req);
     writeJSON<PartialJsonValue>(200, result as unknown as PartialJsonValue, rsp);
     return;
   }
@@ -322,6 +332,49 @@ async function onMenuPostAllGames(): Promise<UiResponse> {
   };
 }
 
+async function onMenuClearTodayDedup(): Promise<UiResponse> {
+  const subredditId = context.subredditId;
+  if (!subredditId) {
+    return { showToast: { text: "No subreddit context.", appearance: "neutral" } };
+  }
+
+  const teamId = await getTeamIdFilter();
+
+  let games: any[] = [];
+  try {
+    const r = await fetch(scheduleUrl(todayDateStr(), teamId));
+    const data: any = await r.json();
+    games = data?.dates?.[0]?.games || [];
+  } catch (e) {
+    console.error("schedule fetch (clear-dedup) failed:", e);
+    return { showToast: { text: "Couldn't fetch schedule.", appearance: "neutral" } };
+  }
+
+  if (!games.length) {
+    return { showToast: { text: "No games today to clear.", appearance: "neutral" } };
+  }
+
+  let cleared = 0;
+  for (const game of games) {
+    const pk = game?.gamePk;
+    if (!pk) continue;
+    const dedupKey = `posted:${subredditId}:${pk}`;
+    const linkedPostId = await redis.get(dedupKey);
+    if (linkedPostId) {
+      await redis.del(dedupKey);
+      await redis.del(`post-game:${linkedPostId}`);
+      cleared++;
+    }
+  }
+
+  return {
+    showToast: {
+      text: `Cleared ${cleared} game(s). You can now re-post them.`,
+      appearance: cleared > 0 ? "success" : "neutral",
+    },
+  };
+}
+
 // ════════════════════════════════════════════════════════════════════════
 // Triggers
 // ════════════════════════════════════════════════════════════════════════
@@ -354,9 +407,13 @@ Threads refresh every 10 seconds while a game is in progress. No further moderat
 
 You can change the team filter at any time — each existing Game Thread is locked to its own game's data, so switching teams later doesn't affect threads already posted.
 
+## Recovering removed threads
+
+If you delete or remove a Game Thread the bot created, the system will detect the removal and automatically allow that game to be re-posted on the next menu run. If for any reason a thread doesn't come back when you re-run the posting menu, run **"Allow re-posting removed game threads"** from the moderator menu to reset the tracker manually.
+
 ## On duplicate prevention
 
-If you click the menu twice on the same day, the bot will skip games it has already posted and only add new ones (such as the second game of a doubleheader added mid-day). If you delete a Game Thread the bot created, the system will automatically recognize the removal and allow that game to be re-posted on the next menu run. Tomorrow's games carry their own IDs and will post normally without any cleanup on your end.
+If you click the posting menu twice on the same day, the bot will skip games it has already posted and only add new ones (such as the second game of a doubleheader added mid-day). Tomorrow's games carry their own IDs and will post normally without any cleanup on your end.
 
 ## Questions or feedback
 
@@ -385,11 +442,27 @@ async function onAppInstall(): Promise<TriggerResponse> {
 }
 
 /**
- * Auto-clean dedup keys when a Game Thread is deleted.
- *
- * If a mod removes one of our posts, this trigger wipes both Redis entries
- * for that post so the bulk-poster menu can re-post the game cleanly.
- * Non-bot posts pass through silently (no mapping → no cleanup).
+ * Remove the dedup keys associated with a given post ID.
+ * Shared by onPostDelete and onModAction handlers.
+ * Safe to call on unknown postIds — silently no-ops if no mapping exists.
+ */
+async function cleanDedupForPost(postId: string): Promise<void> {
+  const gamePk = await redis.get(`post-game:${postId}`);
+  if (!gamePk) return; // Not one of our posts — nothing to clean.
+
+  const subId = context.subredditId;
+  if (subId) {
+    await redis.del(`posted:${subId}:${gamePk}`);
+  }
+  await redis.del(`post-game:${postId}`);
+
+  console.log(`Cleaned dedup for post ${postId} (gamePk ${gamePk})`);
+}
+
+/**
+ * Fires when a post's author deletes their own post.
+ * For bot-authored posts, this catches the rare case where the bot account
+ * itself removes a thread (or where Devvit reports an author-side delete).
  */
 async function onPostDelete(req: IncomingMessage): Promise<TriggerResponse> {
   try {
@@ -399,19 +472,39 @@ async function onPostDelete(req: IncomingMessage): Promise<TriggerResponse> {
       console.warn("onPostDelete: no postId in event payload", body);
       return {};
     }
-
-    const gamePk = await redis.get(`post-game:${postId}`);
-    if (!gamePk) return {}; // Not one of our posts — nothing to clean.
-
-    const subId = context.subredditId;
-    if (subId) {
-      await redis.del(`posted:${subId}:${gamePk}`);
-    }
-    await redis.del(`post-game:${postId}`);
-
-    console.log(`Cleaned dedup for deleted post ${postId} (gamePk ${gamePk})`);
+    await cleanDedupForPost(postId);
   } catch (e) {
     console.error("onPostDelete error:", e);
+  }
+  return {};
+}
+
+/**
+ * Fires for every moderator action in the subreddit.
+ * We only act on link-removal actions (removelink, spamlink), where a mod
+ * has taken one of our Game Threads off the sub. Everything else passes
+ * through silently.
+ */
+async function onModAction(req: IncomingMessage): Promise<TriggerResponse> {
+  try {
+    const body = await readJSON<{
+      action?: string;
+      targetPost?: { id?: string };
+      targetPostId?: string;
+    }>(req);
+
+    const action = (body?.action || "").toLowerCase();
+    const REMOVAL_ACTIONS = ["removelink", "spamlink"];
+    if (!REMOVAL_ACTIONS.includes(action)) return {};
+
+    const postId = body?.targetPost?.id || body?.targetPostId;
+    if (!postId) {
+      console.warn("onModAction: no targetPost ID in event payload", body);
+      return {};
+    }
+    await cleanDedupForPost(postId);
+  } catch (e) {
+    console.error("onModAction error:", e);
   }
   return {};
 }

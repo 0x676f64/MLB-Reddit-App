@@ -95,13 +95,21 @@
         "location": "subreddit",
         "forUserType": "moderator",
         "endpoint": "/internal/menu/post-all-today"
+      },
+      {
+        "label": "Allow re-posting removed game threads",
+        "description": "Use this if a Game Thread was deleted or removed and you need the bot to post it again.",
+        "location": "subreddit",
+        "forUserType": "moderator",
+        "endpoint": "/internal/menu/clear-today-dedup"
       }
     ]
   },
 
   "triggers": {
     "onAppInstall": "/internal/triggers/on-app-install",
-    "onPostDelete": "/internal/triggers/on-post-delete"
+    "onPostDelete": "/internal/triggers/on-post-delete",
+    "onModAction": "/internal/triggers/on-mod-action"
   },
 
   "scripts": {
