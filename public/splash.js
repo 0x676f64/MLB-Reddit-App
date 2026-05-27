@@ -170,6 +170,7 @@ function getPitcherSeasonStats(teamBox, pitcherId) {
 var gamePk = null;
 var pollInterval = null;
 var lastGameData = null;
+var postgameNotificationFired = false;
 function reportError(label, e) {
   console.error(`[${label}]`, e);
   let overlay = document.getElementById("error-overlay");
@@ -1005,6 +1006,7 @@ function render(data) {
   document.body.classList.toggle("is-pregame", isPreGameState(statusText));
   document.body.classList.toggle("is-live", isLiveState(statusText));
   document.body.classList.toggle("is-final", isFinalState(statusText));
+  void maybeNotifyPostgame(statusText);
   const loading = $("loading-state");
   const content = $("scorebug-content");
   loading.style.display = "none";
@@ -1192,6 +1194,16 @@ function setupTabs() {
 function startPolling(pk) {
   if (pollInterval) clearInterval(pollInterval);
   pollInterval = setInterval(() => fetchAndRender(pk), 1e4);
+}
+async function maybeNotifyPostgame(statusText) {
+  if (postgameNotificationFired) return;
+  if (!isFinalState(statusText)) return;
+  postgameNotificationFired = true;
+  try {
+    await fetch("/api/postgame-check", { method: "POST" });
+  } catch (e) {
+    console.error("postgame notify failed:", e);
+  }
 }
 (async () => {
   setupTabs();
