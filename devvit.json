@@ -83,6 +83,12 @@
           { "label": "Washington Nationals",   "value": "120" }
         ],
         "defaultValue": ""
+      },
+      "autoPostgame": {
+        "type": "boolean",
+        "label": "Auto-post postgame threads",
+        "helpText": "When enabled, the bot will automatically post a Postgame Thread the moment a game ends. Recommended for active subreddits. Disable for single-thread discussion style.",
+        "defaultValue": true
       }
     }
   },
@@ -95,6 +101,13 @@
         "location": "subreddit",
         "forUserType": "moderator",
         "endpoint": "/internal/menu/post-all-today"
+      },
+      {
+        "label": "Post postgame threads for completed games",
+        "description": "Manually create Postgame Threads for any completed games that don't yet have one. Use as backup if a postgame thread was missed.",
+        "location": "subreddit",
+        "forUserType": "moderator",
+        "endpoint": "/internal/menu/post-postgame"
       },
       {
         "label": "Allow re-posting removed game threads",

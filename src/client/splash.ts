@@ -161,6 +161,7 @@ function getPitcherSeasonStats(teamBox: any, pitcherId: number | undefined): str
 let gamePk: number | null = null;
 let pollInterval: ReturnType<typeof setInterval> | null = null;
 let lastGameData: any = null;
+let postgameNotificationFired = false;
 
 // ── Visible error reporting (Devvit iframe-friendly) ──────────────────────
 
@@ -1098,6 +1099,8 @@ function render(data: any): void {
   document.body.classList.toggle("is-live", isLiveState(statusText));
   document.body.classList.toggle("is-final", isFinalState(statusText));
 
+  void maybeNotifyPostgame(statusText);
+
   const loading = $("loading-state")!;
   const content = $("scorebug-content")!;
   loading.style.display = "none";
@@ -1295,6 +1298,20 @@ function setupTabs(): void {
 function startPolling(pk: number): void {
   if (pollInterval) clearInterval(pollInterval);
   pollInterval = setInterval(() => fetchAndRender(pk), 10000);
+}
+
+// ── Postgame notification ──────────────────────────────────────────────────
+
+async function maybeNotifyPostgame(statusText: string): Promise<void> {
+  if (postgameNotificationFired) return;
+  if (!isFinalState(statusText)) return;
+  postgameNotificationFired = true;
+  try {
+    await fetch("/api/postgame-check", { method: "POST" });
+  } catch (e) {
+    // Best effort — server has dedup, no harm if this fails
+    console.error("postgame notify failed:", e);
+  }
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────
