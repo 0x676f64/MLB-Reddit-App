@@ -2,12 +2,15 @@
   "$schema": "https://developers.reddit.com/schema/config-file.v1.json",
   "name": "mlb-scores",
 
+  "marketingAssets": {
+    "icon": "assets/mlb-scores-logo.png"
+  },
+
   "permissions": {
     "http": {
       "enable": true,
       "domains": [
         "statsapi.mlb.com",
-        "www.mlbstatic.com",
         "img.mlbstatic.com",
         "midfield.mlbstatic.com",
         "prod-gameday.mlbstatic.com",
@@ -92,19 +95,13 @@
         "location": "subreddit",
         "forUserType": "moderator",
         "endpoint": "/internal/menu/post-all-today"
-      },
-      {
-        "label": "Clear today's MLB dedup (dev only)",
-        "description": "Allow re-posting today's game threads. Dev/test use only.",
-        "location": "subreddit",
-        "forUserType": "moderator",
-        "endpoint": "/internal/menu/clear-today-dedup"
       }
     ]
   },
-  
+
   "triggers": {
-    "onAppInstall": "/internal/triggers/on-app-install"
+    "onAppInstall": "/internal/triggers/on-app-install",
+    "onPostDelete": "/internal/triggers/on-post-delete"
   },
 
   "scripts": {

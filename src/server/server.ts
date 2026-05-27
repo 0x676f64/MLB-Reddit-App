@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { once } from "node:events";
 import { context, reddit, redis, settings } from "@devvit/web/server";
 import type { PartialJsonValue, TriggerResponse, UiResponse } from "@devvit/web/shared";
 
@@ -41,11 +42,6 @@ async function onRequest(
     await onGame(pathname.slice("/api/game/".length), rsp);
     return;
   }
-  if (pathname.startsWith("/api/logo/")) {
-    const teamId = pathname.slice("/api/logo/".length).replace(/\.svg$/, "");
-    await onLogo(teamId, rsp);
-    return;
-  }
   if (pathname.startsWith("/api/winprob/")) {
     await onWinProb(pathname.slice("/api/winprob/".length), rsp);
     return;
@@ -61,15 +57,15 @@ async function onRequest(
     writeJSON<PartialJsonValue>(200, result as unknown as PartialJsonValue, rsp);
     return;
   }
-  if (pathname === "/internal/menu/clear-today-dedup") {
-    const result = await onMenuClearTodayDedup();
-    writeJSON<PartialJsonValue>(200, result as unknown as PartialJsonValue, rsp);
-    return;
-  }
 
   // ── Trigger endpoints ─────────────────────────────────────────────────
   if (pathname === "/internal/triggers/on-app-install") {
     const result = await onAppInstall();
+    writeJSON<PartialJsonValue>(200, result as unknown as PartialJsonValue, rsp);
+    return;
+  }
+  if (pathname === "/internal/triggers/on-post-delete") {
+    const result = await onPostDelete(req);
     writeJSON<PartialJsonValue>(200, result as unknown as PartialJsonValue, rsp);
     return;
   }
@@ -98,6 +94,18 @@ function writeJSON<T extends PartialJsonValue>(
     "Content-Type": "application/json",
   });
   rsp.end(body);
+}
+
+async function readJSON<T>(req: IncomingMessage): Promise<T | null> {
+  try {
+    const chunks: Uint8Array[] = [];
+    req.on("data", (chunk) => chunks.push(chunk));
+    await once(req, "end");
+    const body = Buffer.concat(chunks).toString();
+    return body ? (JSON.parse(body) as T) : null;
+  } catch {
+    return null;
+  }
 }
 
 // ════════════════════════════════════════════════════════════════════════
@@ -129,28 +137,6 @@ async function onGame(pk: string, rsp: ServerResponse): Promise<void> {
     const data = (await r.json()) as PartialJsonValue;
     writeJSON<PartialJsonValue>(200, data, rsp);
   } catch (e) {
-    writeJSON<ErrorResponse>(500, { error: String(e), status: 500 }, rsp);
-  }
-}
-
-async function onLogo(teamId: string, rsp: ServerResponse): Promise<void> {
-  if (!/^\d+$/.test(teamId)) {
-    writeJSON<ErrorResponse>(400, { error: "Invalid team ID", status: 400 }, rsp);
-    return;
-  }
-  try {
-    const r = await fetch(
-      `https://www.mlbstatic.com/team-logos/${teamId}.svg`,
-    );
-    if (!r.ok) {
-      console.error(`Logo upstream ${teamId}: ${r.status} ${r.statusText}`);
-      writeJSON<ErrorResponse>(404, { error: `Upstream ${r.status}`, status: 404 }, rsp);
-      return;
-    }
-    const svg = await r.text();
-    writeJSON<PartialJsonValue>(200, { svg } as PartialJsonValue, rsp);
-  } catch (e) {
-    console.error(`onLogo error for ${teamId}:`, e);
     writeJSON<ErrorResponse>(500, { error: String(e), status: 500 }, rsp);
   }
 }
@@ -198,7 +184,7 @@ async function onPostGame(rsp: ServerResponse): Promise<void> {
  * back to fetching all games instead of erroring out.
  *
  * Devvit's select setting returns an array at runtime even though the
- * schema's defaultValue is typed as a plain string, so we handle both.
+ * schema's defaultValue is a plain string, so we handle both shapes.
  */
 async function getTeamIdFilter(): Promise<string | null> {
   try {
@@ -336,49 +322,6 @@ async function onMenuPostAllGames(): Promise<UiResponse> {
   };
 }
 
-async function onMenuClearTodayDedup(): Promise<UiResponse> {
-  const subredditId = context.subredditId;
-  if (!subredditId) {
-    return { showToast: { text: "No subreddit context.", appearance: "neutral" } };
-  }
-
-  const teamId = await getTeamIdFilter();
-
-  let games: any[] = [];
-  try {
-    const r = await fetch(scheduleUrl(todayDateStr(), teamId));
-    const data: any = await r.json();
-    games = data?.dates?.[0]?.games || [];
-  } catch (e) {
-    console.error("schedule fetch (clear-dedup) failed:", e);
-    return { showToast: { text: "Couldn't fetch schedule.", appearance: "neutral" } };
-  }
-
-  if (!games.length) {
-    return { showToast: { text: "No games today to clear.", appearance: "neutral" } };
-  }
-
-  let cleared = 0;
-  for (const game of games) {
-    const pk = game?.gamePk;
-    if (!pk) continue;
-    const dedupKey = `posted:${subredditId}:${pk}`;
-    const linkedPostId = await redis.get(dedupKey);
-    if (linkedPostId) {
-      await redis.del(dedupKey);
-      await redis.del(`post-game:${linkedPostId}`);
-      cleared++;
-    }
-  }
-
-  return {
-    showToast: {
-      text: `Cleared ${cleared} dedup key(s).`,
-      appearance: cleared > 0 ? "success" : "neutral",
-    },
-  };
-}
-
 // ════════════════════════════════════════════════════════════════════════
 // Triggers
 // ════════════════════════════════════════════════════════════════════════
@@ -413,7 +356,7 @@ You can change the team filter at any time — each existing Game Thread is lock
 
 ## On duplicate prevention
 
-If you click the menu twice on the same day, the bot will skip games it has already posted and only add new ones (such as the second game of a doubleheader added mid-day). Tomorrow's games carry their own IDs and will post normally without any cleanup on your end.
+If you click the menu twice on the same day, the bot will skip games it has already posted and only add new ones (such as the second game of a doubleheader added mid-day). If you delete a Game Thread the bot created, the system will automatically recognize the removal and allow that game to be re-posted on the next menu run. Tomorrow's games carry their own IDs and will post normally without any cleanup on your end.
 
 ## Questions or feedback
 
@@ -437,6 +380,38 @@ async function onAppInstall(): Promise<TriggerResponse> {
     });
   } catch (e) {
     console.error("onAppInstall welcome post failed:", e);
+  }
+  return {};
+}
+
+/**
+ * Auto-clean dedup keys when a Game Thread is deleted.
+ *
+ * If a mod removes one of our posts, this trigger wipes both Redis entries
+ * for that post so the bulk-poster menu can re-post the game cleanly.
+ * Non-bot posts pass through silently (no mapping → no cleanup).
+ */
+async function onPostDelete(req: IncomingMessage): Promise<TriggerResponse> {
+  try {
+    const body = await readJSON<{ postId?: string; post?: { id?: string } }>(req);
+    const postId = body?.postId || body?.post?.id;
+    if (!postId) {
+      console.warn("onPostDelete: no postId in event payload", body);
+      return {};
+    }
+
+    const gamePk = await redis.get(`post-game:${postId}`);
+    if (!gamePk) return {}; // Not one of our posts — nothing to clean.
+
+    const subId = context.subredditId;
+    if (subId) {
+      await redis.del(`posted:${subId}:${gamePk}`);
+    }
+    await redis.del(`post-game:${postId}`);
+
+    console.log(`Cleaned dedup for deleted post ${postId} (gamePk ${gamePk})`);
+  } catch (e) {
+    console.error("onPostDelete error:", e);
   }
   return {};
 }

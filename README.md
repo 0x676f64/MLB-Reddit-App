@@ -36,6 +36,7 @@ A single per-subreddit setting — **MLB Team Filter** — switches between thes
 - **Duplicate prevention** — Internal deduplication keyed to subreddit + game, so accidentally double-clicking the menu doesn't create duplicate posts.
 - **Per-post game linking** — Each post is bound to its game's ID. Multiple posts in one sub each render their own game, not the auto-picked default.
 - **Welcome post on install** — A one-time setup-and-overview post is created when a moderator installs the app, walking the team through configuration.
+- **Auto-cleanup on delete** — If a mod removes one of the bot's Game Threads, the system automatically clears its dedup entry so the menu can re-post that game cleanly.
 
 ### Design
 
