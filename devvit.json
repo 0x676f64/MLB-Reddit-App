@@ -125,6 +125,15 @@
     "onModAction": "/internal/triggers/on-mod-action"
   },
 
+  "scheduler": {
+    "tasks": {
+      "postgame-sweep": {
+        "endpoint": "/internal/scheduler/postgame-sweep",
+        "cron": "*/5 * * * *"
+      }
+    }
+  },
+
   "scripts": {
     "dev": "node --experimental-strip-types ./tools/build.ts --watch",
     "build": "node --experimental-strip-types ./tools/build.ts --minify"

@@ -72,6 +72,13 @@ async function onRequest(
     return;
   }
 
+  // ── Scheduler endpoints ───────────────────────────────────────────────
+  if (pathname === "/internal/scheduler/postgame-sweep") {
+    await onCronPostgameSweep();
+    writeJSON<PartialJsonValue>(200, { ok: true } as PartialJsonValue, rsp);
+    return;
+  }
+
   // ── Trigger endpoints ─────────────────────────────────────────────────
   if (pathname === "/internal/triggers/on-app-install") {
     const result = await onAppInstall();
@@ -249,6 +256,19 @@ async function onPostgameCheck(rsp: ServerResponse): Promise<void> {
     return;
   }
 
+  // Don't post belated postgame threads — if the game's first pitch was more
+  // than 12 hours ago, the window has passed. Protects against postgame
+  // threads firing when someone opens an old Game Thread days after the fact.
+  const gameDateTime = feed?.gameData?.datetime?.dateTime;
+  if (gameDateTime) {
+    const ageMs = Date.now() - new Date(gameDateTime).getTime();
+    if (ageMs > 12 * 60 * 60 * 1000) {
+      console.log(`postgame-check: skipped gamePk ${gamePkStr} (game too old: ${Math.round(ageMs / 3600000)}h)`);
+      writeJSON<PartialJsonValue>(200, { created: false } as PartialJsonValue, rsp);
+      return;
+    }
+  }
+
   const teamId = await getTeamIdFilter();
 
   try {
@@ -357,7 +377,7 @@ function buildGameThreadTitle(game: any, teamId: string | null): string {
 
 /**
  * Postgame thread title using the schedule API format.
- * Used by the manual menu fallback (which scans the schedule).
+ * Used by the manual menu fallback and the cron sweep (which scan the schedule).
  */
 function buildPostgameThreadTitle(game: any, teamId: string | null): string {
   const away = game?.teams?.away?.team?.name || "Away";
@@ -493,10 +513,18 @@ async function onMenuPostPostgame(): Promise<UiResponse> {
     if (codedState === "D") continue; // postponed
     if (codedState === "C") continue; // cancelled
 
+    // Skip games older than 12 hours from first pitch — manual menu is for
+    // missed postgames from today, not retroactive creation of old ones.
+    const gameDateTime = game?.gameDate;
+    if (gameDateTime) {
+      const ageMs = Date.now() - new Date(gameDateTime).getTime();
+      if (ageMs > 12 * 60 * 60 * 1000) continue;
+    }
+
     // Must have had a Game Thread
     const gameDedupKey = `posted:${subredditId}:${pk}`;
     if (!(await redis.get(gameDedupKey))) continue;
-        
+
     // Must not already have a Postgame Thread
     const pgKey = `postgame:${subredditId}:${pk}`;
     if (await redis.get(pgKey)) continue;
@@ -528,6 +556,72 @@ async function onMenuPostPostgame(): Promise<UiResponse> {
   return {
     showToast: { text: msg, appearance: created > 0 ? "success" : "neutral" },
   };
+}
+
+/**
+ * Backup safety net for the splash-based postgame detection. Runs every 5
+ * minutes and creates postgame threads for any completed games that don't
+ * yet have one. Catches the case where no one was viewing the Game Thread
+ * when the game ended.
+ *
+ * Same logic as onMenuPostPostgame minus the UI response.
+ */
+async function onCronPostgameSweep(): Promise<void> {
+  const subredditId = context.subredditId;
+  if (!subredditId) return;
+
+  const enabled = await getAutoPostgameSetting();
+  if (!enabled) return;
+
+  const teamId = await getTeamIdFilter();
+
+  let games: any[] = [];
+  try {
+    const r = await fetch(scheduleUrl(todayDateStr(), teamId));
+    const data: any = await r.json();
+    games = data?.dates?.[0]?.games || [];
+  } catch (e) {
+    console.error("postgame-sweep schedule fetch failed:", e);
+    return;
+  }
+
+  for (const game of games) {
+    const pk = game?.gamePk;
+    if (!pk) continue;
+
+    const abstractState = game?.status?.abstractGameState;
+    const codedState = game?.status?.codedGameState;
+    if (abstractState !== "Final") continue;
+    if (codedState === "D") continue; // postponed
+    if (codedState === "C") continue; // cancelled
+
+    // Age check — same 12-hour window as splash trigger
+    const gameDateTime = game?.gameDate;
+    if (gameDateTime) {
+      const ageMs = Date.now() - new Date(gameDateTime).getTime();
+      if (ageMs > 12 * 60 * 60 * 1000) continue;
+    }
+
+    // Must have had a Game Thread
+    const gameDedupKey = `posted:${subredditId}:${pk}`;
+    if (!(await redis.get(gameDedupKey))) continue;
+
+    // Must not already have a Postgame Thread
+    const pgKey = `postgame:${subredditId}:${pk}`;
+    if (await redis.get(pgKey)) continue;
+
+    try {
+      const post = await reddit.submitCustomPost({
+        title: buildPostgameThreadTitle(game, teamId),
+      });
+      const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 3);
+      await redis.set(`post-game:${post.id}`, String(pk), { expiration: expiresAt });
+      await redis.set(pgKey, post.id, { expiration: expiresAt });
+      console.log(`postgame-sweep: created ${post.id} for gamePk ${pk}`);
+    } catch (e) {
+      console.error(`postgame-sweep failed for gamePk ${pk}:`, e);
+    }
+  }
 }
 
 async function onMenuClearTodayDedup(): Promise<UiResponse> {
