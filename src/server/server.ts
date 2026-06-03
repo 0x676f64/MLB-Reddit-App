@@ -256,9 +256,7 @@ async function onPostgameCheck(rsp: ServerResponse): Promise<void> {
     return;
   }
 
-  // Don't post belated postgame threads — if the game's first pitch was more
-  // than 12 hours ago, the window has passed. Protects against postgame
-  // threads firing when someone opens an old Game Thread days after the fact.
+  // 12-hour age window from first pitch
   const gameDateTime = feed?.gameData?.datetime?.dateTime;
   if (gameDateTime) {
     const ageMs = Date.now() - new Date(gameDateTime).getTime();
@@ -291,11 +289,6 @@ async function onPostgameCheck(rsp: ServerResponse): Promise<void> {
 // Settings helpers
 // ════════════════════════════════════════════════════════════════════════
 
-/**
- * Read the per-subreddit teamId setting.
- * Returns null if unset, blank, or non-numeric so the schedule call falls
- * back to fetching all games instead of erroring out.
- */
 async function getTeamIdFilter(): Promise<string | null> {
   try {
     const raw = await settings.get<string | string[]>("teamId");
@@ -321,10 +314,6 @@ async function getTeamIdFilter(): Promise<string | null> {
   }
 }
 
-/**
- * Read the per-subreddit autoPostgame toggle.
- * Defaults to true (opt-out) if unset or unreadable.
- */
 async function getAutoPostgameSetting(): Promise<boolean> {
   try {
     const raw = await settings.get<boolean | boolean[]>("autoPostgame");
@@ -346,8 +335,63 @@ function scheduleUrl(date: string, teamId: string | null): string {
 // Date / title helpers
 // ════════════════════════════════════════════════════════════════════════
 
+/**
+ * Today's date in MLB's scheduling timezone (ET).
+ */
 function todayDateStr(): string {
   return new Date().toLocaleDateString("sv-SE", { timeZone: "America/New_York" });
+}
+
+/**
+ * Yesterday's date in ET. Needed because west coast games starting at
+ * 10pm ET end after midnight ET, so they appear on yesterday's schedule
+ * but their postgame thread needs to fire on today's calendar day.
+ */
+function yesterdayDateStr(): string {
+  const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  return yesterday.toLocaleDateString("sv-SE", { timeZone: "America/New_York" });
+}
+
+/**
+ * Fetch games for a single date. Returns empty array on error rather than
+ * throwing, so callers can safely use it inside Promise.all without one
+ * date's failure blowing up the whole call.
+ */
+async function fetchGamesForDate(date: string, teamId: string | null): Promise<any[]> {
+  try {
+    const r = await fetch(scheduleUrl(date, teamId));
+    const data: any = await r.json();
+    return data?.dates?.[0]?.games || [];
+  } catch (e) {
+    console.error(`fetchGamesForDate failed for ${date}:`, e);
+    return [];
+  }
+}
+
+/**
+ * Fetch both today's and yesterday's games, merged and deduplicated by
+ * gamePk. Used by postgame-related handlers so we catch west coast late
+ * games that have crossed midnight ET.
+ *
+ * The 12-hour age check downstream prevents anything actually stale from
+ * being acted on, so this is safe to use freely.
+ */
+async function fetchRecentGames(teamId: string | null): Promise<any[]> {
+  const [today, yesterday] = await Promise.all([
+    fetchGamesForDate(todayDateStr(), teamId),
+    fetchGamesForDate(yesterdayDateStr(), teamId),
+  ]);
+
+  const seen = new Set<number>();
+  const combined: any[] = [];
+  for (const g of [...today, ...yesterday]) {
+    const pk = g?.gamePk;
+    if (typeof pk === "number" && !seen.has(pk)) {
+      seen.add(pk);
+      combined.push(g);
+    }
+  }
+  return combined;
 }
 
 function formatGameTimeET(iso: string): string {
@@ -360,9 +404,6 @@ function formatGameTimeET(iso: string): string {
   });
 }
 
-/**
- * Game thread title using the schedule API format.
- */
 function buildGameThreadTitle(game: any, teamId: string | null): string {
   const away = game?.teams?.away?.team?.name || "Away";
   const home = game?.teams?.home?.team?.name || "Home";
@@ -375,10 +416,6 @@ function buildGameThreadTitle(game: any, teamId: string | null): string {
   return `Game Thread: ${away} @ ${home} - ${time}`;
 }
 
-/**
- * Postgame thread title using the schedule API format.
- * Used by the manual menu fallback and the cron sweep (which scan the schedule).
- */
 function buildPostgameThreadTitle(game: any, teamId: string | null): string {
   const away = game?.teams?.away?.team?.name || "Away";
   const home = game?.teams?.home?.team?.name || "Home";
@@ -392,10 +429,6 @@ function buildPostgameThreadTitle(game: any, teamId: string | null): string {
   return `Postgame Thread: ${away} ${awayScore} @ ${home} ${homeScore}`;
 }
 
-/**
- * Postgame thread title using the live feed format (different shape than
- * the schedule API). Used by the splash-triggered postgame check.
- */
 function buildPostgameTitleFromFeed(feed: any, teamId: string | null): string {
   const awayName = feed?.gameData?.teams?.away?.name || "Away";
   const homeName = feed?.gameData?.teams?.home?.name || "Home";
@@ -421,15 +454,9 @@ async function onMenuPostAllGames(): Promise<UiResponse> {
 
   const teamId = await getTeamIdFilter();
 
-  let games: any[] = [];
-  try {
-    const r = await fetch(scheduleUrl(todayDateStr(), teamId));
-    const data: any = await r.json();
-    games = data?.dates?.[0]?.games || [];
-  } catch (e) {
-    console.error("schedule fetch failed:", e);
-    return { showToast: { text: "Couldn't fetch schedule.", appearance: "neutral" } };
-  }
+  // Game-thread posting still uses today's schedule only — you don't want
+  // to retroactively post yesterday's game threads.
+  const games = await fetchGamesForDate(todayDateStr(), teamId);
 
   if (!games.length) {
     const note = teamId ? " for the configured team" : "";
@@ -474,9 +501,9 @@ async function onMenuPostAllGames(): Promise<UiResponse> {
 }
 
 /**
- * Manual fallback: scan today's schedule and create postgame threads for
- * any completed games that don't yet have one. Used when a postgame
- * thread didn't auto-fire (e.g., no one was viewing when the game ended).
+ * Manual fallback: scan today + yesterday's schedules and create postgame
+ * threads for any completed games that don't yet have one. Catches west
+ * coast games that ended after midnight ET.
  */
 async function onMenuPostPostgame(): Promise<UiResponse> {
   const subredditId = context.subredditId;
@@ -485,19 +512,10 @@ async function onMenuPostPostgame(): Promise<UiResponse> {
   }
 
   const teamId = await getTeamIdFilter();
-
-  let games: any[] = [];
-  try {
-    const r = await fetch(scheduleUrl(todayDateStr(), teamId));
-    const data: any = await r.json();
-    games = data?.dates?.[0]?.games || [];
-  } catch (e) {
-    console.error("schedule fetch (postgame menu) failed:", e);
-    return { showToast: { text: "Couldn't fetch schedule.", appearance: "neutral" } };
-  }
+  const games = await fetchRecentGames(teamId);
 
   if (!games.length) {
-    return { showToast: { text: "No games today.", appearance: "neutral" } };
+    return { showToast: { text: "No recent games found.", appearance: "neutral" } };
   }
 
   let created = 0;
@@ -513,8 +531,7 @@ async function onMenuPostPostgame(): Promise<UiResponse> {
     if (codedState === "D") continue; // postponed
     if (codedState === "C") continue; // cancelled
 
-    // Skip games older than 12 hours from first pitch — manual menu is for
-    // missed postgames from today, not retroactive creation of old ones.
+    // Skip games older than 12 hours from first pitch
     const gameDateTime = game?.gameDate;
     if (gameDateTime) {
       const ageMs = Date.now() - new Date(gameDateTime).getTime();
@@ -559,12 +576,10 @@ async function onMenuPostPostgame(): Promise<UiResponse> {
 }
 
 /**
- * Backup safety net for the splash-based postgame detection. Runs every 5
- * minutes and creates postgame threads for any completed games that don't
- * yet have one. Catches the case where no one was viewing the Game Thread
- * when the game ended.
- *
- * Same logic as onMenuPostPostgame minus the UI response.
+ * Cron backup: scans today + yesterday's schedules every minute and posts
+ * postgame threads for completed games that don't yet have one. The
+ * yesterday-inclusion is what catches west coast games that ended after
+ * midnight ET.
  */
 async function onCronPostgameSweep(): Promise<void> {
   const subredditId = context.subredditId;
@@ -574,16 +589,7 @@ async function onCronPostgameSweep(): Promise<void> {
   if (!enabled) return;
 
   const teamId = await getTeamIdFilter();
-
-  let games: any[] = [];
-  try {
-    const r = await fetch(scheduleUrl(todayDateStr(), teamId));
-    const data: any = await r.json();
-    games = data?.dates?.[0]?.games || [];
-  } catch (e) {
-    console.error("postgame-sweep schedule fetch failed:", e);
-    return;
-  }
+  const games = await fetchRecentGames(teamId);
 
   for (const game of games) {
     const pk = game?.gamePk;
@@ -592,10 +598,10 @@ async function onCronPostgameSweep(): Promise<void> {
     const abstractState = game?.status?.abstractGameState;
     const codedState = game?.status?.codedGameState;
     if (abstractState !== "Final") continue;
-    if (codedState === "D") continue; // postponed
-    if (codedState === "C") continue; // cancelled
+    if (codedState === "D") continue;
+    if (codedState === "C") continue;
 
-    // Age check — same 12-hour window as splash trigger
+    // 12-hour age window
     const gameDateTime = game?.gameDate;
     if (gameDateTime) {
       const ageMs = Date.now() - new Date(gameDateTime).getTime();
@@ -631,16 +637,7 @@ async function onMenuClearTodayDedup(): Promise<UiResponse> {
   }
 
   const teamId = await getTeamIdFilter();
-
-  let games: any[] = [];
-  try {
-    const r = await fetch(scheduleUrl(todayDateStr(), teamId));
-    const data: any = await r.json();
-    games = data?.dates?.[0]?.games || [];
-  } catch (e) {
-    console.error("schedule fetch (clear-dedup) failed:", e);
-    return { showToast: { text: "Couldn't fetch schedule.", appearance: "neutral" } };
-  }
+  const games = await fetchGamesForDate(todayDateStr(), teamId);
 
   if (!games.length) {
     return { showToast: { text: "No games today to clear.", appearance: "neutral" } };
@@ -752,10 +749,6 @@ async function onAppInstall(): Promise<TriggerResponse> {
   return {};
 }
 
-/**
- * Remove the dedup keys (both Game Thread and Postgame Thread) associated
- * with a given post ID. Safe to call on unknown postIds — silently no-ops.
- */
 async function cleanDedupForPost(postId: string): Promise<void> {
   const gamePk = await redis.get(`post-game:${postId}`);
   if (!gamePk) return;
@@ -765,7 +758,6 @@ async function cleanDedupForPost(postId: string): Promise<void> {
     const gameKey = `posted:${subId}:${gamePk}`;
     const pgKey = `postgame:${subId}:${gamePk}`;
 
-    // Clear whichever dedup namespace this post belongs to
     const gameLinked = await redis.get(gameKey);
     if (gameLinked === postId) await redis.del(gameKey);
 
