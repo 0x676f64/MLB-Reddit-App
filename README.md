@@ -152,4 +152,6 @@ Not affiliated with Major League Baseball Properties, Inc.
 
 ## License
 
-[TBD]
+MIT License — see [LICENSE](./LICENSE) for full text.
+
+Copyright (c) 2026 0X676F64
