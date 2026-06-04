@@ -215,6 +215,17 @@ function getTeamShortName(team) {
   const parts = name.split(" ");
   return parts[parts.length - 1] || team.abbreviation || "";
 }
+function formatPitcherName(fullName) {
+  const safe = (fullName || "").trim();
+  if (!safe) return "TBD";
+  const parts = safe.split(/\s+/);
+  if (parts.length === 1) {
+    return safe;
+  }
+  const last = parts.pop();
+  const rest = parts.join(" ");
+  return `${rest}<br>${last}`;
+}
 function hideAllStatePanes() {
   ["pregame-content", "live-content", "final-content"].forEach((id) => {
     const el = $(id);
@@ -230,8 +241,8 @@ function renderPregameContent(data, awayTeam, homeTeam) {
   const homeLabel = $("pregame-home-pitcher-label");
   if (awayLabel) awayLabel.textContent = `${getTeamShortName(awayTeam).toUpperCase()} STARTER`;
   if (homeLabel) homeLabel.textContent = `${getTeamShortName(homeTeam).toUpperCase()} STARTER`;
-  $("pregame-away-pitcher-name").textContent = probables.away?.fullName || "TBD";
-  $("pregame-home-pitcher-name").textContent = probables.home?.fullName || "TBD";
+  $("pregame-away-pitcher-name").innerHTML = formatPitcherName(probables.away?.fullName || "TBD");
+  $("pregame-home-pitcher-name").innerHTML = formatPitcherName(probables.home?.fullName || "TBD");
   $("pregame-away-pitcher-stats").textContent = getPitcherSeasonStats(teamsBox.away, awayPid);
   $("pregame-home-pitcher-stats").textContent = getPitcherSeasonStats(teamsBox.home, homePid);
   const dt = new Date(data.gameData.datetime?.dateTime || Date.now());

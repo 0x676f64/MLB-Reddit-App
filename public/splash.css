@@ -382,6 +382,11 @@ body.on-box-tab .linescore { display: none; }
   line-height: 1.15;
 }
 
+.pregame-pitcher-name .pn-line {
+  display: block;
+  line-height: 1.05;
+}
+
 .pregame-pitcher-stats {
   font-family: var(--font-mono);
   font-size: 11px;
