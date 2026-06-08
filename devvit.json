@@ -89,6 +89,18 @@
         "label": "Auto-post postgame threads",
         "helpText": "When enabled, the bot will automatically post a Postgame Thread the moment a game ends. Recommended for active subreddits. Disable for single-thread discussion style.",
         "defaultValue": true
+      },
+      "postgameWinTitle": {
+        "type": "string",
+        "label": "Postgame Win Title (optional)",
+        "helpText": "Custom title for postgame threads when your configured team WINS. Leave blank for default format. Placeholders: {team} = your team's name, {opp} = opponent's name, {teamScore} and {oppScore} = scores. Example: 'THEEEE YANKEES WIN! {team} {teamScore}, {opp} {oppScore}'. Only used when a specific team is configured in the Team Filter.",
+        "defaultValue": ""
+      },
+      "postgameLossTitle": {
+        "type": "string",
+        "label": "Postgame Loss Title (optional)",
+        "helpText": "Custom title for postgame threads when your configured team LOSES. Leave blank for default format. Same placeholders as the win title. Only used when a specific team is configured in the Team Filter.",
+        "defaultValue": ""
       }
     }
   },
@@ -104,7 +116,7 @@
       },
       {
         "label": "Post postgame threads for completed games",
-        "description": "Manually create Postgame Threads for any completed games that don't yet have one. Use as backup if a postgame thread was missed.",
+        "description": "Manually create Postgame Threads (or postponement notices) for any completed/postponed games that don't yet have one. Use as backup if the cron missed one.",
         "location": "subreddit",
         "forUserType": "moderator",
         "endpoint": "/internal/menu/post-postgame"
