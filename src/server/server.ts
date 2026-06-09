@@ -4,6 +4,43 @@ import { context, reddit, redis, settings } from "@devvit/web/server";
 import type { PartialJsonValue, TriggerResponse, UiResponse } from "@devvit/web/shared";
 
 // ════════════════════════════════════════════════════════════════════════
+// Constants
+// ════════════════════════════════════════════════════════════════════════
+
+const TEAM_NAMES: Record<string, string> = {
+  "108": "Los Angeles Angels",
+  "109": "Arizona Diamondbacks",
+  "110": "Baltimore Orioles",
+  "111": "Boston Red Sox",
+  "112": "Chicago Cubs",
+  "113": "Cincinnati Reds",
+  "114": "Cleveland Guardians",
+  "115": "Colorado Rockies",
+  "116": "Detroit Tigers",
+  "117": "Houston Astros",
+  "118": "Kansas City Royals",
+  "119": "Los Angeles Dodgers",
+  "120": "Washington Nationals",
+  "121": "New York Mets",
+  "133": "Athletics",
+  "134": "Pittsburgh Pirates",
+  "135": "San Diego Padres",
+  "136": "Seattle Mariners",
+  "137": "San Francisco Giants",
+  "138": "St. Louis Cardinals",
+  "139": "Tampa Bay Rays",
+  "140": "Texas Rangers",
+  "141": "Toronto Blue Jays",
+  "142": "Minnesota Twins",
+  "143": "Philadelphia Phillies",
+  "144": "Atlanta Braves",
+  "145": "Chicago White Sox",
+  "146": "Miami Marlins",
+  "147": "New York Yankees",
+  "158": "Milwaukee Brewers",
+};
+
+// ════════════════════════════════════════════════════════════════════════
 // Entry point
 // ════════════════════════════════════════════════════════════════════════
 
@@ -184,7 +221,6 @@ async function onWinProb(pk: string, rsp: ServerResponse): Promise<void> {
   }
 }
 
-// Per-post game lookup — the splash calls this to find which game to render
 async function onPostGame(rsp: ServerResponse): Promise<void> {
   if (!context.postId) {
     writeJSON<PartialJsonValue>(200, { gamePk: null } as PartialJsonValue, rsp);
@@ -200,11 +236,6 @@ async function onPostGame(rsp: ServerResponse): Promise<void> {
   }
 }
 
-/**
- * Called by the splash the moment its poll cycle sees the game has gone
- * Final. Server re-validates by fetching the feed, then creates the
- * postgame thread if all conditions are met. Idempotent via dedup keys.
- */
 async function onPostgameCheck(rsp: ServerResponse): Promise<void> {
   const subId = context.subredditId;
   const postId = context.postId;
@@ -248,7 +279,6 @@ async function onPostgameCheck(rsp: ServerResponse): Promise<void> {
     return;
   }
 
-  // 12-hour age window
   const gameDateTime = feed?.gameData?.datetime?.dateTime;
   if (gameDateTime) {
     const ageMs = Date.now() - new Date(gameDateTime).getTime();
@@ -319,13 +349,6 @@ async function getAutoPostgameSetting(): Promise<boolean> {
   }
 }
 
-/**
- * Read the optional custom postgame title templates for wins and losses.
- * Both default to empty string when unset, which means "use the default
- * format". Only meaningful when a specific team is configured in the
- * team filter — for "All Teams" subs, there's no concept of your team
- * winning or losing.
- */
 async function getCustomPostgameTitles(): Promise<{ win: string; loss: string }> {
   const normalize = (raw: unknown): string => {
     if (Array.isArray(raw)) return (raw[0] ?? "").toString().trim();
@@ -352,7 +375,7 @@ function scheduleUrl(date: string, teamId: string | null): string {
 }
 
 // ════════════════════════════════════════════════════════════════════════
-// Date / title helpers
+// Date helpers
 // ════════════════════════════════════════════════════════════════════════
 
 function todayDateStr(): string {
@@ -362,6 +385,11 @@ function todayDateStr(): string {
 function yesterdayDateStr(): string {
   const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
   return yesterday.toLocaleDateString("sv-SE", { timeZone: "America/New_York" });
+}
+
+function dateOffsetStr(daysOffset: number): string {
+  const d = new Date(Date.now() + daysOffset * 24 * 60 * 60 * 1000);
+  return d.toLocaleDateString("sv-SE", { timeZone: "America/New_York" });
 }
 
 async function fetchGamesForDate(date: string, teamId: string | null): Promise<any[]> {
@@ -393,6 +421,36 @@ async function fetchRecentGames(teamId: string | null): Promise<any[]> {
   return combined;
 }
 
+/**
+ * Fetch a team's schedule over a date range (default 7 days back, 7 days
+ * forward). Used by the off-day discussion thread to populate last-game
+ * and next-game info.
+ */
+async function fetchTeamScheduleRange(
+  teamId: string,
+  daysBack: number = 7,
+  daysForward: number = 7,
+): Promise<any[]> {
+  const startStr = dateOffsetStr(-daysBack);
+  const endStr = dateOffsetStr(daysForward);
+
+  try {
+    const url = `https://statsapi.mlb.com/api/v1/schedule?sportId=1&teamId=${teamId}&startDate=${startStr}&endDate=${endStr}`;
+    const r = await fetch(url);
+    const data: any = await r.json();
+    const allGames: any[] = [];
+    for (const date of data?.dates || []) {
+      for (const game of date?.games || []) {
+        allGames.push(game);
+      }
+    }
+    return allGames;
+  } catch (e) {
+    console.error("fetchTeamScheduleRange error:", e);
+    return [];
+  }
+}
+
 function formatGameTimeET(iso: string): string {
   const d = new Date(iso);
   return d.toLocaleTimeString("en-US", {
@@ -403,22 +461,190 @@ function formatGameTimeET(iso: string): string {
   });
 }
 
+function formatDateShortET(iso: string): string {
+  const d = new Date(iso);
+  return d.toLocaleDateString("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    timeZone: "America/New_York",
+  });
+}
+
+// ════════════════════════════════════════════════════════════════════════
+// Game type / context helpers
+// ════════════════════════════════════════════════════════════════════════
+
+/**
+ * Normalize gameType access across schedule and live-feed shapes.
+ * Schedule API: game.gameType
+ * Live feed:    gameData.game.type
+ */
+function getGameType(game: any): string {
+  return (
+    game?.gameType ||
+    game?.gameData?.game?.type ||
+    game?.game?.type ||
+    "R"
+  );
+}
+
+function getSeriesDescription(game: any): string {
+  return (
+    game?.seriesDescription ||
+    game?.gameData?.game?.seriesDescription ||
+    ""
+  );
+}
+
+function getSeriesGameNumber(game: any): number | null {
+  const num =
+    game?.seriesGameNumber ||
+    game?.gameData?.game?.seriesGameNumber ||
+    null;
+  return typeof num === "number" ? num : null;
+}
+
+function getDoubleHeaderInfo(game: any): { isDH: boolean; gameNum: number | null } {
+  const dh =
+    game?.doubleHeader ||
+    game?.gameData?.game?.doubleHeader ||
+    "N";
+  const numRaw =
+    game?.gameNumber ||
+    game?.gameData?.game?.gameNumber ||
+    null;
+  const gameNum = typeof numRaw === "number" ? numRaw : null;
+  return { isDH: dh !== "N", gameNum };
+}
+
+/**
+ * Abbreviate a series description into a short, recognizable form.
+ * Examples:
+ *   "American League Division Series" → "ALDS"
+ *   "World Series" → "World Series"
+ *   "American League Wild Card Game" → "AL Wild Card"
+ */
+function abbreviateSeriesDesc(desc: string): string {
+  if (!desc) return "Postseason";
+  if (/world series/i.test(desc)) return "World Series";
+  if (/american league championship/i.test(desc)) return "ALCS";
+  if (/national league championship/i.test(desc)) return "NLCS";
+  if (/american league division/i.test(desc)) return "ALDS";
+  if (/national league division/i.test(desc)) return "NLDS";
+  if (/american league wild card/i.test(desc)) return "AL Wild Card";
+  if (/national league wild card/i.test(desc)) return "NL Wild Card";
+  if (/wild card/i.test(desc)) return "Wild Card";
+  return desc;
+}
+
+/**
+ * Returns a short bracketed prefix for custom postgame titles that gives
+ * fans context about which game this is. Empty string for regular season
+ * (no prefix needed — that's the default state).
+ *
+ * Examples:
+ *   Regular season → ""
+ *   Spring Training → "[Spring Training] "
+ *   ALDS Game 3    → "[ALDS Game 3] "
+ *   World Series Game 7 → "[World Series Game 7] "
+ *
+ * Used only for custom postgame templates. Default-format titles
+ * already include this context via getGamePrefix().
+ */
+function getCustomTitleContext(game: any): string {
+  const gameType = getGameType(game);
+
+  // Postseason
+  if (["F", "D", "L", "W"].includes(gameType)) {
+    const seriesPrefix = abbreviateSeriesDesc(getSeriesDescription(game));
+    const seriesGameNum = getSeriesGameNumber(game);
+    const gameNumStr = seriesGameNum ? ` Game ${seriesGameNum}` : "";
+    return `[${seriesPrefix}${gameNumStr}] `;
+  }
+
+  // Spring Training
+  if (gameType === "S") return "[Spring Training] ";
+
+  // All-Star Game
+  if (gameType === "A") return "[All-Star Game] ";
+
+  // Exhibition
+  if (gameType === "E") return "[Exhibition] ";
+
+  // Regular season — no prefix
+  return "";
+}
+
+/**
+ * Returns the appropriate title prefix for this game's context.
+ * Examples:
+ *   Regular:    "Game Thread" / "Postgame Thread"
+ *   ST:         "Spring Training" / "Spring Training Postgame"
+ *   Postseason: "ALDS Game 3" / "ALDS Game 3 Final"
+ *   All-Star:   "All-Star Game" / "All-Star Game Final"
+ */
+function getGamePrefix(game: any, isPostgame: boolean): string {
+  const gameType = getGameType(game);
+
+  // Postseason (Wild Card, Division Series, Championship Series, World Series)
+  if (["F", "D", "L", "W"].includes(gameType)) {
+    const seriesPrefix = abbreviateSeriesDesc(getSeriesDescription(game));
+    const seriesGameNum = getSeriesGameNumber(game);
+    const gameNumStr = seriesGameNum ? ` Game ${seriesGameNum}` : "";
+    return isPostgame ? `${seriesPrefix}${gameNumStr} Final` : `${seriesPrefix}${gameNumStr}`;
+  }
+
+  // Spring Training
+  if (gameType === "S") {
+    return isPostgame ? "Spring Training Postgame" : "Spring Training";
+  }
+
+  // All-Star Game
+  if (gameType === "A") {
+    return isPostgame ? "All-Star Game Final" : "All-Star Game";
+  }
+
+  // Exhibition (rare; e.g. Hall of Fame games, special exhibitions)
+  if (gameType === "E") {
+    return isPostgame ? "Exhibition Postgame" : "Exhibition";
+  }
+
+  // Regular season (default)
+  return isPostgame ? "Postgame Thread" : "Game Thread";
+}
+
+/**
+ * Returns " (Game 1)" or " (Game 2)" for doubleheader games, empty string
+ * otherwise. Auto-appended to all title types so each game of a DH has a
+ * unique title.
+ */
+function doubleHeaderSuffix(game: any): string {
+  const { isDH, gameNum } = getDoubleHeaderInfo(game);
+  if (isDH && gameNum) {
+    return ` (Game ${gameNum})`;
+  }
+  return "";
+}
+
+// ════════════════════════════════════════════════════════════════════════
+// Title builders
+// ════════════════════════════════════════════════════════════════════════
+
 function buildGameThreadTitle(game: any, teamId: string | null): string {
   const away = game?.teams?.away?.team?.name || "Away";
   const home = game?.teams?.home?.team?.name || "Home";
   const homeId = String(game?.teams?.home?.team?.id ?? "");
   const time = formatGameTimeET(game?.gameDate || new Date().toISOString());
+  const prefix = getGamePrefix(game, false);
+  const dhSuffix = doubleHeaderSuffix(game);
 
   if (teamId && teamId === homeId) {
-    return `Game Thread: ${home} vs ${away} - ${time}`;
+    return `${prefix}: ${home} vs ${away}${dhSuffix} - ${time}`;
   }
-  return `Game Thread: ${away} @ ${home} - ${time}`;
+  return `${prefix}: ${away} @ ${home}${dhSuffix} - ${time}`;
 }
 
-/**
- * Substitute {team}, {opp}, {teamScore}, {oppScore} placeholders in a
- * custom title template.
- */
 function applyTitleTemplate(
   template: string,
   team: string,
@@ -433,11 +659,6 @@ function applyTitleTemplate(
     .replace(/\{oppScore\}/g, String(oppScore));
 }
 
-/**
- * Postgame thread title using the schedule API format. If a team filter
- * is set AND a matching custom title template is provided, that template
- * is applied. Otherwise falls back to the standard format.
- */
 function buildPostgameThreadTitle(
   game: any,
   teamId: string | null,
@@ -449,16 +670,18 @@ function buildPostgameThreadTitle(
   const awayId = String(game?.teams?.away?.team?.id ?? "");
   const awayScore = game?.teams?.away?.score ?? 0;
   const homeScore = game?.teams?.home?.score ?? 0;
+  const prefix = getGamePrefix(game, true);
+  const dhSuffix = doubleHeaderSuffix(game);
 
   // No team filter — use default format, no custom titles possible
   if (!teamId) {
-    return `Postgame Thread: ${awayName} ${awayScore} @ ${homeName} ${homeScore}`;
+    return `${prefix}: ${awayName} ${awayScore} @ ${homeName} ${homeScore}${dhSuffix}`;
   }
 
   const isHomeYourTeam = teamId === homeId;
   const isAwayYourTeam = teamId === awayId;
   if (!isHomeYourTeam && !isAwayYourTeam) {
-    return `Postgame Thread: ${awayName} ${awayScore} @ ${homeName} ${homeScore}`;
+    return `${prefix}: ${awayName} ${awayScore} @ ${homeName} ${homeScore}${dhSuffix}`;
   }
 
   const teamName = isHomeYourTeam ? homeName : awayName;
@@ -469,20 +692,18 @@ function buildPostgameThreadTitle(
 
   const template = teamWon ? customTitles.win : customTitles.loss;
   if (template) {
-    return applyTitleTemplate(template, teamName, oppName, teamScore, oppScore);
+    const contextPrefix = getCustomTitleContext(game);
+    const filled = applyTitleTemplate(template, teamName, oppName, teamScore, oppScore);
+    return `${contextPrefix}${filled}${dhSuffix}`;
   }
 
-  // Default format
+  // Default format with full prefix and DH suffix
   if (isHomeYourTeam) {
-    return `Postgame Thread: ${homeName} ${homeScore} vs ${awayName} ${awayScore}`;
+    return `${prefix}: ${homeName} ${homeScore} vs ${awayName} ${awayScore}${dhSuffix}`;
   }
-  return `Postgame Thread: ${awayName} ${awayScore} @ ${homeName} ${homeScore}`;
+  return `${prefix}: ${awayName} ${awayScore} @ ${homeName} ${homeScore}${dhSuffix}`;
 }
 
-/**
- * Postgame thread title using the live feed format (different shape than
- * the schedule API). Custom title logic mirrors buildPostgameThreadTitle.
- */
 function buildPostgameTitleFromFeed(
   feed: any,
   teamId: string | null,
@@ -494,15 +715,17 @@ function buildPostgameTitleFromFeed(
   const awayId = String(feed?.gameData?.teams?.away?.id ?? "");
   const awayScore = feed?.liveData?.linescore?.teams?.away?.runs ?? 0;
   const homeScore = feed?.liveData?.linescore?.teams?.home?.runs ?? 0;
+  const prefix = getGamePrefix(feed, true);
+  const dhSuffix = doubleHeaderSuffix(feed);
 
   if (!teamId) {
-    return `Postgame Thread: ${awayName} ${awayScore} @ ${homeName} ${homeScore}`;
+    return `${prefix}: ${awayName} ${awayScore} @ ${homeName} ${homeScore}${dhSuffix}`;
   }
 
   const isHomeYourTeam = teamId === homeId;
   const isAwayYourTeam = teamId === awayId;
   if (!isHomeYourTeam && !isAwayYourTeam) {
-    return `Postgame Thread: ${awayName} ${awayScore} @ ${homeName} ${homeScore}`;
+    return `${prefix}: ${awayName} ${awayScore} @ ${homeName} ${homeScore}${dhSuffix}`;
   }
 
   const teamName = isHomeYourTeam ? homeName : awayName;
@@ -513,49 +736,164 @@ function buildPostgameTitleFromFeed(
 
   const template = teamWon ? customTitles.win : customTitles.loss;
   if (template) {
-    return applyTitleTemplate(template, teamName, oppName, teamScore, oppScore);
+    const contextPrefix = getCustomTitleContext(feed);
+    const filled = applyTitleTemplate(template, teamName, oppName, teamScore, oppScore);
+    return `${contextPrefix}${filled}${dhSuffix}`;
   }
 
   if (isHomeYourTeam) {
-    return `Postgame Thread: ${homeName} ${homeScore} vs ${awayName} ${awayScore}`;
+    return `${prefix}: ${homeName} ${homeScore} vs ${awayName} ${awayScore}${dhSuffix}`;
   }
-  return `Postgame Thread: ${awayName} ${awayScore} @ ${homeName} ${homeScore}`;
+  return `${prefix}: ${awayName} ${awayScore} @ ${homeName} ${homeScore}${dhSuffix}`;
 }
 
-/**
- * Title for a postponement notice thread. Includes the postponement
- * reason in parentheses if MLB provided one (Rain, Inclement Weather,
- * Field Conditions, etc.).
- */
 function buildPostponedThreadTitle(game: any, teamId: string | null): string {
   const away = game?.teams?.away?.team?.name || "Away";
   const home = game?.teams?.home?.team?.name || "Home";
   const homeId = String(game?.teams?.home?.team?.id ?? "");
   const reason = game?.status?.reason ? ` (${game.status.reason})` : "";
+  const dhSuffix = doubleHeaderSuffix(game);
 
   if (teamId && teamId === homeId) {
-    return `Postponed: ${home} vs ${away}${reason}`;
+    return `Postponed: ${home} vs ${away}${dhSuffix}${reason}`;
   }
-  return `Postponed: ${away} @ ${home}${reason}`;
+  return `Postponed: ${away} @ ${home}${dhSuffix}${reason}`;
+}
+
+// ════════════════════════════════════════════════════════════════════════
+// Off-day discussion threads
+// ════════════════════════════════════════════════════════════════════════
+
+function buildOffDayThreadTitle(teamName: string): string {
+  const dateStr = new Date().toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    timeZone: "America/New_York",
+  });
+  return `${teamName} Off Day Discussion - ${dateStr}`;
+}
+
+function formatLastGameLine(game: any, teamId: string): string {
+  const homeId = String(game?.teams?.home?.team?.id ?? "");
+  const isHome = teamId === homeId;
+  const oppName = isHome ? game?.teams?.away?.team?.name : game?.teams?.home?.team?.name;
+  const teamScore = isHome ? (game?.teams?.home?.score ?? 0) : (game?.teams?.away?.score ?? 0);
+  const oppScore = isHome ? (game?.teams?.away?.score ?? 0) : (game?.teams?.home?.score ?? 0);
+  const wl = teamScore > oppScore ? "W" : (teamScore < oppScore ? "L" : "T");
+  const venueDir = isHome ? "vs" : "at";
+  const dateStr = formatDateShortET(game.gameDate);
+  return `**${dateStr} ${venueDir} ${oppName || "Opponent"}** — ${teamScore}-${oppScore} (${wl})`;
+}
+
+function formatNextGameLine(game: any, teamId: string): string {
+  const homeId = String(game?.teams?.home?.team?.id ?? "");
+  const isHome = teamId === homeId;
+  const oppName = isHome ? game?.teams?.away?.team?.name : game?.teams?.home?.team?.name;
+  const venueDir = isHome ? "vs" : "at";
+  const venueName = game?.venue?.name || "";
+  const dateStr = formatDateShortET(game.gameDate);
+  const timeStr = formatGameTimeET(game.gameDate);
+  return `**${dateStr} at ${timeStr}** — ${venueDir} ${oppName || "Opponent"}${venueName ? `, ${venueName}` : ""}`;
+}
+
+async function getOffDayContext(teamId: string): Promise<{ lastGame: any | null; nextGame: any | null }> {
+  const games = await fetchTeamScheduleRange(teamId, 7, 7);
+  const now = Date.now();
+
+  let lastGame: any = null;
+  let nextGame: any = null;
+  let lastGameTime = -Infinity;
+  let nextGameTime = Infinity;
+
+  for (const game of games) {
+    const gameTime = new Date(game.gameDate).getTime();
+    const absState = game?.status?.abstractGameState;
+    const isFinal = absState === "Final";
+    const isUpcoming = absState === "Preview" && gameTime > now;
+
+    if (isFinal && gameTime > lastGameTime && gameTime < now) {
+      lastGame = game;
+      lastGameTime = gameTime;
+    }
+    if (isUpcoming && gameTime < nextGameTime) {
+      nextGame = game;
+      nextGameTime = gameTime;
+    }
+  }
+
+  return { lastGame, nextGame };
+}
+
+function buildOffDayThreadBody(
+  teamName: string,
+  teamId: string,
+  lastGame: any | null,
+  nextGame: any | null,
+): string {
+  let body = `## ${teamName} Off Day\n\n`;
+  body += `No game today. Use this thread for general team discussion — news, prospect talk, recent performance, or anything else ${teamName}-related.\n\n`;
+
+  if (lastGame) {
+    body += `### Recent Result\n\n`;
+    body += formatLastGameLine(lastGame, teamId);
+    body += `\n\n`;
+  }
+
+  if (nextGame) {
+    body += `### Next Game\n\n`;
+    body += formatNextGameLine(nextGame, teamId);
+    body += `\n\n`;
+  }
+
+  body += `---\n\n`;
+  body += `*Discussion thread automatically created by MLB Scoreboards on team off days.*`;
+
+  return body;
+}
+
+/**
+ * Post an off-day discussion thread for a team-specific subreddit.
+ * Returns true if a new thread was posted, false otherwise.
+ */
+async function maybePostOffDayThread(
+  subredditId: string,
+  subredditName: string,
+  teamId: string,
+): Promise<boolean> {
+  const teamName = TEAM_NAMES[teamId] || "Team";
+  const dateStr = todayDateStr();
+  const offDayKey = `offday:${subredditId}:${teamId}:${dateStr}`;
+
+  if (await redis.get(offDayKey)) {
+    return false; // already posted today
+  }
+
+  const { lastGame, nextGame } = await getOffDayContext(teamId);
+  const title = buildOffDayThreadTitle(teamName);
+  const body = buildOffDayThreadBody(teamName, teamId, lastGame, nextGame);
+
+  try {
+    const post = await reddit.submitPost({
+      subredditName,
+      title,
+      text: body,
+    });
+    const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 3);
+    await redis.set(offDayKey, post.id, { expiration: expiresAt });
+    await redis.set(`offday-key:${post.id}`, offDayKey, { expiration: expiresAt });
+    console.log(`off-day: created ${post.id} for team ${teamId} on ${dateStr}`);
+    return true;
+  } catch (e) {
+    console.error("Off-day thread submit failed:", e);
+    return false;
+  }
 }
 
 // ════════════════════════════════════════════════════════════════════════
 // Postponement + Postgame handling (shared helper)
 // ════════════════════════════════════════════════════════════════════════
 
-/**
- * For a given game, decide whether it warrants a postponement notice or
- * a postgame thread, and create the appropriate post if needed.
- *
- * Returns:
- *   - "postponed" if a postponement notice was created
- *   - "postgame"  if a postgame thread was created
- *   - "skipped"   if nothing was created (dedup hit, not yet final, etc.)
- *   - "failed"    if the post submission threw
- *
- * Shared between the cron sweep and the manual menu so the logic only
- * lives in one place.
- */
 async function handlePostgameOrPostponement(
   game: any,
   subredditId: string,
@@ -565,7 +903,6 @@ async function handlePostgameOrPostponement(
   const pk = game?.gamePk;
   if (!pk) return "skipped";
 
-  // Every event-end thread requires a Game Thread to have been posted first
   const gameDedupKey = `posted:${subredditId}:${pk}`;
   if (!(await redis.get(gameDedupKey))) return "skipped";
 
@@ -592,11 +929,10 @@ async function handlePostgameOrPostponement(
     }
   }
 
-  // Postgame branch — only for actually-completed games
+  // Postgame branch
   if (abstractState !== "Final") return "skipped";
   if (codedState === "C") return "skipped"; // cancelled
 
-  // 12-hour age window
   const gameDateTime = game?.gameDate;
   if (gameDateTime) {
     const ageMs = Date.now() - new Date(gameDateTime).getTime();
@@ -627,18 +963,38 @@ async function handlePostgameOrPostponement(
 
 async function onMenuPostAllGames(): Promise<UiResponse> {
   const subredditId = context.subredditId;
-  if (!subredditId) {
+  const subredditName = context.subredditName;
+  if (!subredditId || !subredditName) {
     return { showToast: { text: "No subreddit context.", appearance: "neutral" } };
   }
 
   const teamId = await getTeamIdFilter();
   const games = await fetchGamesForDate(todayDateStr(), teamId);
 
+  // ── Off-day branch ───────────────────────────────────────────────────
+  // No games today AND a specific team is configured → post off-day thread
   if (!games.length) {
-    const note = teamId ? " for the configured team" : "";
-    return { showToast: { text: `No games today${note}.`, appearance: "neutral" } };
+    if (teamId) {
+      const posted = await maybePostOffDayThread(subredditId, subredditName, teamId);
+      if (posted) {
+        return {
+          showToast: {
+            text: "Off Day Discussion thread posted.",
+            appearance: "success",
+          },
+        };
+      }
+      return {
+        showToast: {
+          text: "Off Day Discussion thread already posted today.",
+          appearance: "neutral",
+        },
+      };
+    }
+    return { showToast: { text: "No games today.", appearance: "neutral" } };
   }
 
+  // ── Normal game-thread branch ────────────────────────────────────────
   let created = 0;
   let skipped = 0;
   let failed = 0;
@@ -676,11 +1032,6 @@ async function onMenuPostAllGames(): Promise<UiResponse> {
   };
 }
 
-/**
- * Manual fallback: scan today + yesterday's schedules and create event-end
- * threads (postponement notices or postgame threads) for any qualifying
- * games that don't yet have one.
- */
 async function onMenuPostPostgame(): Promise<UiResponse> {
   const subredditId = context.subredditId;
   if (!subredditId) {
@@ -729,26 +1080,17 @@ async function onMenuPostPostgame(): Promise<UiResponse> {
   };
 }
 
-/**
- * Backup safety net for splash-based postgame detection AND the primary
- * detection path for postponements. Runs every minute. Same logic as the
- * manual menu, just without the UI response.
- */
 async function onCronPostgameSweep(): Promise<void> {
   const subredditId = context.subredditId;
   if (!subredditId) return;
 
   const enabled = await getAutoPostgameSetting();
-  // Note: autoPostgame setting only gates postgame threads; postponement
-  // notices fire regardless because they're informational, not celebratory.
-  // If you want to gate postponements on the same setting, add a check here.
-
   const teamId = await getTeamIdFilter();
   const customTitles = await getCustomPostgameTitles();
   const games = await fetchRecentGames(teamId);
 
   for (const game of games) {
-    // Honor autoPostgame: if disabled, only do postponements, not postgames
+    // Honor autoPostgame: if disabled, only do postponements (informational)
     if (!enabled) {
       const codedState = game?.status?.codedGameState;
       if (codedState !== "D") continue;
@@ -764,18 +1106,16 @@ async function onMenuClearTodayDedup(): Promise<UiResponse> {
   }
 
   const teamId = await getTeamIdFilter();
-  const games = await fetchGamesForDate(todayDateStr(), teamId);
-
-  if (!games.length) {
-    return { showToast: { text: "No games today to clear.", appearance: "neutral" } };
-  }
+  const todayStr = todayDateStr();
+  const games = await fetchGamesForDate(todayStr, teamId);
 
   let cleared = 0;
+
+  // Clear game/postgame/postponed dedup for each scheduled game today
   for (const game of games) {
     const pk = game?.gamePk;
     if (!pk) continue;
 
-    // Game thread dedup
     const gameDedupKey = `posted:${subredditId}:${pk}`;
     const linkedGamePostId = await redis.get(gameDedupKey);
     if (linkedGamePostId) {
@@ -784,7 +1124,6 @@ async function onMenuClearTodayDedup(): Promise<UiResponse> {
       cleared++;
     }
 
-    // Postgame thread dedup
     const pgKey = `postgame:${subredditId}:${pk}`;
     const linkedPgPostId = await redis.get(pgKey);
     if (linkedPgPostId) {
@@ -793,7 +1132,6 @@ async function onMenuClearTodayDedup(): Promise<UiResponse> {
       cleared++;
     }
 
-    // Postponement dedup
     const ppKey = `postponed:${subredditId}:${pk}`;
     const linkedPpPostId = await redis.get(ppKey);
     if (linkedPpPostId) {
@@ -801,6 +1139,21 @@ async function onMenuClearTodayDedup(): Promise<UiResponse> {
       await redis.del(`post-game:${linkedPpPostId}`);
       cleared++;
     }
+  }
+
+  // Clear off-day dedup if applicable
+  if (teamId) {
+    const offDayKey = `offday:${subredditId}:${teamId}:${todayStr}`;
+    const linkedOffDayPostId = await redis.get(offDayKey);
+    if (linkedOffDayPostId) {
+      await redis.del(offDayKey);
+      await redis.del(`offday-key:${linkedOffDayPostId}`);
+      cleared++;
+    }
+  }
+
+  if (!games.length && cleared === 0) {
+    return { showToast: { text: "No games or off-day threads today to clear.", appearance: "neutral" } };
   }
 
   return {
@@ -832,15 +1185,31 @@ MLB Scoreboards turns each Game Thread into a real-time, data-rich scoreboard. O
 
 Threads refresh every 10 seconds while a game is in progress. No further moderator action required after posting.
 
+## What's covered
+
+The app handles every type of MLB game automatically:
+
+- **Regular Season** — Standard "Game Thread" and "Postgame Thread" titles.
+- **Spring Training** — Titles use "Spring Training" prefix so they're easy to spot.
+- **Postseason** — Titles automatically reflect the series and game number ("ALDS Game 3", "World Series Game 7", "AL Wild Card", etc.).
+- **All-Star Game** — Titles use "All-Star Game" prefix.
+- **Doubleheaders** — Each game gets a "(Game 1)" / "(Game 2)" suffix so both games are clearly distinguished in the subreddit feed.
+- **Postponements** — Automatic notice within ~1 minute of MLB's official announcement, including the reason (Rain, Field Conditions, etc.) when available.
+- **Off Days** — For team-specific subreddits, the app posts a discussion thread with last-game and next-game info instead of game threads.
+
 ## Three types of automated threads
 
-The app creates up to three types of discussion threads per game:
+The app creates up to three types of game-related discussion threads per game:
 
 - **Game Thread** — Posted manually by you when you run the "Post today's MLB game threads" menu. Captures live, in-game reactions.
 - **Postgame Thread** — Posted automatically the moment a game ends. Includes the final score in the title and captures postgame analysis.
-- **Postponement Notice** — Posted automatically when MLB officially postpones a game. Includes the reason (Rain, Field Conditions, etc.) when available.
+- **Postponement Notice** — Posted automatically when MLB officially postpones a game.
 
-This matches the discussion pattern of most established sports subreddits and keeps live, postgame, and postponement conversations separate. If you prefer single-thread style, disable **Auto-post postgame threads** in the settings — postponement notices will still fire, since they're informational.
+Plus, on off days for team-specific subs:
+
+- **Off Day Discussion** — Posted via the same menu when there's no game scheduled. Includes last game result and next game info.
+
+If you prefer single-thread style, disable **Auto-post postgame threads** in the settings — postponement notices will still fire, since they're informational.
 
 ## Custom postgame titles (optional)
 
@@ -860,6 +1229,18 @@ Both fields support placeholders:
 
 Leave both blank to use the default format. Only applies when a specific team is configured in the Team Filter — for "All Teams" subs, the default format is always used.
 
+For doubleheaders, "(Game 1)" / "(Game 2)" is automatically appended to your custom title so both games of the doubleheader have unique titles.
+
+## Off-day discussion threads
+
+If your subreddit is configured to follow a specific team, and that team has no game scheduled today, the "Post today's MLB game threads" menu will instead post an **Off Day Discussion** thread. It includes:
+
+- Last game result with score and W/L
+- Next scheduled game with date, time, opponent, and venue
+- A general team-discussion prompt
+
+This keeps the subreddit active on off days. Off-day threads aren't created for "All Teams" subs — there's always a game somewhere in MLB during the season.
+
 ## Quick setup
 
 1. Open **Mod Tools → Community Apps → mlb-scores → Settings**.
@@ -869,7 +1250,7 @@ Leave both blank to use the default format. Only applies when a specific team is
 3. Confirm **Auto-post postgame threads** is set to your preference (on by default).
 4. (Optional) Set custom **Postgame Win Title** and **Postgame Loss Title** if your sub has signature phrases.
 5. Click **Save**.
-6. When you're ready to post today's threads, open the moderator menu on your subreddit and select **"Post today's MLB game threads."** Postgame threads and postponement notices will follow automatically.
+6. When you're ready to post today's threads, open the moderator menu on your subreddit and select **"Post today's MLB game threads."** Postgame threads, postponement notices, and off-day discussions will follow automatically based on context.
 
 ## Recovering removed threads
 
@@ -906,11 +1287,21 @@ async function onAppInstall(): Promise<TriggerResponse> {
 }
 
 /**
- * Remove the dedup keys (Game Thread, Postgame Thread, AND Postponement
- * notice) associated with a given post ID. Safe to call on unknown
- * postIds — silently no-ops if no mapping exists.
+ * Remove the dedup keys associated with a given post ID. Handles Game
+ * Threads, Postgame Threads, Postponement notices, AND Off-Day threads.
+ * Safe to call on unknown postIds — silently no-ops if no mapping exists.
  */
 async function cleanDedupForPost(postId: string): Promise<void> {
+  // Off-day thread cleanup (no gamePk for these)
+  const offDayKey = await redis.get(`offday-key:${postId}`);
+  if (offDayKey) {
+    await redis.del(offDayKey);
+    await redis.del(`offday-key:${postId}`);
+    console.log(`Cleaned off-day dedup for post ${postId}`);
+    return;
+  }
+
+  // Game-related post cleanup
   const gamePk = await redis.get(`post-game:${postId}`);
   if (!gamePk) return;
 
@@ -920,7 +1311,6 @@ async function cleanDedupForPost(postId: string): Promise<void> {
     const pgKey = `postgame:${subId}:${gamePk}`;
     const ppKey = `postponed:${subId}:${gamePk}`;
 
-    // Only clear whichever namespace this post belongs to
     const gameLinked = await redis.get(gameKey);
     if (gameLinked === postId) await redis.del(gameKey);
 
