@@ -265,7 +265,6 @@ body.scorebug {
 .linescore-compact {
   width: 100%;
   border-collapse: collapse;
-  table-layout: fixed;
   font-family: var(--font-sans);
 }
 
@@ -276,6 +275,7 @@ body.scorebug {
   font-size: 10px;
   font-weight: 700;
   color: var(--text-primary);
+  min-width: 20px;
 }
 
 .linescore-compact thead th {
@@ -380,6 +380,7 @@ body.on-box-tab .linescore { display: none; }
   letter-spacing: 0.01em;
   text-transform: uppercase;
   line-height: 1.15;
+  min-height: 2.3em; /* always reserve 2 lines so TBD aligns with multi-word names */
 }
 
 .pregame-pitcher-name .pn-line {
