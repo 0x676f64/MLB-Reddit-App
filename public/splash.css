@@ -71,12 +71,34 @@ body.scorebug {
   position: absolute;
   inset: 0;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 20px;
+  background: var(--bg-card);
+}
+
+.loading-spinner {
+  width: 56px;
+  height: 56px;
+  border: 4px solid rgba(255, 255, 255, 0.08);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: loadingSpin 0.9s linear infinite;
+  box-shadow: 0 0 16px rgba(191, 13, 61, 0.25);
+}
+
+@keyframes loadingSpin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+.loading-text {
   font-family: var(--font-mono);
   font-size: 11px;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.14em;
   color: var(--text-muted);
+  text-transform: uppercase;
 }
 
 /* Main content container — absolutely fills body so flex math is exact */
@@ -671,6 +693,7 @@ body.is-pregame .status-block {
 
 /* ════════════════════════════════════════════════════════════════════
    FINAL / WRAP TAB
+   Base styles = mobile. Desktop refinements in media query below.
    ════════════════════════════════════════════════════════════════════ */
 
 .final-decisions {
@@ -694,8 +717,8 @@ body.is-pregame .status-block {
 }
 
 .final-team-logo {
-  width: 36px;
-  height: 36px;
+  width: 28px;
+  height: 24px;
   object-fit: contain;
   flex-shrink: 0;
 }
@@ -718,7 +741,7 @@ body.is-pregame .status-block {
 .final-slot-decision {
   font-family: var(--font-display);
   font-weight: 800;
-  font-size: 14px;
+  font-size: 12px;
   letter-spacing: 0.05em;
   color: var(--text-muted);
 }
@@ -738,7 +761,7 @@ body.is-pregame .status-block {
 .final-slot-name {
   font-family: var(--font-display);
   font-weight: 700;
-  font-size: 13px;
+  font-size: 12px;
   letter-spacing: 0.01em;
   text-transform: uppercase;
   color: var(--text-primary);
@@ -807,6 +830,42 @@ body.is-pregame .status-block {
   color: var(--text-secondary);
   letter-spacing: 0.02em;
   line-height: 1.3;
+}
+
+/* Desktop refinements (>= 500px) */
+@media (min-width: 500px) {
+  .final-team-logo {
+    width: 42px;
+    height: 36px;
+  }
+
+  .final-slot-decision {
+    font-size: 14px;
+  }
+
+  .final-slot-role {
+    font-size: 11px;
+  }
+
+  .final-slot-name {
+    font-size: 16px;
+  }
+
+  .final-slot-stats {
+    font-size: 10px;
+  }
+
+  .final-section-header {
+    font-size: 9px;
+  }
+
+  .final-performer-name {
+    font-size: 14px;
+  }
+
+  .final-performer-stats {
+    font-size: 11px;
+  }
 }
 
 /* ════════════════════════════════════════════════════════════════════
@@ -1470,4 +1529,57 @@ body.is-pregame .status-block {
   height: 4px;
   border-radius: 2px;
   flex-shrink: 0;
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   LIVE TAB — desktop refinements
+   Beefier sizes when viewport allows (>= 500px wide).
+   Mobile keeps the compact original sizes.
+   ════════════════════════════════════════════════════════════════════ */
+
+@media (min-width: 500px) {
+  .live-matchup {
+    gap: 14px;
+    padding-bottom: var(--space-sm);
+  }
+
+  .live-slot {
+    gap: 12px;
+  }
+
+  .live-team-logo {
+    width: 42px;
+    height: 32px;
+  }
+
+  .live-slot-meta {
+    gap: 6px;
+  }
+
+  .live-slot-role,
+  .live-slot-pos {
+    font-size: 10px;
+  }
+
+  .live-slot-name {
+    font-size: 14px;
+    line-height: 1.15;
+  }
+
+  .live-slot-stats {
+    font-size: 10px;
+  }
+
+  .live-scorebug {
+    gap: 4px;
+  }
+
+  .live-bases svg {
+    width: 65px;
+    height: 65px;
+  }
+
+  .live-count {
+    font-size: 10px;
+  }
 }
