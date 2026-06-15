@@ -223,16 +223,17 @@ async function onWinProb(pk: string, rsp: ServerResponse): Promise<void> {
 
 async function onPostGame(rsp: ServerResponse): Promise<void> {
   if (!context.postId) {
-    writeJSON<PartialJsonValue>(200, { gamePk: null } as PartialJsonValue, rsp);
+    writeJSON<PartialJsonValue>(200, { gamePk: null, postType: null } as PartialJsonValue, rsp);
     return;
   }
   try {
     const val = await redis.get(`post-game:${context.postId}`);
+    const postType = await redis.get(`post-type:${context.postId}`);
     const gamePk = val ? Number(val) : null;
-    writeJSON<PartialJsonValue>(200, { gamePk } as PartialJsonValue, rsp);
+    writeJSON<PartialJsonValue>(200, { gamePk, postType: postType || null } as PartialJsonValue, rsp);
   } catch (e) {
     console.error("onPostGame error:", e);
-    writeJSON<PartialJsonValue>(200, { gamePk: null } as PartialJsonValue, rsp);
+    writeJSON<PartialJsonValue>(200, { gamePk: null, postType: null } as PartialJsonValue, rsp);
   }
 }
 
@@ -298,6 +299,7 @@ async function onPostgameCheck(rsp: ServerResponse): Promise<void> {
     });
     const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 3);
     await redis.set(`post-game:${post.id}`, gamePkStr, { expiration: expiresAt });
+    await redis.set(`post-type:${post.id}`, "postgame", { expiration: expiresAt });
     await redis.set(pgKey, post.id, { expiration: expiresAt });
 
     console.log(`postgame-check: created ${post.id} for gamePk ${gamePkStr}`);
@@ -475,11 +477,6 @@ function formatDateShortET(iso: string): string {
 // Game type / context helpers
 // ════════════════════════════════════════════════════════════════════════
 
-/**
- * Normalize gameType access across schedule and live-feed shapes.
- * Schedule API: game.gameType
- * Live feed:    gameData.game.type
- */
 function getGameType(game: any): string {
   return (
     game?.gameType ||
@@ -518,13 +515,6 @@ function getDoubleHeaderInfo(game: any): { isDH: boolean; gameNum: number | null
   return { isDH: dh !== "N", gameNum };
 }
 
-/**
- * Abbreviate a series description into a short, recognizable form.
- * Examples:
- *   "American League Division Series" → "ALDS"
- *   "World Series" → "World Series"
- *   "American League Wild Card Game" → "AL Wild Card"
- */
 function abbreviateSeriesDesc(desc: string): string {
   if (!desc) return "Postseason";
   if (/world series/i.test(desc)) return "World Series";
@@ -538,24 +528,9 @@ function abbreviateSeriesDesc(desc: string): string {
   return desc;
 }
 
-/**
- * Returns a short bracketed prefix for custom postgame titles that gives
- * fans context about which game this is. Empty string for regular season
- * (no prefix needed — that's the default state).
- *
- * Examples:
- *   Regular season → ""
- *   Spring Training → "[Spring Training] "
- *   ALDS Game 3    → "[ALDS Game 3] "
- *   World Series Game 7 → "[World Series Game 7] "
- *
- * Used only for custom postgame templates. Default-format titles
- * already include this context via getGamePrefix().
- */
 function getCustomTitleContext(game: any): string {
   const gameType = getGameType(game);
 
-  // Postseason
   if (["F", "D", "L", "W"].includes(gameType)) {
     const seriesPrefix = abbreviateSeriesDesc(getSeriesDescription(game));
     const seriesGameNum = getSeriesGameNumber(game);
@@ -563,31 +538,16 @@ function getCustomTitleContext(game: any): string {
     return `[${seriesPrefix}${gameNumStr}] `;
   }
 
-  // Spring Training
   if (gameType === "S") return "[Spring Training] ";
-
-  // All-Star Game
   if (gameType === "A") return "[All-Star Game] ";
-
-  // Exhibition
   if (gameType === "E") return "[Exhibition] ";
 
-  // Regular season — no prefix
   return "";
 }
 
-/**
- * Returns the appropriate title prefix for this game's context.
- * Examples:
- *   Regular:    "Game Thread" / "Postgame Thread"
- *   ST:         "Spring Training" / "Spring Training Postgame"
- *   Postseason: "ALDS Game 3" / "ALDS Game 3 Final"
- *   All-Star:   "All-Star Game" / "All-Star Game Final"
- */
 function getGamePrefix(game: any, isPostgame: boolean): string {
   const gameType = getGameType(game);
 
-  // Postseason (Wild Card, Division Series, Championship Series, World Series)
   if (["F", "D", "L", "W"].includes(gameType)) {
     const seriesPrefix = abbreviateSeriesDesc(getSeriesDescription(game));
     const seriesGameNum = getSeriesGameNumber(game);
@@ -595,30 +555,21 @@ function getGamePrefix(game: any, isPostgame: boolean): string {
     return isPostgame ? `${seriesPrefix}${gameNumStr} Final` : `${seriesPrefix}${gameNumStr}`;
   }
 
-  // Spring Training
   if (gameType === "S") {
     return isPostgame ? "Spring Training Postgame" : "Spring Training";
   }
 
-  // All-Star Game
   if (gameType === "A") {
     return isPostgame ? "All-Star Game Final" : "All-Star Game";
   }
 
-  // Exhibition (rare; e.g. Hall of Fame games, special exhibitions)
   if (gameType === "E") {
     return isPostgame ? "Exhibition Postgame" : "Exhibition";
   }
 
-  // Regular season (default)
   return isPostgame ? "Postgame Thread" : "Game Thread";
 }
 
-/**
- * Returns " (Game 1)" or " (Game 2)" for doubleheader games, empty string
- * otherwise. Auto-appended to all title types so each game of a DH has a
- * unique title.
- */
 function doubleHeaderSuffix(game: any): string {
   const { isDH, gameNum } = getDoubleHeaderInfo(game);
   if (isDH && gameNum) {
@@ -673,7 +624,6 @@ function buildPostgameThreadTitle(
   const prefix = getGamePrefix(game, true);
   const dhSuffix = doubleHeaderSuffix(game);
 
-  // No team filter — use default format, no custom titles possible
   if (!teamId) {
     return `${prefix}: ${awayName} ${awayScore} @ ${homeName} ${homeScore}${dhSuffix}`;
   }
@@ -697,7 +647,6 @@ function buildPostgameThreadTitle(
     return `${contextPrefix}${filled}${dhSuffix}`;
   }
 
-  // Default format with full prefix and DH suffix
   if (isHomeYourTeam) {
     return `${prefix}: ${homeName} ${homeScore} vs ${awayName} ${awayScore}${dhSuffix}`;
   }
@@ -852,10 +801,6 @@ function buildOffDayThreadBody(
   return body;
 }
 
-/**
- * Post an off-day discussion thread for a team-specific subreddit.
- * Returns true if a new thread was posted, false otherwise.
- */
 async function maybePostOffDayThread(
   subredditId: string,
   subredditName: string,
@@ -866,7 +811,7 @@ async function maybePostOffDayThread(
   const offDayKey = `offday:${subredditId}:${teamId}:${dateStr}`;
 
   if (await redis.get(offDayKey)) {
-    return false; // already posted today
+    return false;
   }
 
   const { lastGame, nextGame } = await getOffDayContext(teamId);
@@ -920,6 +865,7 @@ async function handlePostgameOrPostponement(
       });
       const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 3);
       await redis.set(`post-game:${post.id}`, String(pk), { expiration: expiresAt });
+      await redis.set(`post-type:${post.id}`, "postponed", { expiration: expiresAt });
       await redis.set(postponedKey, post.id, { expiration: expiresAt });
       console.log(`postponed: created ${post.id} for gamePk ${pk}`);
       return "postponed";
@@ -931,7 +877,7 @@ async function handlePostgameOrPostponement(
 
   // Postgame branch
   if (abstractState !== "Final") return "skipped";
-  if (codedState === "C") return "skipped"; // cancelled
+  if (codedState === "C") return "skipped";
 
   const gameDateTime = game?.gameDate;
   if (gameDateTime) {
@@ -948,6 +894,7 @@ async function handlePostgameOrPostponement(
     });
     const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 3);
     await redis.set(`post-game:${post.id}`, String(pk), { expiration: expiresAt });
+    await redis.set(`post-type:${post.id}`, "postgame", { expiration: expiresAt });
     await redis.set(pgKey, post.id, { expiration: expiresAt });
     console.log(`postgame: created ${post.id} for gamePk ${pk}`);
     return "postgame";
@@ -971,8 +918,6 @@ async function onMenuPostAllGames(): Promise<UiResponse> {
   const teamId = await getTeamIdFilter();
   const games = await fetchGamesForDate(todayDateStr(), teamId);
 
-  // ── Off-day branch ───────────────────────────────────────────────────
-  // No games today AND a specific team is configured → post off-day thread
   if (!games.length) {
     if (teamId) {
       const posted = await maybePostOffDayThread(subredditId, subredditName, teamId);
@@ -994,7 +939,6 @@ async function onMenuPostAllGames(): Promise<UiResponse> {
     return { showToast: { text: "No games today.", appearance: "neutral" } };
   }
 
-  // ── Normal game-thread branch ────────────────────────────────────────
   let created = 0;
   let skipped = 0;
   let failed = 0;
@@ -1015,6 +959,7 @@ async function onMenuPostAllGames(): Promise<UiResponse> {
       });
       const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 3);
       await redis.set(`post-game:${post.id}`, String(pk), { expiration: expiresAt });
+      await redis.set(`post-type:${post.id}`, "game", { expiration: expiresAt });
       await redis.set(dedupKey, post.id, { expiration: expiresAt });
       created++;
     } catch (e) {
@@ -1090,7 +1035,6 @@ async function onCronPostgameSweep(): Promise<void> {
   const games = await fetchRecentGames(teamId);
 
   for (const game of games) {
-    // Honor autoPostgame: if disabled, only do postponements (informational)
     if (!enabled) {
       const codedState = game?.status?.codedGameState;
       if (codedState !== "D") continue;
@@ -1111,7 +1055,6 @@ async function onMenuClearTodayDedup(): Promise<UiResponse> {
 
   let cleared = 0;
 
-  // Clear game/postgame/postponed dedup for each scheduled game today
   for (const game of games) {
     const pk = game?.gamePk;
     if (!pk) continue;
@@ -1121,6 +1064,7 @@ async function onMenuClearTodayDedup(): Promise<UiResponse> {
     if (linkedGamePostId) {
       await redis.del(gameDedupKey);
       await redis.del(`post-game:${linkedGamePostId}`);
+      await redis.del(`post-type:${linkedGamePostId}`);
       cleared++;
     }
 
@@ -1129,6 +1073,7 @@ async function onMenuClearTodayDedup(): Promise<UiResponse> {
     if (linkedPgPostId) {
       await redis.del(pgKey);
       await redis.del(`post-game:${linkedPgPostId}`);
+      await redis.del(`post-type:${linkedPgPostId}`);
       cleared++;
     }
 
@@ -1137,17 +1082,18 @@ async function onMenuClearTodayDedup(): Promise<UiResponse> {
     if (linkedPpPostId) {
       await redis.del(ppKey);
       await redis.del(`post-game:${linkedPpPostId}`);
+      await redis.del(`post-type:${linkedPpPostId}`);
       cleared++;
     }
   }
 
-  // Clear off-day dedup if applicable
   if (teamId) {
     const offDayKey = `offday:${subredditId}:${teamId}:${todayStr}`;
     const linkedOffDayPostId = await redis.get(offDayKey);
     if (linkedOffDayPostId) {
       await redis.del(offDayKey);
       await redis.del(`offday-key:${linkedOffDayPostId}`);
+      await redis.del(`post-type:${linkedOffDayPostId}`);
       cleared++;
     }
   }
@@ -1297,6 +1243,7 @@ async function cleanDedupForPost(postId: string): Promise<void> {
   if (offDayKey) {
     await redis.del(offDayKey);
     await redis.del(`offday-key:${postId}`);
+    await redis.del(`post-type:${postId}`);
     console.log(`Cleaned off-day dedup for post ${postId}`);
     return;
   }
@@ -1321,6 +1268,7 @@ async function cleanDedupForPost(postId: string): Promise<void> {
     if (ppLinked === postId) await redis.del(ppKey);
   }
   await redis.del(`post-game:${postId}`);
+  await redis.del(`post-type:${postId}`);
 
   console.log(`Cleaned dedup for post ${postId} (gamePk ${gamePk})`);
 }

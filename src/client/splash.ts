@@ -156,12 +156,59 @@ function getPitcherSeasonStats(teamBox: any, pitcherId: number | undefined): str
   return `${w}-${l}  ·  ${era} ERA  ·  ${k} K`;
 }
 
+// ── Game-context label (postseason/ST/All-Star + doubleheader) ────────────
+
+function abbreviateSeriesDesc(desc: string): string {
+  if (!desc) return "Postseason";
+  if (/world series/i.test(desc)) return "World Series";
+  if (/american league championship/i.test(desc)) return "ALCS";
+  if (/national league championship/i.test(desc)) return "NLCS";
+  if (/american league division/i.test(desc)) return "ALDS";
+  if (/national league division/i.test(desc)) return "NLDS";
+  if (/american league wild card/i.test(desc)) return "AL Wild Card";
+  if (/national league wild card/i.test(desc)) return "NL Wild Card";
+  if (/wild card/i.test(desc)) return "Wild Card";
+  return desc;
+}
+
+/**
+ * Build a short, all-caps context label for the meta strip. Returns
+ * empty string for regular-season single games (most cases), so the
+ * pill auto-hides via `:empty { display: none }`.
+ */
+function getGameContextLabel(gameDataObj: any): string {
+  const gameInfo = gameDataObj?.game || {};
+  const gameType: string = gameInfo.type || gameInfo.gameType || "R";
+  const parts: string[] = [];
+
+  if (["F", "D", "L", "W"].includes(gameType)) {
+    const seriesPrefix = abbreviateSeriesDesc(gameInfo.seriesDescription || "");
+    const gameNum = gameInfo.seriesGameNumber;
+    parts.push(gameNum ? `${seriesPrefix} Game ${gameNum}` : seriesPrefix);
+  } else if (gameType === "S") {
+    parts.push("Spring Training");
+  } else if (gameType === "A") {
+    parts.push("All-Star Game");
+  } else if (gameType === "E") {
+    parts.push("Exhibition");
+  }
+
+  const dh: string = gameInfo.doubleHeader || "N";
+  const dhNum = gameInfo.gameNumber;
+  if (dh !== "N" && dhNum) {
+    parts.push(`Game ${dhNum} of 2`);
+  }
+
+  return parts.join(" · ").toUpperCase();
+}
+
 // ── State ─────────────────────────────────────────────────────────────────
 
 let gamePk: number | null = null;
 let pollInterval: ReturnType<typeof setInterval> | null = null;
 let lastGameData: any = null;
 let postgameNotificationFired = false;
+let postType: string | null = null;
 
 // ── Visible error reporting (Devvit iframe-friendly) ──────────────────────
 
@@ -186,7 +233,6 @@ function reportError(label: string, e: unknown): void {
   overlay.appendChild(line);
 }
 
-// Catch any uncaught errors anywhere
 window.addEventListener("error", (e) => reportError("window.error", e.error || e.message));
 window.addEventListener("unhandledrejection", (e) => reportError("unhandled promise", e.reason));
 
@@ -237,7 +283,7 @@ function formatPitcherName(fullName: string): string {
 }
 
 function hideAllStatePanes(): void {
-  ["pregame-content", "live-content", "final-content"].forEach((id) => {
+  ["pregame-content", "live-content", "final-content", "postponed-content"].forEach((id) => {
     const el = $(id);
     if (el) el.style.display = "none";
   });
@@ -453,7 +499,6 @@ function buildBoxPanel(teamStats: any): string {
   const rawBatters: number[] = teamStats.batters || [];
   const pitchers: number[] = teamStats.pitchers || [];
 
-  // Pitchers don't appear in the batting list — filter them to the pitching section only
   const batters: number[] = rawBatters.filter((id: number) => {
     const pos = teamStats.players?.[`ID${id}`]?.position?.abbreviation;
     return pos && pos !== "P" && pos !== "Pitcher";
@@ -521,7 +566,6 @@ function renderBoxScore(data: any): void {
   if (awayLogoEl && awayTeam.id) loadLogo(awayLogoEl, awayTeam.id);
   if (homeLogoEl && homeTeam.id) loadLogo(homeLogoEl, homeTeam.id);
 
-  // Preserve scroll position across re-renders so background polls don't snap to top
   const wrap = document.querySelector(".bs-panel-wrap") as HTMLElement | null;
   const savedScroll = wrap?.scrollTop ?? 0;
 
@@ -543,7 +587,6 @@ function setupBoxScoreTeamTabs(): void {
       document.querySelectorAll(".bs-panel").forEach((p) => p.classList.remove("active"));
       $(`bs-${team}-panel`)?.classList.add("active");
 
-      // Reset scroll on team switch so user starts at top of the new panel
       const wrap = document.querySelector(".bs-panel-wrap") as HTMLElement | null;
       if (wrap) wrap.scrollTop = 0;
     });
@@ -609,14 +652,12 @@ function buildPlayCard(play: any, awayAbbr: string, homeAbbr: string, showScore:
   const eventBadge = getEventBadge(event);
   const desc = play.result?.description || "";
 
-  // Statcast (only present on contact plays)
   const hitData = play.playEvents?.find((e: any) => e?.hitData)?.hitData || {};
   const exitVelo = hitData.launchSpeed ? `${Math.round(hitData.launchSpeed)} mph` : "";
   const launchAngle = hitData.launchAngle != null ? `${Math.round(hitData.launchAngle)}°` : "";
   const distance = hitData.totalDistance ? `${Math.round(hitData.totalDistance)} ft` : "";
   const hasStatcast = exitVelo || launchAngle || distance;
 
-  // Score line (scoring plays only)
   let scoreHtml = "";
   if (showScore && play.result?.awayScore != null && play.result?.homeScore != null) {
     const rbiHtml = play.result.rbi > 0 ? `<span class="play-rbi">+${play.result.rbi} RBI</span>` : "";
@@ -635,7 +676,7 @@ function buildPlayCard(play: any, awayAbbr: string, homeAbbr: string, showScore:
     statcastHtml = `<div class="play-statcast">${chips.join("")}</div>`;
   }
 
-return `<div class="play-card">
+  return `<div class="play-card">
     <div class="play-main">
       <div class="play-header">
         <span class="play-inning">${inningTxt}</span>
@@ -667,7 +708,6 @@ function renderScoringPlays(data: any): void {
     return;
   }
 
-  // Newest first
   const cards = [...scoringIdx].reverse().map((idx: number) => {
     const play = allPlays[idx];
     if (!play) return "";
@@ -694,7 +734,6 @@ function renderAllPlays(data: any): void {
     return;
   }
 
-  // Newest first — only completed plays (skip current/in-progress)
   const completed = allPlays.filter((p: any) => p.result?.event);
   if (!completed.length) {
     container.innerHTML = '<div class="plays-empty">Awaiting first play</div>';
@@ -793,10 +832,48 @@ function renderFinalContent(data: any): void {
       if (b?.summary) stats = b.summary;
       else if (b) stats = `${b.hits ?? 0}-${b.atBats ?? 0} · ${b.runs ?? 0} R · ${b.rbi ?? 0} RBI`;
     }
-  const nameEl = slot.querySelector(".final-performer-name") as HTMLElement | null;
+    const nameEl = slot.querySelector(".final-performer-name") as HTMLElement | null;
     const statsEl = slot.querySelector(".final-performer-stats") as HTMLElement | null;
     if (nameEl) nameEl.textContent = name;
     if (statsEl) statsEl.textContent = stats;
+  }
+}
+
+// ── Postponed content ─────────────────────────────────────────────────────
+
+function renderPostponedContent(data: any): void {
+  const game = data.gameData;
+
+  // Reason for postponement
+  const reason = game?.status?.reason || "";
+  const reasonEl = $("postponed-reason");
+  if (reasonEl) {
+    reasonEl.textContent = reason
+      ? `Due to ${reason.toLowerCase()}`
+      : "Postponed by Major League Baseball";
+  }
+
+  // Doubleheader note — only if the postponed game has been rescheduled
+  // as part of a DH on its new date.
+  const gameInfo = game?.game || {};
+  const dh = gameInfo.doubleHeader || "N";
+  const dhNum = gameInfo.gameNumber;
+  const dhEl = $("postponed-dh-note");
+  if (dhEl) {
+    if (dh !== "N" && dhNum) {
+      dhEl.textContent = `Now scheduled as Game ${dhNum} of a doubleheader`;
+      dhEl.style.display = "block";
+    } else {
+      dhEl.style.display = "none";
+    }
+  }
+
+  // Teams (for the "between" line)
+  const away = game?.teams?.away?.name || "";
+  const home = game?.teams?.home?.name || "";
+  const teamsEl = $("postponed-teams");
+  if (teamsEl) {
+    teamsEl.textContent = away && home ? `${away} at ${home}` : "";
   }
 }
 
@@ -831,7 +908,6 @@ function escapeHtml(s: string): string {
 }
 
 let winProbCache: any[] | null = null;
-let winProbCacheGamePk: number | null = null;
 
 async function fetchWinProb(): Promise<any[] | null> {
   if (!gamePk) return null;
@@ -841,7 +917,6 @@ async function fetchWinProb(): Promise<any[] | null> {
     const data = await res.json();
     if (Array.isArray(data)) {
       winProbCache = data;
-      winProbCacheGamePk = gamePk;
       return data;
     }
     return winProbCache;
@@ -867,7 +942,6 @@ async function renderWinProb(): Promise<void> {
     return;
   }
 
-  // Show loading state only if container is empty / first paint
   if (!container.querySelector(".wp-summary")) {
     container.innerHTML = '<div class="placeholder">Loading win probability…</div>';
   }
@@ -891,7 +965,6 @@ async function renderWinProb(): Promise<void> {
   const homeProb = Math.round(latest.homeTeamWinProbability ?? 50);
   const awayProb = Math.round(latest.awayTeamWinProbability ?? 50);
 
-  // Chart geometry — compact, scrollbar-free
   const W = 520, H = 125;
   const PL = 36, PR = 16, PT = 10, PB = 22;
   const CW = W - PL - PR;
@@ -914,7 +987,6 @@ async function renderWinProb(): Promise<void> {
   const linePoints = pts.map((p) => `${p.x},${p.y}`).join(" ");
   const polyPts = [`${PL},${midY}`, ...pts.map((p) => `${p.x},${p.y}`), `${PL + CW},${midY}`].join(" ");
 
-  // Inning gridlines + numbers (only at top of each new inning)
   let inningLines = "";
   let lastInn = 0;
   pts.forEach((p) => {
@@ -927,7 +999,6 @@ async function renderWinProb(): Promise<void> {
     }
   });
 
-  // Hover zones (one per data point, sized to halfway to neighbors)
   const zones = pts.map((p, i) => {
     const prev = pts[i - 1];
     const next = pts[i + 1];
@@ -1023,10 +1094,8 @@ function wireWinProbHover(awayAbbr: string, homeAbbr: string, awayColor: string,
 
   chart.querySelectorAll(".wp-zone").forEach((zone) => {
     const z = zone as SVGElement;
-    // Desktop: hover to peek
     z.addEventListener("mouseenter", () => showFor(z));
     z.addEventListener("mouseleave", hide);
-    // Mobile (and desktop too): tap/click pins the tooltip until an outside tap
     z.addEventListener("click", (e: Event) => {
       e.stopPropagation();
       showFor(z);
@@ -1034,13 +1103,12 @@ function wireWinProbHover(awayAbbr: string, homeAbbr: string, awayColor: string,
   });
 }
 
-// Attached once in init — taps anywhere outside the chart dismiss the tooltip
 function setupWinProbDismiss(): void {
   document.addEventListener("click", (e: MouseEvent) => {
     const tip = document.getElementById("wp-tooltip");
     if (!tip || tip.style.display === "none") return;
     const target = e.target as Element | null;
-    if (target?.closest(".wp-chart")) return; // tap inside the chart, leave it alone
+    if (target?.closest(".wp-chart")) return;
     tip.style.display = "none";
     const dotEl = document.getElementById("wp-dot");
     if (dotEl) (dotEl as unknown as HTMLElement).style.display = "none";
@@ -1050,17 +1118,16 @@ function setupWinProbDismiss(): void {
 // ── Game selection ────────────────────────────────────────────────────────
 
 async function selectGameForThisPost(): Promise<number | null> {
-  // 1. If this post was created for a specific game, use that
   try {
     const res = await fetch("/api/post-game");
     if (res.ok) {
       const data = await res.json();
+      if (data?.postType) postType = data.postType;
       if (data?.gamePk) return Number(data.gamePk);
     }
   } catch (e) {
     /* fall through to auto-pick */
   }
-  // 2. Otherwise auto-pick today's most-relevant game (legacy / dev behavior)
   return selectTodaysGame();
 }
 
@@ -1103,20 +1170,26 @@ function render(data: any): void {
   lastGameData = data;
   const game = data.gameData;
   const linescore = data.liveData.linescore;
-  const statusText: string = game.status.detailedState;
+  // For postponement posts, force "Postponed" status regardless of what
+  // /feed/live reports — that endpoint can lag the actual postponement
+  // by hours, but we know definitively from post-type that this is a
+  // postponement notice.
+  const statusText: string = postType === "postponed"
+    ? "Postponed"
+    : game.status.detailedState;
   const awayTeam = game.teams.away;
   const homeTeam = game.teams.home;
 
   document.body.classList.toggle("is-pregame", isPreGameState(statusText));
   document.body.classList.toggle("is-live", isLiveState(statusText));
   document.body.classList.toggle("is-final", isFinalState(statusText));
+  document.body.classList.toggle("is-postponed", statusText === "Postponed");
 
   void maybeNotifyPostgame(statusText);
 
   const loading = $("loading-state")!;
   const content = $("scorebug-content")!;
   loading.style.display = "none";
-  // Clear inline style so the CSS rule (display: flex from absolute layout) wins
   content.style.display = "";
 
   const venueName = game.venue?.name || "";
@@ -1128,6 +1201,12 @@ function render(data: any): void {
   const broadcasts = game.broadcasts || [];
   const tvBroadcast = broadcasts.find((b: any) => b.type === "TV" && b.isNational);
   $("network-info")!.textContent = tvBroadcast?.name || "";
+
+  // Postseason / Spring Training / Doubleheader context pill
+  const contextEl = $("game-context");
+  if (contextEl) {
+    contextEl.textContent = getGameContextLabel(game);
+  }
 
   (($("away-logo")) as HTMLImageElement).alt = awayTeam.name;
   (($("home-logo")) as HTMLImageElement).alt = homeTeam.name;
@@ -1172,11 +1251,16 @@ function render(data: any): void {
     if (preEl) preEl.style.display = "block";
     try { renderPregameContent(data, awayTeam, homeTeam); } catch (e) { reportError("renderPregameContent", e); }
   } else if (statusText === "Postponed") {
-    badge.textContent = "PPD";
-    badge.style.background = "rgba(255,255,255,0.15)";
-    inning.textContent = "";
+    badge.textContent = "POSTPONED";
+    badge.style.background = "#bf0d3d";
+    const reason = game?.status?.reason || "";
+    inning.textContent = reason ? reason.toUpperCase() : "";
+    inning.style.color = "rgba(255,255,255,0.7)";
     countBlock.style.display = "none";
-    $("dynamic-tab-label")!.textContent = "PPD";
+    $("dynamic-tab-label")!.textContent = "POSTPONED";
+    const ppdEl = $("postponed-content");
+    if (ppdEl) ppdEl.style.display = "block";
+    try { renderPostponedContent(data); } catch (e) { reportError("renderPostponedContent", e); }
   } else if (isLiveState(statusText)) {
     badge.textContent = "LIVE";
     badge.style.background = "#bf0d3d";
@@ -1206,7 +1290,7 @@ function render(data: any): void {
     $("dynamic-tab-label")!.textContent = statusText.toUpperCase();
   }
 
-try { renderLinescore(linescore, awayTeam, homeTeam, isFinalState(statusText)); }
+  try { renderLinescore(linescore, awayTeam, homeTeam, isFinalState(statusText)); }
   catch (e) { reportError("renderLinescore", e); }
 
   try { renderBoxScore(data); }
@@ -1218,7 +1302,6 @@ try { renderLinescore(linescore, awayTeam, homeTeam, isFinalState(statusText)); 
   try { renderAllPlays(data); }
   catch (e) { reportError("renderAllPlays", e); }
 
-  // Refresh Win Prob only if its tab is currently active (avoids needless fetches)
   if ($("tab-winprob")?.classList.contains("tab-content-active")) {
     void renderWinProb();
   }
@@ -1290,14 +1373,12 @@ function setupTabs(): void {
     btn.addEventListener("click", () => {
       const targetTab = (btn as HTMLElement).dataset.tab;
       if (!targetTab) return;
-      // Body class so CSS can hide the main linescore on the box tab
       document.body.classList.toggle("on-box-tab", targetTab === "box");
       document.querySelectorAll(".tab").forEach((t) => t.classList.remove("tab-active"));
       btn.classList.add("tab-active");
       document.querySelectorAll(".tab-content").forEach((c) => c.classList.remove("tab-content-active"));
       $(`tab-${targetTab}`)?.classList.add("tab-content-active");
 
-      // Lazy-load win probability when its tab is opened
       if (targetTab === "winprob") {
         void renderWinProb();
       }
@@ -1321,7 +1402,6 @@ async function maybeNotifyPostgame(statusText: string): Promise<void> {
   try {
     await fetch("/api/postgame-check", { method: "POST" });
   } catch (e) {
-    // Best effort — server has dedup, no harm if this fails
     console.error("postgame notify failed:", e);
   }
 }
