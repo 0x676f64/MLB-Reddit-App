@@ -167,10 +167,45 @@ function getPitcherSeasonStats(teamBox, pitcherId) {
   const k = stats.strikeOuts ?? 0;
   return `${w}-${l}  \xB7  ${era} ERA  \xB7  ${k} K`;
 }
+function abbreviateSeriesDesc(desc) {
+  if (!desc) return "Postseason";
+  if (/world series/i.test(desc)) return "World Series";
+  if (/american league championship/i.test(desc)) return "ALCS";
+  if (/national league championship/i.test(desc)) return "NLCS";
+  if (/american league division/i.test(desc)) return "ALDS";
+  if (/national league division/i.test(desc)) return "NLDS";
+  if (/american league wild card/i.test(desc)) return "AL Wild Card";
+  if (/national league wild card/i.test(desc)) return "NL Wild Card";
+  if (/wild card/i.test(desc)) return "Wild Card";
+  return desc;
+}
+function getGameContextLabel(gameDataObj) {
+  const gameInfo = gameDataObj?.game || {};
+  const gameType = gameInfo.type || gameInfo.gameType || "R";
+  const parts = [];
+  if (["F", "D", "L", "W"].includes(gameType)) {
+    const seriesPrefix = abbreviateSeriesDesc(gameInfo.seriesDescription || "");
+    const gameNum = gameInfo.seriesGameNumber;
+    parts.push(gameNum ? `${seriesPrefix} Game ${gameNum}` : seriesPrefix);
+  } else if (gameType === "S") {
+    parts.push("Spring Training");
+  } else if (gameType === "A") {
+    parts.push("All-Star Game");
+  } else if (gameType === "E") {
+    parts.push("Exhibition");
+  }
+  const dh = gameInfo.doubleHeader || "N";
+  const dhNum = gameInfo.gameNumber;
+  if (dh !== "N" && dhNum) {
+    parts.push(`Game ${dhNum} of 2`);
+  }
+  return parts.join(" \xB7 ").toUpperCase();
+}
 var gamePk = null;
 var pollInterval = null;
 var lastGameData = null;
 var postgameNotificationFired = false;
+var postType = null;
 function reportError(label, e) {
   console.error(`[${label}]`, e);
   let overlay = document.getElementById("error-overlay");
@@ -227,7 +262,7 @@ function formatPitcherName(fullName) {
   return `${rest}<br>${last}`;
 }
 function hideAllStatePanes() {
-  ["pregame-content", "live-content", "final-content"].forEach((id) => {
+  ["pregame-content", "live-content", "final-content", "postponed-content"].forEach((id) => {
     const el = $(id);
     if (el) el.style.display = "none";
   });
@@ -726,6 +761,32 @@ function renderFinalContent(data) {
     if (statsEl) statsEl.textContent = stats;
   }
 }
+function renderPostponedContent(data) {
+  const game = data.gameData;
+  const reason = game?.status?.reason || "";
+  const reasonEl = $("postponed-reason");
+  if (reasonEl) {
+    reasonEl.textContent = reason ? `Due to ${reason.toLowerCase()}` : "Postponed by Major League Baseball";
+  }
+  const gameInfo = game?.game || {};
+  const dh = gameInfo.doubleHeader || "N";
+  const dhNum = gameInfo.gameNumber;
+  const dhEl = $("postponed-dh-note");
+  if (dhEl) {
+    if (dh !== "N" && dhNum) {
+      dhEl.textContent = `Now scheduled as Game ${dhNum} of a doubleheader`;
+      dhEl.style.display = "block";
+    } else {
+      dhEl.style.display = "none";
+    }
+  }
+  const away = game?.teams?.away?.name || "";
+  const home = game?.teams?.home?.name || "";
+  const teamsEl = $("postponed-teams");
+  if (teamsEl) {
+    teamsEl.textContent = away && home ? `${away} at ${home}` : "";
+  }
+}
 var MLB_TEAM_COLORS = {
   108: "#BA0021",
   109: "#A71930",
@@ -779,7 +840,6 @@ function escapeHtml(s) {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 var winProbCache = null;
-var winProbCacheGamePk = null;
 async function fetchWinProb() {
   if (!gamePk) return null;
   try {
@@ -788,7 +848,6 @@ async function fetchWinProb() {
     const data = await res.json();
     if (Array.isArray(data)) {
       winProbCache = data;
-      winProbCacheGamePk = gamePk;
       return data;
     }
     return winProbCache;
@@ -970,6 +1029,7 @@ async function selectGameForThisPost() {
     const res = await fetch("/api/post-game");
     if (res.ok) {
       const data = await res.json();
+      if (data?.postType) postType = data.postType;
       if (data?.gamePk) return Number(data.gamePk);
     }
   } catch (e) {
@@ -1011,12 +1071,13 @@ function render(data) {
   lastGameData = data;
   const game = data.gameData;
   const linescore = data.liveData.linescore;
-  const statusText = game.status.detailedState;
+  const statusText = postType === "postponed" ? "Postponed" : game.status.detailedState;
   const awayTeam = game.teams.away;
   const homeTeam = game.teams.home;
   document.body.classList.toggle("is-pregame", isPreGameState(statusText));
   document.body.classList.toggle("is-live", isLiveState(statusText));
   document.body.classList.toggle("is-final", isFinalState(statusText));
+  document.body.classList.toggle("is-postponed", statusText === "Postponed");
   void maybeNotifyPostgame(statusText);
   const loading = $("loading-state");
   const content = $("scorebug-content");
@@ -1030,6 +1091,10 @@ function render(data) {
   const broadcasts = game.broadcasts || [];
   const tvBroadcast = broadcasts.find((b) => b.type === "TV" && b.isNational);
   $("network-info").textContent = tvBroadcast?.name || "";
+  const contextEl = $("game-context");
+  if (contextEl) {
+    contextEl.textContent = getGameContextLabel(game);
+  }
   $("away-logo").alt = awayTeam.name;
   $("home-logo").alt = homeTeam.name;
   loadLogo($("away-logo"), awayTeam.id);
@@ -1075,11 +1140,20 @@ function render(data) {
       reportError("renderPregameContent", e);
     }
   } else if (statusText === "Postponed") {
-    badge.textContent = "PPD";
-    badge.style.background = "rgba(255,255,255,0.15)";
-    inning.textContent = "";
+    badge.textContent = "POSTPONED";
+    badge.style.background = "#bf0d3d";
+    const reason = game?.status?.reason || "";
+    inning.textContent = reason ? reason.toUpperCase() : "";
+    inning.style.color = "rgba(255,255,255,0.7)";
     countBlock.style.display = "none";
-    $("dynamic-tab-label").textContent = "PPD";
+    $("dynamic-tab-label").textContent = "POSTPONED";
+    const ppdEl = $("postponed-content");
+    if (ppdEl) ppdEl.style.display = "block";
+    try {
+      renderPostponedContent(data);
+    } catch (e) {
+      reportError("renderPostponedContent", e);
+    }
   } else if (isLiveState(statusText)) {
     badge.textContent = "LIVE";
     badge.style.background = "#bf0d3d";

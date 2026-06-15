@@ -21,6 +21,7 @@
       <div class="scorebug-top">
         <header class="meta-strip">
           <span class="venue" id="venue-info">—</span>
+          <span class="game-context" id="game-context"></span>
           <span class="network" id="network-info"></span>
         </header>
 
@@ -132,7 +133,6 @@
         <!-- ─────────────── FINAL / WRAP STATE ─────────────── -->
         <div id="final-content" class="state-pane" style="display:none;">
 
-          <!-- W/L pitchers row: away team left, home right -->
           <div class="final-decisions">
             <div class="final-slot final-slot-away" id="final-pitcher-away">
               <img class="final-team-logo" id="final-away-team-logo" alt="">
@@ -159,7 +159,6 @@
             </div>
           </div>
 
-          <!-- Top performers row -->
           <div class="final-section-header">TOP PERFORMERS</div>
           <div class="final-performers">
             <div class="final-performer" id="final-performer-1">
@@ -171,12 +170,27 @@
               <div class="final-performer-stats">—</div>
             </div>
             <div class="final-performer" id="final-performer-3">
-            <div class="final-performer-name">—</div>
-            <div class="final-performer-stats">—</div>
+              <div class="final-performer-name">—</div>
+              <div class="final-performer-stats">—</div>
+            </div>
           </div>
+
         </div>
 
-      </div>
+        <!-- ─────────────── POSTPONED STATE ─────────────── -->
+        <div id="postponed-content" class="state-pane" style="display:none;">
+          <div class="postponed-display">
+
+            <div class="postponed-headline">POSTPONED</div>
+            <div class="postponed-teams" id="postponed-teams"></div>
+            <div class="postponed-reason" id="postponed-reason">—</div>
+
+            <div class="postponed-divider"></div>
+
+            <div class="postponed-dh-note" id="postponed-dh-note" style="display:none;"></div>
+
+          </div>
+        </div>
 
       </div>
       <!-- end tab-dynamic -->
@@ -204,8 +218,6 @@
       <div class="tab-content" id="tab-plays">
         <div class="plays-list" id="all-plays-list"></div>
       </div>
-
-      <!-- ─────────────── OTHER TABS (placeholders) ─────────────── -->
 
       <div class="tab-content" id="tab-winprob">
         <div class="placeholder"></div>
