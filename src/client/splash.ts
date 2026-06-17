@@ -9,6 +9,7 @@ const PRE_GAME_STATES: string[] = ["Pre-Game", "Scheduled", "Warmup"];
 
 const isFinalState = (s: string): boolean => FINAL_STATES.includes(s);
 const isPreGameState = (s: string): boolean => PRE_GAME_STATES.includes(s);
+const isSuspendedState = (s: string): boolean => s.startsWith("Suspended");
 const isLiveState = (s: string): boolean =>
   !isFinalState(s) && !isPreGameState(s) &&
   !["Postponed", "Suspended", "Suspended: Rain", "Cancelled", "Cancelled: Rain", "Delayed"].includes(s);
@@ -283,7 +284,7 @@ function formatPitcherName(fullName: string): string {
 }
 
 function hideAllStatePanes(): void {
-  ["pregame-content", "live-content", "final-content", "postponed-content"].forEach((id) => {
+  ["pregame-content", "live-content", "final-content", "postponed-content", "suspended-content"].forEach((id) => {
     const el = $(id);
     if (el) el.style.display = "none";
   });
@@ -877,6 +878,94 @@ function renderPostponedContent(data: any): void {
   }
 }
 
+// ── Suspended content ─────────────────────────────────────────────────────
+
+function renderSuspendedContent(data: any): void {
+  const game = data.gameData;
+  const linescore = data.liveData?.linescore;
+
+  // Inning info ("BOTTOM 2ND", "TOP 5TH", etc.)
+  const inningEl = $("suspended-inning");
+  if (inningEl) {
+    const half = linescore?.inningHalf;
+    const inning = linescore?.currentInning;
+    if (half && inning) {
+      const halfTxt = half === "Top" ? "TOP" : "BOTTOM";
+      inningEl.textContent = `${halfTxt} ${ordinalInning(inning)}`;
+    } else {
+      inningEl.textContent = "";
+    }
+  }
+
+  // Teams ("Tigers at Pirates")
+  const away = game?.teams?.away?.name || "";
+  const home = game?.teams?.home?.name || "";
+  const teamsEl = $("suspended-teams");
+  if (teamsEl) {
+    teamsEl.textContent = away && home ? `${away} at ${home}` : "";
+  }
+
+  // Reason for suspension
+  const reason = game?.status?.reason || "";
+  const reasonEl = $("suspended-reason");
+  if (reasonEl) {
+    reasonEl.textContent = reason
+      ? `Due to ${reason.toLowerCase()}`
+      : "Game has been suspended";
+  }
+
+  // Makeup date — when game will resume. Check multiple potential field
+  // locations defensively since MLB's API surfaces this inconsistently.
+  const reschedRaw =
+    game?.rescheduleDate ||
+    game?.rescheduleGameDate ||
+    game?.rescheduledTo ||
+    game?.datetime?.rescheduleDate ||
+    game?.game?.rescheduleDate ||
+    null;
+  const makeupEl = $("suspended-makeup-note");
+  if (makeupEl) {
+    if (reschedRaw) {
+      const dt = new Date(reschedRaw);
+      const dateStr = dt.toLocaleDateString("en-US", {
+        weekday: "long", month: "long", day: "numeric"
+      });
+      const timeStr = formatGameTime(reschedRaw);
+      makeupEl.textContent = `Resumes ${dateStr} at ${timeStr}`;
+      makeupEl.style.display = "block";
+    } else {
+      makeupEl.style.display = "none";
+    }
+  }
+
+  // Doubleheader note — if the resumption is scheduled as part of a DH.
+  const gameInfo = game?.game || {};
+  const dh = gameInfo.doubleHeader || "N";
+  const dhNum = gameInfo.gameNumber;
+  const dhEl = $("suspended-dh-note");
+  if (dhEl) {
+    if (dh !== "N" && dhNum) {
+      dhEl.textContent = `Continues as Game ${dhNum} of a doubleheader`;
+      dhEl.style.display = "block";
+    } else {
+      dhEl.style.display = "none";
+    }
+  }
+}
+
+function ordinalInning(n: number): string {
+  if (n === 1) return "1ST";
+  if (n === 2) return "2ND";
+  if (n === 3) return "3RD";
+  if (n >= 21) {
+    const last = n % 10;
+    if (last === 1) return `${n}ST`;
+    if (last === 2) return `${n}ND`;
+    if (last === 3) return `${n}RD`;
+  }
+  return `${n}TH`;
+}
+
 // ── Win Probability ───────────────────────────────────────────────────────
 
 const MLB_TEAM_COLORS: Record<number, string> = {
@@ -1184,6 +1273,7 @@ function render(data: any): void {
   document.body.classList.toggle("is-live", isLiveState(statusText));
   document.body.classList.toggle("is-final", isFinalState(statusText));
   document.body.classList.toggle("is-postponed", statusText === "Postponed");
+  document.body.classList.toggle("is-suspended", isSuspendedState(statusText));
 
   void maybeNotifyPostgame(statusText);
 
@@ -1261,6 +1351,19 @@ function render(data: any): void {
     const ppdEl = $("postponed-content");
     if (ppdEl) ppdEl.style.display = "block";
     try { renderPostponedContent(data); } catch (e) { reportError("renderPostponedContent", e); }
+  } else if (isSuspendedState(statusText)) {
+    badge.textContent = "SUSPENDED";
+    badge.style.background = "#bf0d3d";
+    const half = linescore?.inningHalf === "Top" ? "▲" : "▼";
+    inning.textContent = linescore?.currentInning
+      ? `${half} ${linescore.currentInning}`
+      : "";
+    inning.style.color = "#bf0d3d";
+    countBlock.style.display = "none";
+    $("dynamic-tab-label")!.textContent = "SUSPENDED";
+    const susEl = $("suspended-content");
+    if (susEl) susEl.style.display = "block";
+    try { renderSuspendedContent(data); } catch (e) { reportError("renderSuspendedContent", e); }
   } else if (isLiveState(statusText)) {
     badge.textContent = "LIVE";
     badge.style.background = "#bf0d3d";
