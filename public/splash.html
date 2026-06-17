@@ -21,7 +21,6 @@
       <div class="scorebug-top">
         <header class="meta-strip">
           <span class="venue" id="venue-info">—</span>
-          <span class="game-context" id="game-context"></span>
           <span class="network" id="network-info"></span>
         </header>
 
@@ -133,6 +132,7 @@
         <!-- ─────────────── FINAL / WRAP STATE ─────────────── -->
         <div id="final-content" class="state-pane" style="display:none;">
 
+          <!-- W/L pitchers row: away team left, home right -->
           <div class="final-decisions">
             <div class="final-slot final-slot-away" id="final-pitcher-away">
               <img class="final-team-logo" id="final-away-team-logo" alt="">
@@ -159,6 +159,7 @@
             </div>
           </div>
 
+          <!-- Top performers row -->
           <div class="final-section-header">TOP PERFORMERS</div>
           <div class="final-performers">
             <div class="final-performer" id="final-performer-1">
@@ -189,6 +190,24 @@
 
             <div class="postponed-dh-note" id="postponed-dh-note" style="display:none;"></div>
 
+            <div class="postponed-footer">Check back here for updates as MLB confirms details.</div>
+
+          </div>
+        </div>
+
+        <!-- ─────────────── SUSPENDED STATE ─────────────── -->
+        <div id="suspended-content" class="state-pane" style="display:none;">
+          <div class="suspended-display">
+
+            <div class="suspended-headline">SUSPENDED</div>
+            <div class="suspended-inning" id="suspended-inning"></div>
+            <div class="suspended-reason" id="suspended-reason">—</div>
+
+            <div class="suspended-divider"></div>
+
+            <div class="suspended-makeup-note" id="suspended-makeup-note" style="display:none;"></div>
+            <div class="suspended-dh-note" id="suspended-dh-note" style="display:none;"></div>
+
           </div>
         </div>
 
@@ -218,6 +237,8 @@
       <div class="tab-content" id="tab-plays">
         <div class="plays-list" id="all-plays-list"></div>
       </div>
+
+      <!-- ─────────────── OTHER TABS (placeholders) ─────────────── -->
 
       <div class="tab-content" id="tab-winprob">
         <div class="placeholder"></div>
