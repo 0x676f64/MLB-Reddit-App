@@ -882,7 +882,10 @@ async function handlePostgameOrPostponement(
       await redis.set(`post-game:${post.id}`, String(pk), { expiration: renderExpiresAt() });
       await redis.set(`post-type:${post.id}`, "postponed", { expiration: renderExpiresAt() });
       await redis.set(postponedKey, post.id, { expiration: dedupExpiresAt() });
-      console.log(`postponed: created ${post.id} for gamePk ${pk}`);
+      // Release the original Game Thread's dedup so the makeup date can post
+      // a fresh Game Thread for this same gamePk (MLB reuses gamePk on reschedule).
+      await redis.del(gameDedupKey);
+      console.log(`postponed: created ${post.id} for gamePk ${pk}, released gameDedupKey for makeup`);
       return "postponed";
     } catch (e) {
       console.error(`postponed post failed for gamePk ${pk}:`, e);
@@ -974,6 +977,9 @@ async function onMenuPostAllGames(): Promise<UiResponse> {
       await redis.set(`post-game:${post.id}`, String(pk), { expiration: renderExpiresAt() });
       await redis.set(`post-type:${post.id}`, "game", { expiration: renderExpiresAt() });
       await redis.set(dedupKey, post.id, { expiration: dedupExpiresAt() });
+      // If this game was previously postponed, release the postponement lock so
+      // the cron can fire another postponement notice if it happens again.
+      await redis.del(`postponed:${subredditId}:${pk}`);
       created++;
     } catch (e) {
       console.error(`Failed posting game ${pk}:`, e);
