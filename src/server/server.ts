@@ -41,6 +41,24 @@ const TEAM_NAMES: Record<string, string> = {
 };
 
 // ════════════════════════════════════════════════════════════════════════
+// Redis expiration helpers
+// ════════════════════════════════════════════════════════════════════════
+
+// Dedup keys only need to live long enough to prevent same-day or
+// next-day re-posts. Three days is plenty.
+function dedupExpiresAt(): Date {
+  return new Date(Date.now() + 1000 * 60 * 60 * 24 * 3);
+}
+
+// Render keys (`post-game:{postId}`, `post-type:{postId}`) need to live
+// as long as the Reddit post is likely to be viewed. Reddit archives
+// posts at 6 months by default, after which engagement drops to near
+// zero, so 180 days covers the entire useful lifespan.
+function renderExpiresAt(): Date {
+  return new Date(Date.now() + 1000 * 60 * 60 * 24 * 180);
+}
+
+// ════════════════════════════════════════════════════════════════════════
 // Entry point
 // ════════════════════════════════════════════════════════════════════════
 
@@ -297,10 +315,9 @@ async function onPostgameCheck(rsp: ServerResponse): Promise<void> {
     const post = await reddit.submitCustomPost({
       title: buildPostgameTitleFromFeed(feed, teamId, customTitles),
     });
-    const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 3);
-    await redis.set(`post-game:${post.id}`, gamePkStr, { expiration: expiresAt });
-    await redis.set(`post-type:${post.id}`, "postgame", { expiration: expiresAt });
-    await redis.set(pgKey, post.id, { expiration: expiresAt });
+    await redis.set(`post-game:${post.id}`, gamePkStr, { expiration: renderExpiresAt() });
+    await redis.set(`post-type:${post.id}`, "postgame", { expiration: renderExpiresAt() });
+    await redis.set(pgKey, post.id, { expiration: dedupExpiresAt() });
 
     console.log(`postgame-check: created ${post.id} for gamePk ${gamePkStr}`);
     writeJSON<PartialJsonValue>(200, { created: true } as PartialJsonValue, rsp);
@@ -824,9 +841,8 @@ async function maybePostOffDayThread(
       title,
       text: body,
     });
-    const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 3);
-    await redis.set(offDayKey, post.id, { expiration: expiresAt });
-    await redis.set(`offday-key:${post.id}`, offDayKey, { expiration: expiresAt });
+    await redis.set(offDayKey, post.id, { expiration: dedupExpiresAt() });
+    await redis.set(`offday-key:${post.id}`, offDayKey, { expiration: renderExpiresAt() });
     console.log(`off-day: created ${post.id} for team ${teamId} on ${dateStr}`);
     return true;
   } catch (e) {
@@ -863,10 +879,9 @@ async function handlePostgameOrPostponement(
       const post = await reddit.submitCustomPost({
         title: buildPostponedThreadTitle(game, teamId),
       });
-      const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 3);
-      await redis.set(`post-game:${post.id}`, String(pk), { expiration: expiresAt });
-      await redis.set(`post-type:${post.id}`, "postponed", { expiration: expiresAt });
-      await redis.set(postponedKey, post.id, { expiration: expiresAt });
+      await redis.set(`post-game:${post.id}`, String(pk), { expiration: renderExpiresAt() });
+      await redis.set(`post-type:${post.id}`, "postponed", { expiration: renderExpiresAt() });
+      await redis.set(postponedKey, post.id, { expiration: dedupExpiresAt() });
       console.log(`postponed: created ${post.id} for gamePk ${pk}`);
       return "postponed";
     } catch (e) {
@@ -892,10 +907,9 @@ async function handlePostgameOrPostponement(
     const post = await reddit.submitCustomPost({
       title: buildPostgameThreadTitle(game, teamId, customTitles),
     });
-    const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 3);
-    await redis.set(`post-game:${post.id}`, String(pk), { expiration: expiresAt });
-    await redis.set(`post-type:${post.id}`, "postgame", { expiration: expiresAt });
-    await redis.set(pgKey, post.id, { expiration: expiresAt });
+    await redis.set(`post-game:${post.id}`, String(pk), { expiration: renderExpiresAt() });
+    await redis.set(`post-type:${post.id}`, "postgame", { expiration: renderExpiresAt() });
+    await redis.set(pgKey, post.id, { expiration: dedupExpiresAt() });
     console.log(`postgame: created ${post.id} for gamePk ${pk}`);
     return "postgame";
   } catch (e) {
@@ -957,10 +971,9 @@ async function onMenuPostAllGames(): Promise<UiResponse> {
       const post = await reddit.submitCustomPost({
         title: buildGameThreadTitle(game, teamId),
       });
-      const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 3);
-      await redis.set(`post-game:${post.id}`, String(pk), { expiration: expiresAt });
-      await redis.set(`post-type:${post.id}`, "game", { expiration: expiresAt });
-      await redis.set(dedupKey, post.id, { expiration: expiresAt });
+      await redis.set(`post-game:${post.id}`, String(pk), { expiration: renderExpiresAt() });
+      await redis.set(`post-type:${post.id}`, "game", { expiration: renderExpiresAt() });
+      await redis.set(dedupKey, post.id, { expiration: dedupExpiresAt() });
       created++;
     } catch (e) {
       console.error(`Failed posting game ${pk}:`, e);
