@@ -1,3 +1,24 @@
+// src/client/splash.ts
+//
+// CHANGES IN THIS REVISION
+//   1. Expanded mode  — imports requestExpandedMode/getWebViewMode and injects a
+//      full-screen button (setupExpand). Inline web views sit inside Reddit's
+//      feed, which captures vertical scroll; expanded mode owns the viewport so
+//      native scrolling works with zero touch handlers. Self-contained: no
+//      HTML/CSS edits required.
+//   2. Polling stops on terminal states (Final / Postponed) — a days-long
+//      postgame thread no longer polls the MLB API forever.
+//   3. Polling pauses while the post is off-screen (document.hidden) and
+//      refreshes the moment it returns to view.
+//   4. selectTodaysGame() now resolves "today" in US Eastern (matching the
+//      server), not the viewer's local clock.
+//
+// NOTE: this file now imports from "@devvit/web/client". Make sure your client
+// build runs esbuild with platform:"browser" (or conditions:["browser"]) so the
+// import resolves to the browser entry rather than the server-panic stub.
+
+import { requestExpandedMode, getWebViewMode } from "@devvit/web/client";
+
 // ── Constants ─────────────────────────────────────────────────────────────
 
 const FINAL_STATES: string[] = [
@@ -13,6 +34,9 @@ const isSuspendedState = (s: string): boolean => s.startsWith("Suspended");
 const isLiveState = (s: string): boolean =>
   !isFinalState(s) && !isPreGameState(s) &&
   !["Postponed", "Suspended", "Suspended: Rain", "Cancelled", "Cancelled: Rain", "Delayed"].includes(s);
+
+// A game in one of these states is done changing — nothing left to poll for.
+const isTerminalState = (s: string): boolean => isFinalState(s) || s === "Postponed";
 
 // MLB-only team IDs — used by getLogoPath for the dark cap variants
 const MLB_TEAM_IDS: Set<number> = new Set([
@@ -210,6 +234,7 @@ let pollInterval: ReturnType<typeof setInterval> | null = null;
 let lastGameData: any = null;
 let postgameNotificationFired = false;
 let postType: string | null = null;
+let gameIsTerminal = false; // set once the game reaches Final/Postponed
 
 // ── Visible error reporting (Devvit iframe-friendly) ──────────────────────
 
@@ -251,12 +276,20 @@ function loadLogo(imgEl: HTMLImageElement, teamId: number): void {
   imgEl.src = getLogoPath(teamId);
 }
 
+// All game dates/times render in US Eastern — matching the bot's post text and
+// MLB's scheduling convention — instead of the viewer's device zone. Intl picks
+// EST vs EDT automatically and handles DST.
+const GAME_TZ = "America/New_York";
+
 function formatGameTime(gameDate: string): string {
-  const d = new Date(gameDate);
-  const h = d.getHours();
-  const m = d.getMinutes();
-  const ampm = h >= 12 ? "PM" : "AM";
-  return `${(h % 12) || 12}:${String(m).padStart(2, "0")} ${ampm}`;
+  // e.g. "7:05 PM EDT" — timeZoneName:"short" emits the correct EST/EDT label.
+  return new Date(gameDate).toLocaleTimeString("en-US", {
+    timeZone: GAME_TZ,
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+    timeZoneName: "short",
+  });
 }
 
 function getTeamShortName(team: any): string {
@@ -290,6 +323,67 @@ function hideAllStatePanes(): void {
   });
 }
 
+// ── Expanded mode (the scroll fix) ────────────────────────────────────────
+//
+// Inline web views are embedded in Reddit's feed, which owns vertical scroll
+// gestures — that's why inner scrolling never worked. requestExpandedMode opens
+// the post full-screen, where the existing CSS `overflow-y: auto` scrolls
+// natively. Must be triggered by a trusted click.
+//
+// The button ONLY expands. In full-screen, Reddit's own chrome (the X) is the
+// single way back — we don't render a collapse control, which avoids the desync
+// where exiting via the X left our button stuck in a stale "collapse" state.
+// The button is hidden whenever the view is expanded. Mode can change in place
+// on desktop without reloading the page, so visibility is reconciled against the
+// live mode on resize, and the click handler refuses to expand when already
+// expanded as a backstop against any double-expand error.
+
+const EXPAND_ICON =
+  '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" ' +
+  'stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+  '<path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1-2 2h-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>';
+
+function isExpandedMode(): boolean {
+  try { return getWebViewMode() === "expanded"; } catch { return false; }
+}
+
+function setupExpand(): void {
+  if (document.getElementById("expand-btn")) return;
+  const host = $("scorebug-content") || document.body;
+
+  const btn = document.createElement("button");
+  btn.id = "expand-btn";
+  btn.type = "button";
+  btn.setAttribute("aria-label", "Open full screen");
+  btn.innerHTML = EXPAND_ICON;
+  btn.style.cssText =
+    "position:absolute;top:10px;right:12px;z-index:40;width:32px;height:32px;" +
+    "display:flex;align-items:center;justify-content:center;padding:0;" +
+    "background:rgba(255,255,255,0.10);color:#fff;border:1px solid rgba(255,255,255,0.18);" +
+    "border-radius:6px;cursor:pointer;-webkit-tap-highlight-color:transparent;" +
+    "backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);";
+
+  // Visible only while inline; hidden in full-screen so the X is the way back.
+  const sync = (): void => { btn.style.display = isExpandedMode() ? "none" : "flex"; };
+  sync();
+  window.addEventListener("resize", sync);
+
+  btn.addEventListener("click", (event: MouseEvent) => {
+    // Backstop: if we're somehow already expanded, just hide and bail rather
+    // than calling requestExpandedMode twice (which throws "already expanded").
+    if (isExpandedMode()) { sync(); return; }
+    try {
+      // "default" is this app's devvit.json post entrypoint (splash.html).
+      requestExpandedMode(event, "default");
+    } catch (e) {
+      reportError("requestExpandedMode", e);
+    }
+    sync();
+  });
+
+  host.appendChild(btn);
+}
+
 // ── Pregame content ───────────────────────────────────────────────────────
 
 function renderPregameContent(data: any, awayTeam: any, homeTeam: any): void {
@@ -309,7 +403,7 @@ function renderPregameContent(data: any, awayTeam: any, homeTeam: any): void {
   $("pregame-home-pitcher-stats")!.textContent = getPitcherSeasonStats(teamsBox.home, homePid);
 
   const dt = new Date(data.gameData.datetime?.dateTime || Date.now());
-  const dateStr = dt.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }).toUpperCase();
+  const dateStr = dt.toLocaleDateString("en-US", { timeZone: GAME_TZ, weekday: "short", month: "short", day: "numeric" }).toUpperCase();
   const timeStr = formatGameTime(data.gameData.datetime?.dateTime || dt.toISOString());
   $("pregame-first-pitch")!.textContent = `${dateStr}  ·  ${timeStr}`;
 }
@@ -928,7 +1022,7 @@ function renderSuspendedContent(data: any): void {
     if (reschedRaw) {
       const dt = new Date(reschedRaw);
       const dateStr = dt.toLocaleDateString("en-US", {
-        weekday: "long", month: "long", day: "numeric"
+        timeZone: GAME_TZ, weekday: "long", month: "long", day: "numeric"
       });
       const timeStr = formatGameTime(reschedRaw);
       makeupEl.textContent = `Resumes ${dateStr} at ${timeStr}`;
@@ -1221,8 +1315,9 @@ async function selectGameForThisPost(): Promise<number | null> {
 }
 
 async function selectTodaysGame(): Promise<number | null> {
-  const today = new Date();
-  const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+  // MLB's schedule "day" is US Eastern; match the server (todayDateStr) so a
+  // viewer in another time zone near midnight doesn't request the wrong date.
+  const dateStr = new Date().toLocaleDateString("sv-SE", { timeZone: "America/New_York" });
   try {
     const res = await fetch(`/api/schedule?date=${dateStr}`);
     const data = await res.json();
@@ -1284,7 +1379,7 @@ function render(data: any): void {
 
   const venueName = game.venue?.name || "";
   const dt = new Date(game.datetime?.dateTime || Date.now());
-  const dateStr = dt.toLocaleDateString("en-US", { month: "short", day: "numeric" }).toUpperCase();
+  const dateStr = dt.toLocaleDateString("en-US", { timeZone: GAME_TZ, month: "short", day: "numeric" }).toUpperCase();
   const timeStr = formatGameTime(game.datetime?.dateTime || dt.toISOString());
   $("venue-info")!.textContent = `${venueName.toUpperCase()} · ${dateStr} · ${timeStr}`;
 
@@ -1408,6 +1503,13 @@ function render(data: any): void {
   if ($("tab-winprob")?.classList.contains("tab-content-active")) {
     void renderWinProb();
   }
+
+  // Once the game is final or postponed there's nothing more to fetch — stop
+  // the loop so a multi-day postgame thread isn't polling the MLB API forever.
+  if (isTerminalState(statusText)) {
+    gameIsTerminal = true;
+    stopPolling();
+  }
 }
 
 // ── Linescore ─────────────────────────────────────────────────────────────
@@ -1491,9 +1593,20 @@ function setupTabs(): void {
 
 // ── Polling ───────────────────────────────────────────────────────────────
 
-function startPolling(pk: number): void {
+function startPolling(): void {
   if (pollInterval) clearInterval(pollInterval);
-  pollInterval = setInterval(() => fetchAndRender(pk), 10000);
+  pollInterval = setInterval(() => {
+    // Skip the fetch while the post is scrolled off-screen / backgrounded.
+    if (document.hidden || gamePk == null) return;
+    void fetchAndRender(gamePk);
+  }, 10000);
+}
+
+function stopPolling(): void {
+  if (pollInterval) {
+    clearInterval(pollInterval);
+    pollInterval = null;
+  }
 }
 
 // ── Postgame notification ──────────────────────────────────────────────────
@@ -1515,11 +1628,23 @@ async function maybeNotifyPostgame(statusText: string): Promise<void> {
   setupTabs();
   setupBoxScoreTeamTabs();
   setupWinProbDismiss();
+  setupExpand();
+
+  // When the post returns to view, refresh immediately (only while the poll is
+  // still alive — i.e. not after a terminal-state stop).
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden && pollInterval !== null && gamePk != null) {
+      void fetchAndRender(gamePk);
+    }
+  });
+
   gamePk = await selectGameForThisPost();
   if (!gamePk) {
     $("loading-state")!.textContent = "No games today.";
     return;
   }
   await fetchAndRender(gamePk);
-  startPolling(gamePk);
+
+  // Don't start the loop at all if the game was already over on load.
+  if (!gameIsTerminal) startPolling();
 })();
