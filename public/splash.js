@@ -7554,7 +7554,32 @@ function mapPx(pX) {
 function mapPz(pZ) {
   return SZ_BOT - (pZ - PZ_BOT_FT) / (PZ_TOP_FT - PZ_BOT_FT) * (SZ_BOT - SZ_TOP);
 }
+function svgInk() {
+  const light = document.documentElement.getAttribute("data-theme") === "light";
+  return light ? {
+    empty: "rgba(10,24,40,0.10)",
+    faint: "rgba(10,24,40,0.32)",
+    mid: "rgba(10,24,40,0.30)",
+    strong: "rgba(10,24,40,0.62)",
+    label: "rgba(10,24,40,0.50)",
+    grid: "rgba(10,24,40,0.10)",
+    chartBg: "rgba(10,24,40,0.05)",
+    dotFill: "#0a1828",
+    dotRing: "rgba(10,24,40,0.6)"
+  } : {
+    empty: "rgba(255,255,255,0.08)",
+    faint: "rgba(255,255,255,0.35)",
+    mid: "rgba(255,255,255,0.30)",
+    strong: "rgba(255,255,255,0.55)",
+    label: "rgba(255,255,255,0.45)",
+    grid: "rgba(255,255,255,0.08)",
+    chartBg: "rgba(255,255,255,0.04)",
+    dotFill: "#fff",
+    dotRing: "rgba(255,255,255,0.6)"
+  };
+}
 function buildStrikeZoneSVG(pitches) {
+  const ink = svgInk();
   const dW = DZ_RIGHT - DZ_LEFT, dH = DZ_BOT - DZ_TOP;
   const d3 = dW / 3, d3h = dH / 3;
   const dots = pitches.map((p, i) => {
@@ -7565,7 +7590,7 @@ function buildStrikeZoneSVG(pitches) {
     const info = pitchInfo(p.details?.type?.code);
     const isLast = i === pitches.length - 1;
     return `<circle cx="${cx}" cy="${cy}" r="${isLast ? 7 : 5}"
-      fill="${info.color}" stroke="${isLast ? "#fff" : "rgba(255,255,255,0.35)"}"
+      fill="${info.color}" stroke="${isLast ? "#fff" : ink.faint}"
       stroke-width="${isLast ? 2 : 1}" opacity="${isLast ? 1 : 0.65}"/>
       <text x="${cx}" y="${cy + 0.5}" text-anchor="middle" dominant-baseline="middle"
       font-size="${isLast ? 7 : 6}" font-weight="700" fill="white"
@@ -7583,13 +7608,14 @@ function buildStrikeZoneSVG(pitches) {
     <line x1="${DZ_LEFT}" y1="${DZ_TOP + d3h * 2}" x2="${DZ_RIGHT}" y2="${DZ_TOP + d3h * 2}"
       stroke="rgba(191,13,61,0.22)" stroke-width="0.8" stroke-dasharray="3,2"/>
     <polygon points="${DZ_LEFT},${DZ_BOT + 5} ${DZ_RIGHT},${DZ_BOT + 5} ${DZ_RIGHT},${DZ_BOT + 12} ${SZ_CX},${DZ_BOT + 20} ${DZ_LEFT},${DZ_BOT + 12}"
-      fill="rgba(255,255,255,0.55)" stroke="rgba(255,255,255,0.3)" stroke-width="1"/>
+      fill="${ink.strong}" stroke="${ink.mid}" stroke-width="1"/>
     ${dots}
   </svg>`;
 }
 function buildBasesSVG(outs, onBase) {
-  const outFill = (n) => outs >= n ? "#bf0d3d" : "rgba(255,255,255,0.06)";
-  const baseFill = (b) => b ? "#bf0d3d" : "rgba(255,255,255,0.06)";
+  const ink = svgInk();
+  const outFill = (n) => outs >= n ? "#bf0d3d" : ink.empty;
+  const baseFill = (b) => b ? "#bf0d3d" : ink.empty;
   return `<svg width="60" height="60" viewBox="0 0 58 79" xmlns="http://www.w3.org/2000/svg">
     <circle cx="13" cy="61" r="6" fill="${outFill(1)}" stroke="#bf0d3d" stroke-width="1.5"/>
     <circle cx="30" cy="61" r="6" fill="${outFill(2)}" stroke="#bf0d3d" stroke-width="1.5"/>
@@ -7693,21 +7719,28 @@ ${e.stack || ""}` : String(e);
 window.addEventListener("error", (e) => reportError("window.error", e.error || e.message));
 window.addEventListener("unhandledrejection", (e) => reportError("unhandled promise", e.reason));
 var $ = (id) => document.getElementById(id);
+function baseLogoPath(teamId) {
+  return `/teams/${teamId}.svg`;
+}
 function getLogoPath(teamId) {
+  const light = document.documentElement.getAttribute("data-theme") === "light";
+  if (light) return `/teams/${teamId}.svg`;
   return MLB_TEAM_IDS.has(teamId) ? `/teams/dark/${teamId}.svg` : `/teams/${teamId}.svg`;
 }
+var logoFallbackAttr = (teamId) => `this.onerror=null;this.src='${baseLogoPath(teamId)}'`;
 function loadLogo(imgEl, teamId) {
+  imgEl.onerror = () => {
+    imgEl.onerror = null;
+    imgEl.src = baseLogoPath(teamId);
+  };
   imgEl.src = getLogoPath(teamId);
 }
-var GAME_TZ = "America/New_York";
 function formatGameTime(gameDate) {
-  return new Date(gameDate).toLocaleTimeString("en-US", {
-    timeZone: GAME_TZ,
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
-    timeZoneName: "short"
-  });
+  const d = new Date(gameDate);
+  const h = d.getHours();
+  const m = d.getMinutes();
+  const ampm = h >= 12 ? "PM" : "AM";
+  return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${ampm}`;
 }
 function getTeamShortName(team) {
   if (!team) return "";
@@ -7753,12 +7786,21 @@ function setupExpand() {
   btn.type = "button";
   btn.setAttribute("aria-label", "Open full screen");
   btn.innerHTML = EXPAND_ICON;
-  btn.style.cssText = "position:absolute;top:10px;right:12px;z-index:40;width:32px;height:32px;display:flex;align-items:center;justify-content:center;padding:0;background:rgba(255,255,255,0.10);color:#fff;border:1px solid rgba(255,255,255,0.18);border-radius:6px;cursor:pointer;-webkit-tap-highlight-color:transparent;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);";
+  btn.style.cssText = "position:absolute;top:10px;right:12px;z-index:40;width:32px;height:32px;display:flex;align-items:center;justify-content:center;padding:0;background:var(--bg-elev-2);color:var(--text-primary);border:1px solid var(--border-medium);border-radius:6px;cursor:pointer;-webkit-tap-highlight-color:transparent;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);";
+  let modePoll = 0;
   const sync = () => {
-    btn.style.display = isExpandedMode() ? "none" : "flex";
+    const expanded = isExpandedMode();
+    btn.style.display = expanded ? "none" : "flex";
+    if (expanded && !modePoll) {
+      modePoll = window.setInterval(sync, 400);
+    } else if (!expanded && modePoll) {
+      window.clearInterval(modePoll);
+      modePoll = 0;
+    }
   };
   sync();
   window.addEventListener("resize", sync);
+  document.addEventListener("visibilitychange", sync);
   btn.addEventListener("click", (event) => {
     if (isExpandedMode()) {
       sync();
@@ -7771,6 +7813,81 @@ function setupExpand() {
     }
     sync();
   });
+  host.appendChild(btn);
+}
+var SUN_ICON = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>';
+var MOON_ICON = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>';
+var THEME_KEY = "mlb-scores-theme";
+function applyTheme(theme) {
+  if (theme === "light") document.documentElement.setAttribute("data-theme", "light");
+  else document.documentElement.removeAttribute("data-theme");
+}
+function systemTheme() {
+  try {
+    return window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+  } catch {
+    return "dark";
+  }
+}
+function savedTheme() {
+  try {
+    const v = localStorage.getItem(THEME_KEY);
+    return v === "light" || v === "dark" ? v : null;
+  } catch {
+    return null;
+  }
+}
+function resolveTheme() {
+  return savedTheme() ?? systemTheme();
+}
+function setupThemeToggle() {
+  if (document.getElementById("theme-btn")) return;
+  const host = $("scorebug-content") || document.body;
+  let theme = resolveTheme();
+  applyTheme(theme);
+  const btn = document.createElement("button");
+  btn.id = "theme-btn";
+  btn.type = "button";
+  btn.style.cssText = "position:absolute;top:10px;left:12px;z-index:40;width:32px;height:32px;display:flex;align-items:center;justify-content:center;padding:0;background:var(--bg-elev-2);color:var(--text-primary);border:1px solid var(--border-medium);border-radius:6px;cursor:pointer;-webkit-tap-highlight-color:transparent;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);";
+  const paint = () => {
+    btn.innerHTML = theme === "light" ? MOON_ICON : SUN_ICON;
+    btn.setAttribute("aria-label", theme === "light" ? "Switch to dark mode" : "Switch to light mode");
+  };
+  paint();
+  btn.addEventListener("click", () => {
+    theme = theme === "light" ? "dark" : "light";
+    applyTheme(theme);
+    try {
+      localStorage.setItem(THEME_KEY, theme);
+    } catch {
+    }
+    paint();
+    try {
+      if (lastGameData) render(lastGameData);
+    } catch (e) {
+      reportError("theme re-render", e);
+    }
+  });
+  try {
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    const onSchemeChange = (e) => {
+      try {
+        localStorage.removeItem(THEME_KEY);
+      } catch {
+      }
+      theme = e.matches ? "dark" : "light";
+      applyTheme(theme);
+      paint();
+      try {
+        if (lastGameData) render(lastGameData);
+      } catch (err) {
+        reportError("scheme re-render", err);
+      }
+    };
+    if (mq.addEventListener) mq.addEventListener("change", onSchemeChange);
+    else if (mq.addListener) mq.addListener(onSchemeChange);
+  } catch {
+  }
   host.appendChild(btn);
 }
 function renderPregameContent(data, awayTeam, homeTeam) {
@@ -7787,7 +7904,7 @@ function renderPregameContent(data, awayTeam, homeTeam) {
   $("pregame-away-pitcher-stats").textContent = getPitcherSeasonStats(teamsBox.away, awayPid);
   $("pregame-home-pitcher-stats").textContent = getPitcherSeasonStats(teamsBox.home, homePid);
   const dt = new Date(data.gameData.datetime?.dateTime || Date.now());
-  const dateStr = dt.toLocaleDateString("en-US", { timeZone: GAME_TZ, weekday: "short", month: "short", day: "numeric" }).toUpperCase();
+  const dateStr = dt.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }).toUpperCase();
   const timeStr = formatGameTime(data.gameData.datetime?.dateTime || dt.toISOString());
   $("pregame-first-pitch").textContent = `${dateStr}  \xB7  ${timeStr}`;
 }
@@ -8080,8 +8197,9 @@ function buildPlayScorebug(play) {
     second: !!play.matchup?.postOnSecond,
     third: !!play.matchup?.postOnThird
   };
-  const outFill = (n) => outs >= n ? "#bf0d3d" : "rgba(255,255,255,0.08)";
-  const baseFill = (b) => b ? "#bf0d3d" : "rgba(255,255,255,0.08)";
+  const ink = svgInk();
+  const outFill = (n) => outs >= n ? "#bf0d3d" : ink.empty;
+  const baseFill = (b) => b ? "#bf0d3d" : ink.empty;
   return `<div class="play-scorebug">
     <div class="play-count-mini">${balls}-${strikes}</div>
     <svg width="48" height="48" viewBox="0 0 58 79" xmlns="http://www.w3.org/2000/svg">
@@ -8324,7 +8442,6 @@ function renderSuspendedContent(data) {
     if (reschedRaw) {
       const dt = new Date(reschedRaw);
       const dateStr = dt.toLocaleDateString("en-US", {
-        timeZone: GAME_TZ,
         weekday: "long",
         month: "long",
         day: "numeric"
@@ -8481,15 +8598,16 @@ async function renderWinProb() {
   }));
   const linePoints = pts.map((p) => `${p.x},${p.y}`).join(" ");
   const polyPts = [`${PL},${midY}`, ...pts.map((p) => `${p.x},${p.y}`), `${PL + CW},${midY}`].join(" ");
+  const ink = svgInk();
   let inningLines = "";
   let lastInn = 0;
   pts.forEach((p) => {
     if (p.inning && p.inning !== lastInn && p.isTop) {
       lastInn = p.inning;
       inningLines += `
-        <line x1="${p.x}" y1="${PT}" x2="${p.x}" y2="${PT + CH}" stroke="rgba(255,255,255,0.08)" stroke-width="1" stroke-dasharray="3,3"/>
-        <line x1="${p.x}" y1="${PT + CH}" x2="${p.x}" y2="${PT + CH + 5}" stroke="rgba(255,255,255,0.3)" stroke-width="1"/>
-        <text x="${p.x}" y="${PT + CH + 15}" text-anchor="middle" font-size="8" fill="rgba(255,255,255,0.55)" font-family="DM Mono, monospace">${p.inning}</text>`;
+        <line x1="${p.x}" y1="${PT}" x2="${p.x}" y2="${PT + CH}" stroke="${ink.grid}" stroke-width="1" stroke-dasharray="3,3"/>
+        <line x1="${p.x}" y1="${PT + CH}" x2="${p.x}" y2="${PT + CH + 5}" stroke="${ink.mid}" stroke-width="1"/>
+        <text x="${p.x}" y="${PT + CH + 15}" text-anchor="middle" font-size="8" fill="${ink.strong}" font-family="DM Mono, monospace">${p.inning}</text>`;
     }
   });
   const zones = pts.map((p, i) => {
@@ -8510,13 +8628,13 @@ async function renderWinProb() {
   container.innerHTML = `
     <div class="wp-summary">
       <div class="wp-team wp-team-away">
-        <img class="wp-team-logo" src="${getLogoPath(awayId)}" alt="${awayAbbr}">
+        <img class="wp-team-logo" src="${getLogoPath(awayId)}" onerror="${logoFallbackAttr(awayId)}" alt="${awayAbbr}">
         <span class="wp-team-pct" style="color:${awayColor}">${awayProb}%</span>
       </div>
       <div class="wp-title">WIN PROBABILITY</div>
       <div class="wp-team wp-team-home">
         <span class="wp-team-pct" style="color:${homeColor}">${homeProb}%</span>
-        <img class="wp-team-logo" src="${getLogoPath(homeId)}" alt="${homeAbbr}">
+        <img class="wp-team-logo" src="${getLogoPath(homeId)}" onerror="${logoFallbackAttr(homeId)}" alt="${homeAbbr}">
       </div>
     </div>
 
@@ -8528,22 +8646,22 @@ async function renderWinProb() {
     <div class="wp-chart-wrap">
       <div class="wp-tooltip" id="wp-tooltip"></div>
       <svg class="wp-chart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">
-        <rect x="${PL}" y="${PT}" width="${CW}" height="${CH}" fill="rgba(255,255,255,0.04)" rx="2"/>
+        <rect x="${PL}" y="${PT}" width="${CW}" height="${CH}" fill="${ink.chartBg}" rx="2"/>
         <defs>
           <clipPath id="wp-clip-top"><rect x="${PL}" y="${PT}" width="${CW}" height="${CH / 2}"/></clipPath>
           <clipPath id="wp-clip-bot"><rect x="${PL}" y="${PT + CH / 2}" width="${CW}" height="${CH / 2}"/></clipPath>
         </defs>
         <polygon points="${polyPts}" fill="${awayColor}" opacity="0.9" clip-path="url(#wp-clip-top)"/>
         <polygon points="${polyPts}" fill="${homeColor}" opacity="0.9" clip-path="url(#wp-clip-bot)"/>
-        <line x1="${PL}" y1="${midY}" x2="${PL + CW}" y2="${midY}" stroke="rgba(255,255,255,0.3)" stroke-width="1" stroke-dasharray="4,3"/>
-        <text x="${PL - 4}" y="${midY + 3}" text-anchor="end" font-size="8" fill="rgba(255,255,255,0.55)" font-family="DM Mono, monospace">50%</text>
+        <line x1="${PL}" y1="${midY}" x2="${PL + CW}" y2="${midY}" stroke="${ink.mid}" stroke-width="1" stroke-dasharray="4,3"/>
+        <text x="${PL - 4}" y="${midY + 3}" text-anchor="end" font-size="8" fill="${ink.strong}" font-family="DM Mono, monospace">50%</text>
         <text x="${PL - 4}" y="${PT + 6}" text-anchor="end" font-size="8" fill="${awayColor}" font-family="DM Mono, monospace">${awayAbbr}</text>
         <text x="${PL - 4}" y="${PT + CH + 2}" text-anchor="end" font-size="8" fill="${homeColor}" font-family="DM Mono, monospace">${homeAbbr}</text>
         ${inningLines}
-        <polyline points="${linePoints}" fill="none" stroke="rgba(255,255,255,0.55)" stroke-width="1.2" stroke-linejoin="round"/>
+        <polyline points="${linePoints}" fill="none" stroke="${ink.strong}" stroke-width="1.2" stroke-linejoin="round"/>
         ${zones}
-        <circle id="wp-dot" cx="0" cy="0" r="4" fill="#fff" stroke="rgba(255,255,255,0.6)" stroke-width="2" style="display:none;pointer-events:none;"/>
-        <text x="${PL + CW / 2}" y="${H - 2}" text-anchor="middle" font-size="9" fill="rgba(255,255,255,0.45)" font-family="DM Mono, monospace">INNING</text>
+        <circle id="wp-dot" cx="0" cy="0" r="4" fill="${ink.dotFill}" stroke="${ink.dotRing}" stroke-width="2" style="display:none;pointer-events:none;"/>
+        <text x="${PL + CW / 2}" y="${H - 2}" text-anchor="middle" font-size="9" fill="${ink.label}" font-family="DM Mono, monospace">INNING</text>
       </svg>
     </div>
 
@@ -8659,7 +8777,7 @@ function render(data) {
   content.style.display = "";
   const venueName = game.venue?.name || "";
   const dt = new Date(game.datetime?.dateTime || Date.now());
-  const dateStr = dt.toLocaleDateString("en-US", { timeZone: GAME_TZ, month: "short", day: "numeric" }).toUpperCase();
+  const dateStr = dt.toLocaleDateString("en-US", { month: "short", day: "numeric" }).toUpperCase();
   const timeStr = formatGameTime(game.datetime?.dateTime || dt.toISOString());
   $("venue-info").textContent = `${venueName.toUpperCase()} \xB7 ${dateStr} \xB7 ${timeStr}`;
   const broadcasts = game.broadcasts || [];
@@ -8703,7 +8821,7 @@ function render(data) {
   } else if (isPreGameState(statusText)) {
     badge.textContent = "";
     inning.textContent = timeStr;
-    inning.style.color = "rgba(255,255,255,0.7)";
+    inning.style.color = "var(--text-secondary)";
     countBlock.style.display = "none";
     $("dynamic-tab-label").textContent = "GAME INFO";
     const preEl = $("pregame-content");
@@ -8718,7 +8836,7 @@ function render(data) {
     badge.style.background = "#bf0d3d";
     const reason = game?.status?.reason || "";
     inning.textContent = reason ? reason.toUpperCase() : "";
-    inning.style.color = "rgba(255,255,255,0.7)";
+    inning.style.color = "var(--text-secondary)";
     countBlock.style.display = "none";
     $("dynamic-tab-label").textContent = "POSTPONED";
     const ppdEl = $("postponed-content");
@@ -8769,7 +8887,7 @@ function render(data) {
     }
   } else {
     badge.textContent = statusText.toUpperCase();
-    badge.style.background = "rgba(255,255,255,0.15)";
+    badge.style.background = "var(--text-muted)";
     inning.textContent = "";
     countBlock.style.display = "none";
     $("dynamic-tab-label").textContent = statusText.toUpperCase();
@@ -8819,7 +8937,7 @@ function renderLinescore(linescore, awayTeam, homeTeam, isFinal) {
   const buildRow = (teamKey, team) => {
     const abbr = team.abbreviation || team.teamName?.slice(0, 3).toUpperCase() || "\u2014";
     let cells = `<td class="ls-team-col">
-      <img class="ls-team-logo" src="${getLogoPath(team.id)}" alt="${abbr}">
+      <img class="ls-team-logo" src="${getLogoPath(team.id)}" onerror="${logoFallbackAttr(team.id)}" alt="${abbr}">
       <span class="ls-team-abbr">${abbr}</span>
     </td>`;
     for (let i = 1; i <= maxInnings; i++) {
@@ -8896,6 +9014,7 @@ async function maybeNotifyPostgame(statusText) {
   setupTabs();
   setupBoxScoreTeamTabs();
   setupWinProbDismiss();
+  setupThemeToggle();
   setupExpand();
   document.addEventListener("visibilitychange", () => {
     if (!document.hidden && pollInterval !== null && gamePk != null) {
