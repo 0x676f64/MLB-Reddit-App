@@ -7699,8 +7699,22 @@ var lastGameData = null;
 var postgameNotificationFired = false;
 var postType = null;
 var gameIsTerminal = false;
+function isDebugEnabled() {
+  try {
+    const v = (new URLSearchParams(location.search).get("debug") || "").toLowerCase();
+    if (v === "1" || v === "true" || v === "yes") return true;
+  } catch {
+  }
+  try {
+    if (localStorage.getItem("mlb-scores-debug") === "1") return true;
+  } catch {
+  }
+  return false;
+}
+var DEBUG_OVERLAY = isDebugEnabled();
 function reportError(label, e) {
   console.error(`[${label}]`, e);
+  if (!DEBUG_OVERLAY) return;
   let overlay = document.getElementById("error-overlay");
   if (!overlay) {
     overlay = document.createElement("div");
@@ -8147,8 +8161,8 @@ function setupBoxScoreTeamTabs() {
       btn.classList.add("active");
       document.querySelectorAll(".bs-panel").forEach((p) => p.classList.remove("active"));
       $(`bs-${team}-panel`)?.classList.add("active");
-      const wrap = document.querySelector(".bs-panel-wrap");
-      if (wrap) wrap.scrollTop = 0;
+      document.body.scrollTop = 0;
+      document.documentElement.scrollTop = 0;
     });
   });
 }
@@ -8981,6 +8995,8 @@ function setupTabs() {
       btn.classList.add("tab-active");
       document.querySelectorAll(".tab-content").forEach((c) => c.classList.remove("tab-content-active"));
       $(`tab-${targetTab}`)?.classList.add("tab-content-active");
+      document.body.scrollTop = 0;
+      document.documentElement.scrollTop = 0;
       if (targetTab === "winprob") {
         void renderWinProb();
       }
