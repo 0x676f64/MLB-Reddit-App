@@ -189,54 +189,117 @@ async function readJSON<T>(req: IncomingMessage): Promise<T | null> {
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+//  CACHE HELPERS
+// ─────────────────────────────────────────────────────────────────────────────
+ 
+const GAME_CACHE_TTL_S = 8;       // live feed — pitch-by-pitch, refreshes ~every 10s
+const SCHEDULE_CACHE_TTL_S = 30;  // schedule — changes slowly
+const WINPROB_CACHE_TTL_S = 12;   // win probability — per play
+ 
+// Like writeJSON, but writes an already-serialized JSON string as-is. Lets a
+// cache hit go straight to the wire without a parse/re-stringify round trip.
+function writeRawJSON(status: number, body: string, rsp: ServerResponse): void {
+  rsp.writeHead(status, {
+    "Content-Length": Buffer.byteLength(body),
+    "Content-Type": "application/json",
+  });
+  rsp.end(body);
+}
+ 
+// Serve `url` as JSON, backed by a short-lived Redis cache under `cacheKey`.
+// See the header comment for the safety/fallback contract.
+async function proxyMlbJsonCached(
+  cacheKey: string,
+  url: string,
+  ttlSeconds: number,
+  rsp: ServerResponse,
+): Promise<void> {
+  // Cache read — a failure here is non-fatal; we just fall through to a fetch.
+  try {
+    const cached = await redis.get(cacheKey);
+    if (cached) {
+      writeRawJSON(200, cached, rsp);
+      return;
+    }
+  } catch (e) {
+    console.error(`cache read failed for ${cacheKey}:`, e);
+  }
+ 
+  try {
+    const r = await fetch(url);
+    const text = await r.text();
+    if (r.ok) {
+      // Cache write — a failure here (e.g. value too large for Redis) is also
+      // non-fatal; we serve the freshly-fetched body uncached. If these show up
+      // in the logs frequently, the feed payload is exceeding the Redis value
+      // limit and we can switch to caching a trimmed subset.
+      try {
+        await redis.set(cacheKey, text, {
+          expiration: new Date(Date.now() + ttlSeconds * 1000),
+        });
+      } catch (e) {
+        console.error(`cache write failed for ${cacheKey}:`, e);
+      }
+      writeRawJSON(200, text, rsp);
+    } else {
+      // Pass upstream errors through uncached so the client can retry.
+      writeRawJSON(
+        r.status,
+        text || `{"error":"upstream ${r.status}","status":${r.status}}`,
+        rsp,
+      );
+    }
+  } catch (e) {
+    writeJSON<ErrorResponse>(500, { error: String(e), status: 500 }, rsp);
+  }
+}
+
 // ════════════════════════════════════════════════════════════════════════
 // MLB Stats API proxies (called by the splash)
 // ════════════════════════════════════════════════════════════════════════
 
 async function onSchedule(urlObj: URL, rsp: ServerResponse): Promise<void> {
   const date = urlObj.searchParams.get("date");
-  if (!date) {
-    writeJSON<ErrorResponse>(400, { error: "Missing date param", status: 400 }, rsp);
+  // Tightened from a bare presence check to a shape check — the client always
+  // sends sv-SE (YYYY-MM-DD), and this keeps a junk value out of the cache key.
+  if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    writeJSON<ErrorResponse>(400, { error: "Missing or invalid date param", status: 400 }, rsp);
     return;
   }
-  try {
-    const r = await fetch(
-      `https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${date}`,
-    );
-    const data = (await r.json()) as PartialJsonValue;
-    writeJSON<PartialJsonValue>(200, data, rsp);
-  } catch (e) {
-    writeJSON<ErrorResponse>(500, { error: String(e), status: 500 }, rsp);
-  }
+  await proxyMlbJsonCached(
+    `mlbcache:sched:${date}`,
+    `https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${date}`,
+    SCHEDULE_CACHE_TTL_S,
+    rsp,
+  );
 }
-
+ 
 async function onGame(pk: string, rsp: ServerResponse): Promise<void> {
-  try {
-    const r = await fetch(
-      `https://statsapi.mlb.com/api/v1.1/game/${pk}/feed/live`,
-    );
-    const data = (await r.json()) as PartialJsonValue;
-    writeJSON<PartialJsonValue>(200, data, rsp);
-  } catch (e) {
-    writeJSON<ErrorResponse>(500, { error: String(e), status: 500 }, rsp);
+  // Adds the gamePk guard onGame was missing (onWinProb already had it).
+  if (!/^\d+$/.test(pk)) {
+    writeJSON<ErrorResponse>(400, { error: "Invalid gamePk", status: 400 }, rsp);
+    return;
   }
+  await proxyMlbJsonCached(
+    `mlbcache:game:${pk}`,
+    `https://statsapi.mlb.com/api/v1.1/game/${pk}/feed/live`,
+    GAME_CACHE_TTL_S,
+    rsp,
+  );
 }
-
+ 
 async function onWinProb(pk: string, rsp: ServerResponse): Promise<void> {
   if (!/^\d+$/.test(pk)) {
     writeJSON<ErrorResponse>(400, { error: "Invalid gamePk", status: 400 }, rsp);
     return;
   }
-  try {
-    const r = await fetch(
-      `https://statsapi.mlb.com/api/v1/game/${pk}/winProbability`,
-    );
-    const data = (await r.json()) as PartialJsonValue;
-    writeJSON<PartialJsonValue>(200, data, rsp);
-  } catch (e) {
-    console.error(`onWinProb error for ${pk}:`, e);
-    writeJSON<ErrorResponse>(500, { error: String(e), status: 500 }, rsp);
-  }
+  await proxyMlbJsonCached(
+    `mlbcache:winprob:${pk}`,
+    `https://statsapi.mlb.com/api/v1/game/${pk}/winProbability`,
+    WINPROB_CACHE_TTL_S,
+    rsp,
+  );
 }
 
 async function onPostGame(rsp: ServerResponse): Promise<void> {
@@ -301,7 +364,7 @@ async function onPostgameCheck(rsp: ServerResponse): Promise<void> {
   const gameDateTime = feed?.gameData?.datetime?.dateTime;
   if (gameDateTime) {
     const ageMs = Date.now() - new Date(gameDateTime).getTime();
-    if (ageMs > 12 * 60 * 60 * 1000) {
+    if (ageMs > 36 * 60 * 60 * 1000) {
       console.log(`postgame-check: skipped gamePk ${gamePkStr} (game too old: ${Math.round(ageMs / 3600000)}h)`);
       writeJSON<PartialJsonValue>(200, { created: false } as PartialJsonValue, rsp);
       return;
@@ -900,7 +963,7 @@ async function handlePostgameOrPostponement(
   const gameDateTime = game?.gameDate;
   if (gameDateTime) {
     const ageMs = Date.now() - new Date(gameDateTime).getTime();
-    if (ageMs > 12 * 60 * 60 * 1000) return "skipped";
+    if (ageMs > 36 * 60 * 60 * 1000) return "skipped";
   }
 
   const pgKey = `postgame:${subredditId}:${pk}`;

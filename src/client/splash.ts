@@ -258,9 +258,28 @@ let postType: string | null = null;
 let gameIsTerminal = false; // set once the game reaches Final/Postponed
 
 // ── Visible error reporting (Devvit iframe-friendly) ──────────────────────
+//
+// The red overlay is a debugging aid, not something a normal viewer should ever
+// see. reportError still logs to the console unconditionally; the on-screen
+// banner only mounts when debug mode is on. Enable it with `?debug=1` in the
+// URL (easiest in a browser) or by setting localStorage["mlb-scores-debug"]="1".
+
+function isDebugEnabled(): boolean {
+  try {
+    const v = (new URLSearchParams(location.search).get("debug") || "").toLowerCase();
+    if (v === "1" || v === "true" || v === "yes") return true;
+  } catch { /* location unavailable — ignore */ }
+  try {
+    if (localStorage.getItem("mlb-scores-debug") === "1") return true;
+  } catch { /* storage blocked — ignore */ }
+  return false;
+}
+
+const DEBUG_OVERLAY: boolean = isDebugEnabled();
 
 function reportError(label: string, e: unknown): void {
   console.error(`[${label}]`, e);
+  if (!DEBUG_OVERLAY) return; // keep logging, but don't show the banner to viewers
   let overlay = document.getElementById("error-overlay");
   if (!overlay) {
     overlay = document.createElement("div");
@@ -824,8 +843,12 @@ function setupBoxScoreTeamTabs(): void {
       document.querySelectorAll(".bs-panel").forEach((p) => p.classList.remove("active"));
       $(`bs-${team}-panel`)?.classList.add("active");
 
-      const wrap = document.querySelector(".bs-panel-wrap") as HTMLElement | null;
-      if (wrap) wrap.scrollTop = 0;
+      // The <body> is the scroll container, not .bs-panel-wrap (setting that was
+      // a no-op). Reset the body — same as the main tab switch — so the newly
+      // selected team's box score starts at the top instead of wherever the
+      // previous team was scrolled. Fires only on a team tap, never on the poll.
+      document.body.scrollTop = 0;
+      document.documentElement.scrollTop = 0;
     });
   });
 }
@@ -1727,6 +1750,15 @@ function setupTabs(): void {
       btn.classList.add("tab-active");
       document.querySelectorAll(".tab-content").forEach((c) => c.classList.remove("tab-content-active"));
       $(`tab-${targetTab}`)?.classList.add("tab-content-active");
+
+      // A newly selected tab always starts at the top. The <body> is the scroll
+      // container (see splash.css), so swapping panels leaves the previous tab's
+      // scroll position in place — that's what made a new tab open mid-page.
+      // Reset it; documentElement is covered too for engines that host the
+      // scroll there. (This fires only on an explicit tab tap, never on the 10s
+      // poll, so reading a tab won't get yanked back to the top mid-refresh.)
+      document.body.scrollTop = 0;
+      document.documentElement.scrollTop = 0;
 
       if (targetTab === "winprob") {
         void renderWinProb();
