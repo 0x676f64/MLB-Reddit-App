@@ -1964,6 +1964,46 @@ body.is-postponed .linescore {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
+   ENDED / ARCHIVED bookend — shown by renderEndedState() in splash.ts when a
+   post has no game bound to it (render mapping expired past ~180 days, or was
+   never written). Painted into the loading overlay, so it inherits that
+   container's centered full-card layout. No red frame — deliberately calm.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.ended-display {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 12px;
+  padding: 24px;
+  max-width: 340px;
+}
+
+.ended-headline {
+  font-family: var(--font-display);
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-primary);
+}
+
+.ended-divider {
+  width: 80px;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+}
+
+.ended-text {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-muted);
+  letter-spacing: 0.02em;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
    LIGHT THEME — enabled by data-theme="light" on <html> (set by the toggle in
    splash.ts). Flips the navy↔white token values and softens the shadows; red
    (--accent) is unchanged. Everything token-driven recolors automatically; the

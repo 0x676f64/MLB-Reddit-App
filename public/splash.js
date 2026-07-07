@@ -8740,24 +8740,17 @@ async function selectGameForThisPost() {
     }
   } catch (e) {
   }
-  return selectTodaysGame();
+  return null;
 }
-async function selectTodaysGame() {
-  const dateStr = (/* @__PURE__ */ new Date()).toLocaleDateString("sv-SE", { timeZone: "America/New_York" });
-  try {
-    const res = await fetch(`/api/schedule?date=${dateStr}`);
-    const data = await res.json();
-    const games = data?.dates?.[0]?.games || [];
-    if (!games.length) return null;
-    const live = games.find((g) => isLiveState(g.status?.detailedState || ""));
-    if (live) return live.gamePk;
-    const upcoming = games.find((g) => isPreGameState(g.status?.detailedState || ""));
-    if (upcoming) return upcoming.gamePk;
-    return games[0].gamePk;
-  } catch (e) {
-    console.error("selectTodaysGame error:", e);
-    return null;
-  }
+function renderEndedState() {
+  const host = $("loading-state");
+  if (!host) return;
+  host.innerHTML = `
+    <div class="ended-display">
+      <div class="ended-headline">Thread Ended</div>
+      <div class="ended-divider"></div>
+      <div class="ended-text">This game thread is no longer live. Live scoreboards appear here only while a game is in progress.</div>
+    </div>`;
 }
 async function fetchAndRender(pk) {
   try {
@@ -9039,7 +9032,7 @@ async function maybeNotifyPostgame(statusText) {
   });
   gamePk = await selectGameForThisPost();
   if (!gamePk) {
-    $("loading-state").textContent = "No games today.";
+    renderEndedState();
     return;
   }
   await fetchAndRender(gamePk);
