@@ -1476,29 +1476,30 @@ async function selectGameForThisPost(): Promise<number | null> {
       if (data?.gamePk) return Number(data.gamePk);
     }
   } catch (e) {
-    /* fall through to auto-pick */
+    /* no bound game resolvable → ended bookend */
   }
-  return selectTodaysGame();
+  // No game is bound to this post: its render mapping has expired (threads older
+  // than ~180 days) or was never written. We deliberately DON'T fall back to
+  // today's game here — that made an archived thread display whatever was on the
+  // current schedule. Returning null lets init() show a neutral "thread ended"
+  // bookend.
+  return null;
 }
 
-async function selectTodaysGame(): Promise<number | null> {
-  // MLB's schedule "day" is US Eastern; match the server (todayDateStr) so a
-  // viewer in another time zone near midnight doesn't request the wrong date.
-  const dateStr = new Date().toLocaleDateString("sv-SE", { timeZone: "America/New_York" });
-  try {
-    const res = await fetch(`/api/schedule?date=${dateStr}`);
-    const data = await res.json();
-    const games = data?.dates?.[0]?.games || [];
-    if (!games.length) return null;
-    const live = games.find((g: any) => isLiveState(g.status?.detailedState || ""));
-    if (live) return live.gamePk;
-    const upcoming = games.find((g: any) => isPreGameState(g.status?.detailedState || ""));
-    if (upcoming) return upcoming.gamePk;
-    return games[0].gamePk;
-  } catch (e) {
-    console.error("selectTodaysGame error:", e);
-    return null;
-  }
+// Terminal "ended" bookend, shown when no game is bound to this post (render
+// mapping expired past ~180 days, or was never written). Replaces the old
+// fall-back-to-today's-game behavior so an archived thread never displays an
+// unrelated current game. Paints into the loading overlay and leaves the
+// scoreboard hidden with polling never started, so it's a final state.
+function renderEndedState(): void {
+  const host = $("loading-state");
+  if (!host) return;
+  host.innerHTML = `
+    <div class="ended-display">
+      <div class="ended-headline">Thread Ended</div>
+      <div class="ended-divider"></div>
+      <div class="ended-text">This game thread is no longer live. Live scoreboards appear here only while a game is in progress.</div>
+    </div>`;
 }
 
 // ── Fetch and render ──────────────────────────────────────────────────────
@@ -1817,7 +1818,7 @@ async function maybeNotifyPostgame(statusText: string): Promise<void> {
 
   gamePk = await selectGameForThisPost();
   if (!gamePk) {
-    $("loading-state")!.textContent = "No games today.";
+    renderEndedState();
     return;
   }
   await fetchAndRender(gamePk);
