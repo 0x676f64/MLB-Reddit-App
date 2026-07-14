@@ -1236,7 +1236,7 @@ const MLB_TEAM_COLORS: Record<number, string> = {
   135: "#FFC72C", 136: "#005C5C", 137: "#FD5A1E", 138: "#C41E3A",
   139: "#8FBCE6", 140: "#003278", 141: "#134A8E", 142: "#D31145",
   143: "#E81828", 144: "#CE1141", 145: "#C4CED4", 146: "#00A3E0",
-  147: "#C4CED3", 158: "#ffc52f",
+  147: "#C4CED3", 158: "#ffc52f", 159: "#000088", 160: "#cc0000",
 };
 
 const WBC_COLORS: Record<string, string> = {
