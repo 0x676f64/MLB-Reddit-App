@@ -1,6 +1,6 @@
 # Privacy Policy — MLB Scoreboards
 
-**Effective date:** [set when you publish]
+**Effective date:** July 19 2026
 
 MLB Scoreboards ("the app") is a Reddit Developer Platform (Devvit) app that posts live Major League Baseball game-thread scoreboards in the subreddits that install it. This policy explains what data the app uses and, just as importantly, what it does not.
 
