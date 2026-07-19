@@ -1,6 +1,6 @@
 # Terms and Conditions — MLB Scoreboards
 
-**Effective date:** [set when you publish]
+**Effective date:** July 19th 2026
 
 These terms govern the use of MLB Scoreboards ("the app"), a Reddit Developer Platform (Devvit) app that posts live Major League Baseball game-thread scoreboards. By installing or using the app, you agree to these terms.
 
