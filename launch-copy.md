@@ -43,7 +43,7 @@ Welcome to r/MLBScoreboards
 
 **Body:**
 
-Hey everyone! I'm u/0xgod, a founding moderator of r/MLBScoreboards.
+Hey everyone! I'm u/0xgod — I built the live scoreboard that powers this community, and I'm one of its founding moderators.
 
 This is our new home for following MLB games together, in real time. Every game on the schedule gets its own thread with a live scoreboard built right in — the score, a full box score, play-by-play, scoring plays, and a win-probability chart, all updating pitch by pitch while the game is on. When a game ends, a final thread posts automatically with the result. Whether you live and die with one team or just love baseball, this is a place to watch the game and talk it out as it happens.
 
