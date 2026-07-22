@@ -9336,7 +9336,6 @@ var _TxClient_transactionId;
 var _TxClient_txnStartMetadata;
 var _TxClient_metadata_get;
 var _RedisClient_instances;
-var _RedisClient_metadata_get;
 var _RedisClient_plugin_get;
 var TxClient = class {
   constructor(plugin, transactionId, metadata) {
@@ -9398,6 +9397,8 @@ var TxClient = class {
         output.push(result.str);
       } else if (result.dbl !== void 0) {
         output.push(result.dbl);
+      } else if (result.bool !== void 0) {
+        output.push(result.bool);
       }
     }
     return output;
@@ -9579,13 +9580,13 @@ var RedisClient = class _RedisClient {
     this.global = scope === RedisKeyScope.INSTALLATION ? new _RedisClient(RedisKeyScope.GLOBAL) : this;
   }
   async watch(...keys) {
-    const txId = await __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_plugin_get).Watch({ keys }, __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_metadata_get));
-    return new TxClient(__classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_plugin_get), txId, __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_metadata_get));
+    const txId = await __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_plugin_get).Watch({ keys }, this.metadata);
+    return new TxClient(__classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_plugin_get), txId, this.metadata);
   }
   async get(key) {
     try {
       const response = await __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_plugin_get).Get({ key, scope: this.scope }, {
-        ...__classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_metadata_get),
+        ...this.metadata,
         "throw-redis-nil": { values: ["true"] }
       });
       return response !== null ? response.value ?? void 0 : response;
@@ -9599,7 +9600,7 @@ var RedisClient = class _RedisClient {
   async getBuffer(key) {
     try {
       const response = await __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_plugin_get).GetBytes({ key, scope: this.scope }, {
-        ...__classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_metadata_get),
+        ...this.metadata,
         "throw-redis-nil": { values: ["true"] }
       });
       return response !== null ? Buffer.from(response.value) : response;
@@ -9625,41 +9626,41 @@ var RedisClient = class _RedisClient {
       xx: options?.xx === true && !options.nx,
       expiration: expiration || 0,
       scope: this.scope
-    }, __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_metadata_get));
+    }, this.metadata);
     return response.value;
   }
   async exists(...keys) {
-    const response = await __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_plugin_get).Exists({ keys, scope: this.scope }, __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_metadata_get));
+    const response = await __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_plugin_get).Exists({ keys, scope: this.scope }, this.metadata);
     return response.existingKeys;
   }
   async del(...keys) {
-    await __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_plugin_get).Del({ keys, scope: this.scope }, __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_metadata_get));
+    await __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_plugin_get).Del({ keys, scope: this.scope }, this.metadata);
   }
   async incrBy(key, value) {
-    const response = await __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_plugin_get).IncrBy({ key, value, scope: this.scope }, __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_metadata_get));
+    const response = await __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_plugin_get).IncrBy({ key, value, scope: this.scope }, this.metadata);
     return response.value;
   }
   async getRange(key, start, end) {
-    const response = await __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_plugin_get).GetRange({ key, start, end, scope: this.scope }, __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_metadata_get));
+    const response = await __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_plugin_get).GetRange({ key, start, end, scope: this.scope }, this.metadata);
     return response !== null ? response.value : response;
   }
   async setRange(key, offset, value) {
-    const response = await __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_plugin_get).SetRange({ key, offset, value, scope: this.scope }, __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_metadata_get));
+    const response = await __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_plugin_get).SetRange({ key, offset, value, scope: this.scope }, this.metadata);
     return response.value;
   }
   async strLen(key) {
-    const response = await __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_plugin_get).Strlen({ key, scope: this.scope }, __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_metadata_get));
+    const response = await __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_plugin_get).Strlen({ key, scope: this.scope }, this.metadata);
     return response.value;
   }
   async expire(key, seconds) {
-    await __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_plugin_get).Expire({ key, seconds, scope: this.scope }, __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_metadata_get));
+    await __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_plugin_get).Expire({ key, seconds, scope: this.scope }, this.metadata);
   }
   async expireTime(key) {
-    const response = await __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_plugin_get).ExpireTime({ key, scope: this.scope }, __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_metadata_get));
+    const response = await __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_plugin_get).ExpireTime({ key, scope: this.scope }, this.metadata);
     return response.value;
   }
   async zAdd(key, ...members) {
-    return (await __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_plugin_get).ZAdd({ key, members, scope: this.scope }, __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_metadata_get))).value;
+    return (await __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_plugin_get).ZAdd({ key, members, scope: this.scope }, this.metadata)).value;
   }
   async zRange(key, start, stop, options) {
     let opts = { rev: false, byLex: false, byScore: false, offset: 0, count: 1e3 };
@@ -9682,28 +9683,28 @@ var RedisClient = class _RedisClient {
         throw new Error(`zRange parsing error: 'limit' only allowed when 'options.by' is 'lex' or 'score'`);
       }
     }
-    return (await __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_plugin_get).ZRange({ key: { key }, start: start + "", stop: stop + "", ...opts, scope: this.scope }, __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_metadata_get))).members;
+    return (await __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_plugin_get).ZRange({ key: { key }, start: start + "", stop: stop + "", ...opts, scope: this.scope }, this.metadata)).members;
   }
   async zRem(key, members) {
-    const response = await __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_plugin_get).ZRem({ key: { key }, members, scope: this.scope }, __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_metadata_get));
+    const response = await __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_plugin_get).ZRem({ key: { key }, members, scope: this.scope }, this.metadata);
     return response.value;
   }
   async zRemRangeByLex(key, min, max) {
-    const response = await __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_plugin_get).ZRemRangeByLex({ key: { key }, min, max, scope: this.scope }, __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_metadata_get));
+    const response = await __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_plugin_get).ZRemRangeByLex({ key: { key }, min, max, scope: this.scope }, this.metadata);
     return response.value;
   }
   async zRemRangeByRank(key, start, stop) {
-    const response = await __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_plugin_get).ZRemRangeByRank({ key: { key }, start, stop, scope: this.scope }, __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_metadata_get));
+    const response = await __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_plugin_get).ZRemRangeByRank({ key: { key }, start, stop, scope: this.scope }, this.metadata);
     return response.value;
   }
   async zRemRangeByScore(key, min, max) {
-    const response = await __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_plugin_get).ZRemRangeByScore({ key: { key }, min, max, scope: this.scope }, __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_metadata_get));
+    const response = await __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_plugin_get).ZRemRangeByScore({ key: { key }, min, max, scope: this.scope }, this.metadata);
     return response.value;
   }
   async zScore(key, member) {
     try {
       const response = await __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_plugin_get).ZScore({ key: { key }, member, scope: this.scope }, {
-        ...__classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_metadata_get),
+        ...this.metadata,
         "throw-redis-nil": { values: ["true"] }
       });
       return response !== null ? response.value : response;
@@ -9717,7 +9718,7 @@ var RedisClient = class _RedisClient {
   async zRank(key, member) {
     try {
       const response = await __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_plugin_get).ZRank({ key: { key }, member, scope: this.scope }, {
-        ...__classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_metadata_get),
+        ...this.metadata,
         "throw-redis-nil": { values: ["true"] }
       });
       return response !== null ? response.value : response;
@@ -9729,37 +9730,37 @@ var RedisClient = class _RedisClient {
     }
   }
   async zIncrBy(key, member, value) {
-    const response = await __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_plugin_get).ZIncrBy({ key, member, value, scope: this.scope }, __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_metadata_get));
+    const response = await __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_plugin_get).ZIncrBy({ key, member, value, scope: this.scope }, this.metadata);
     return response !== null ? response.value : response;
   }
   async mGet(keys) {
-    const response = await __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_plugin_get).MGet({ keys, scope: this.scope }, __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_metadata_get));
+    const response = await __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_plugin_get).MGet({ keys, scope: this.scope }, this.metadata);
     return response !== null ? response.values.map((value) => value || null) : response;
   }
   async mSet(keyValues) {
     const kv = Object.entries(keyValues).map(([key, value]) => ({ key, value }));
-    await __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_plugin_get).MSet({ kv, scope: this.scope }, __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_metadata_get));
+    await __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_plugin_get).MSet({ kv, scope: this.scope }, this.metadata);
   }
   async zCard(key) {
-    const response = await __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_plugin_get).ZCard({ key, scope: this.scope }, __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_metadata_get));
+    const response = await __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_plugin_get).ZCard({ key, scope: this.scope }, this.metadata);
     return response !== null ? response.value : response;
   }
   async zScan(key, cursor, pattern, count) {
     const request = { key, cursor, pattern, count, scope: this.scope };
-    return await __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_plugin_get).ZScan(request, __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_metadata_get));
+    return await __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_plugin_get).ZScan(request, this.metadata);
   }
   async type(key) {
-    const response = await __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_plugin_get).Type({ key, scope: this.scope }, __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_metadata_get));
+    const response = await __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_plugin_get).Type({ key, scope: this.scope }, this.metadata);
     return response !== null ? response.value : response;
   }
   async rename(key, newKey) {
-    const response = await __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_plugin_get).Rename({ key, newKey, scope: this.scope }, __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_metadata_get));
+    const response = await __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_plugin_get).Rename({ key, newKey, scope: this.scope }, this.metadata);
     return response.result;
   }
   async hGet(key, field) {
     try {
       const response = await __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_plugin_get).HGet({ key, field, scope: this.scope }, {
-        ...__classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_metadata_get),
+        ...this.metadata,
         "throw-redis-nil": { values: ["true"] }
       });
       return response !== null ? response.value ?? void 0 : response;
@@ -9771,36 +9772,36 @@ var RedisClient = class _RedisClient {
     }
   }
   async hMGet(key, fields) {
-    const response = await __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_plugin_get).HMGet({ key, fields, scope: this.scope }, __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_metadata_get));
+    const response = await __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_plugin_get).HMGet({ key, fields, scope: this.scope }, this.metadata);
     return response !== null ? response.values.map((value) => value || null) : response;
   }
   async hSet(key, fieldValues) {
     const fv = Object.entries(fieldValues).map(([field, value]) => ({ field, value }));
-    const response = await __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_plugin_get).HSet({ key, fv, scope: this.scope }, __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_metadata_get));
+    const response = await __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_plugin_get).HSet({ key, fv, scope: this.scope }, this.metadata);
     return response.value;
   }
   async hSetNX(key, field, value) {
-    const response = await __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_plugin_get).HSetNX({ key, field, value, scope: this.scope }, __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_metadata_get));
+    const response = await __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_plugin_get).HSetNX({ key, field, value, scope: this.scope }, this.metadata);
     return response.success;
   }
   async hGetAll(key) {
-    const response = await __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_plugin_get).HGetAll({ key, scope: this.scope }, __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_metadata_get));
+    const response = await __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_plugin_get).HGetAll({ key, scope: this.scope }, this.metadata);
     return response !== null ? response.fieldValues : response;
   }
   async hDel(key, fields) {
-    const response = await __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_plugin_get).HDel({ key, fields, scope: this.scope }, __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_metadata_get));
+    const response = await __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_plugin_get).HDel({ key, fields, scope: this.scope }, this.metadata);
     return response.value;
   }
   async hScan(key, cursor, pattern, count) {
     const request = { key, cursor, pattern, count, scope: this.scope };
-    return await __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_plugin_get).HScan(request, __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_metadata_get));
+    return await __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_plugin_get).HScan(request, this.metadata);
   }
   async hKeys(key) {
-    const response = await __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_plugin_get).HKeys({ key, scope: this.scope }, __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_metadata_get));
+    const response = await __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_plugin_get).HKeys({ key, scope: this.scope }, this.metadata);
     return response !== null ? response.keys : response;
   }
   async hIncrBy(key, field, value) {
-    const response = await __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_plugin_get).HIncrBy({ key, field, value, scope: this.scope }, __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_metadata_get));
+    const response = await __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_plugin_get).HIncrBy({ key, field, value, scope: this.scope }, this.metadata);
     return response.value;
   }
   async hLen(key) {
@@ -9875,10 +9876,14 @@ var RedisClient = class _RedisClient {
     });
     return response.results;
   }
+  get metadata() {
+    return context.metadata;
+  }
+  get plugin() {
+    return __classPrivateFieldGet(this, _RedisClient_instances, "a", _RedisClient_plugin_get);
+  }
 };
-_RedisClient_instances = /* @__PURE__ */ new WeakSet(), _RedisClient_metadata_get = function _RedisClient_metadata_get2() {
-  return context.metadata;
-}, _RedisClient_plugin_get = function _RedisClient_plugin_get2() {
+_RedisClient_instances = /* @__PURE__ */ new WeakSet(), _RedisClient_plugin_get = function _RedisClient_plugin_get2() {
   return getDevvitConfig().use(RedisAPIDefinition);
 };
 function toBehaviorProto(behavior) {
@@ -93173,11 +93178,7 @@ async function onMenuClearTodayDedup() {
 }
 var WELCOME_POST_BODY = `# Welcome to MLB Scoreboards
 
-# Welcome to MLB Scoreboards
-
 Thanks for installing **MLB Scoreboards** \u2014 a live Game Thread experience built for Major League Baseball communities, from team-focused subreddits to league-wide aggregators.
-
-I'm **u/0xgod** \u2014 I built this app and run it on r/MLBScoreboards myself. It's actively maintained, and I'm around for questions, bug reports, and feature requests. If anything ever looks off, message me directly.
 
 ## What it does
 
@@ -93269,7 +93270,7 @@ If you click the posting menu twice on the same day, the bot will skip games it 
 
 ## Questions or feedback
 
-Reach out to me \u2014 **u/0xgod** \u2014 with anything: feature requests, bug reports, suggestions. This is built for your community; it should work the way you want it to.
+Reach out to u/0xgod with anything \u2014 feature requests, bug reports, suggestions. This is built for your community; it should work the way you want it to.
 
 ---
 

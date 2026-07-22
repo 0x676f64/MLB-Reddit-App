@@ -397,6 +397,95 @@ function isExpandedMode(): boolean {
   try { return getWebViewMode() === "expanded"; } catch { return false; }
 }
 
+// ── Inline pager ────────────────────────────────────────────────────────────
+// Reddit forbids scroll-trapping in the in-feed (inline) view. So inline we lock
+// the body (no native scroll → the feed scrolls past untouched), bound the active
+// panel to the visible area, and let people move through long panels (box score,
+// plays) with up/down buttons that scroll the panel PROGRAMMATICALLY. A panel set
+// to `overflow: hidden` won't capture a drag/wheel gesture (no trap), but its
+// scrollBy()/scrollTop still work from a button click. Expanded mode is unchanged
+// (native scroll). body.is-inline is toggled in setupExpand's sync().
+
+const pagerScrollWired = new WeakSet<HTMLElement>();
+let pagerRaf = 0;
+
+function scheduleInlinePagerSync(): void {
+  if (pagerRaf) return;
+  pagerRaf = requestAnimationFrame(() => { pagerRaf = 0; updateInlinePager(); });
+}
+
+// The element the buttons scroll. For the box tab that's the inner panel wrap so
+// the away/home toggle stays pinned; for every other tab, the active pane itself.
+function inlinePagerRegion(): HTMLElement | null {
+  const active = document.querySelector(".tab-content.tab-content-active") as HTMLElement | null;
+  if (!active) return null;
+  return (active.querySelector(".bs-panel-wrap") as HTMLElement | null) || active;
+}
+
+function updateInlinePager(): void {
+  const pager = document.getElementById("inline-pager");
+  if (!pager) return;
+  const inline = document.body.classList.contains("is-inline");
+  const region = inline ? inlinePagerRegion() : null;
+  const needed = !!region && region.scrollHeight > region.clientHeight + 2;
+  pager.classList.toggle("pager-active", inline && needed);
+  if (!needed || !region) return;
+
+  // Float just above the sticky tab-bar.
+  const bar = document.querySelector(".tab-bar") as HTMLElement | null;
+  pager.style.bottom = (bar ? bar.offsetHeight : 56) + 10 + "px";
+
+  const up = document.getElementById("inline-pager-up") as HTMLButtonElement | null;
+  const down = document.getElementById("inline-pager-down") as HTMLButtonElement | null;
+  if (up) up.disabled = region.scrollTop <= 1;
+  if (down) down.disabled = region.scrollTop >= region.scrollHeight - region.clientHeight - 1;
+
+  if (!pagerScrollWired.has(region)) {
+    region.addEventListener("scroll", scheduleInlinePagerSync, { passive: true });
+    pagerScrollWired.add(region);
+  }
+}
+
+function setupInlinePager(): void {
+  const host = $("scorebug-content");
+  if (!host || document.getElementById("inline-pager")) return;
+
+  const chev = (d: string): string =>
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" ' +
+    'stroke-linecap="round" stroke-linejoin="round"><path d="' + d + '"/></svg>';
+
+  const pager = document.createElement("div");
+  pager.id = "inline-pager";
+
+  const mk = (id: string, label: string, path: string, dir: number): HTMLButtonElement => {
+    const b = document.createElement("button");
+    b.id = id;
+    b.type = "button";
+    b.className = "inline-pager-btn";
+    b.setAttribute("aria-label", label);
+    b.innerHTML = chev(path);
+    b.addEventListener("click", () => {
+      const region = inlinePagerRegion();
+      if (!region) return;
+      region.scrollBy({ top: dir * Math.round(region.clientHeight * 0.8), behavior: "smooth" });
+    });
+    return b;
+  };
+
+  pager.appendChild(mk("inline-pager-up", "Scroll up", "M18 15l-6-6-6 6", -1));
+  pager.appendChild(mk("inline-pager-down", "Scroll down", "M6 9l6 6 6-6", 1));
+  host.appendChild(pager);
+
+  // One observer catches both tab switches (class changes) and the 10s poll's
+  // innerHTML rewrites (which grow the plays list), so the buttons re-sync
+  // without touching setupTabs or render.
+  const obs = new MutationObserver(scheduleInlinePagerSync);
+  obs.observe(host, { childList: true, subtree: true, attributes: true, attributeFilter: ["class", "style"] });
+  window.addEventListener("resize", scheduleInlinePagerSync);
+
+  updateInlinePager();
+}
+
 function setupExpand(): void {
   if (document.getElementById("expand-btn")) return;
   const host = $("scorebug-content") || document.body;
@@ -421,6 +510,10 @@ function setupExpand(): void {
   const sync = (): void => {
     const expanded = isExpandedMode();
     btn.style.display = expanded ? "none" : "flex";
+    // Inline (in-feed) views must not trap scroll: inline uses a bounded,
+    // button-paged layout; expanded keeps native scroll. See setupInlinePager.
+    document.body.classList.toggle("is-inline", !expanded);
+    scheduleInlinePagerSync();
     if (expanded && !modePoll) {
       modePoll = window.setInterval(sync, 400);
     } else if (!expanded && modePoll) {
@@ -843,12 +936,14 @@ function setupBoxScoreTeamTabs(): void {
       document.querySelectorAll(".bs-panel").forEach((p) => p.classList.remove("active"));
       $(`bs-${team}-panel`)?.classList.add("active");
 
-      // The <body> is the scroll container, not .bs-panel-wrap (setting that was
-      // a no-op). Reset the body — same as the main tab switch — so the newly
-      // selected team's box score starts at the top instead of wherever the
-      // previous team was scrolled. Fires only on a team tap, never on the poll.
+      // Start the newly selected team's box score at the top, not wherever the
+      // previous team was scrolled. Two scrollers to cover: the <body> in
+      // expanded mode, and .bs-panel-wrap in inline mode (where the body doesn't
+      // scroll — the panel wrap is the scroll region). Fires only on a team tap.
       document.body.scrollTop = 0;
       document.documentElement.scrollTop = 0;
+      const wrap = document.querySelector(".bs-panel-wrap") as HTMLElement | null;
+      if (wrap) wrap.scrollTop = 0;
     });
   });
 }
@@ -1236,7 +1331,7 @@ const MLB_TEAM_COLORS: Record<number, string> = {
   135: "#FFC72C", 136: "#005C5C", 137: "#FD5A1E", 138: "#C41E3A",
   139: "#8FBCE6", 140: "#003278", 141: "#134A8E", 142: "#D31145",
   143: "#E81828", 144: "#CE1141", 145: "#C4CED4", 146: "#00A3E0",
-  147: "#C4CED3", 158: "#ffc52f",
+  147: "#C4CED3", 158: "#ffc52f", 159: "#000088", 160: "#cc0000",
 };
 
 const WBC_COLORS: Record<string, string> = {
@@ -1752,14 +1847,15 @@ function setupTabs(): void {
       document.querySelectorAll(".tab-content").forEach((c) => c.classList.remove("tab-content-active"));
       $(`tab-${targetTab}`)?.classList.add("tab-content-active");
 
-      // A newly selected tab always starts at the top. The <body> is the scroll
-      // container (see splash.css), so swapping panels leaves the previous tab's
-      // scroll position in place — that's what made a new tab open mid-page.
-      // Reset it; documentElement is covered too for engines that host the
-      // scroll there. (This fires only on an explicit tab tap, never on the 10s
-      // poll, so reading a tab won't get yanked back to the top mid-refresh.)
+      // A newly selected tab always starts at the top. Two scrollers to reset:
+      // the <body> in expanded mode, and the newly-active panel itself in inline
+      // mode (where the body doesn't scroll — the panel is the scroll region).
+      // Without the panel reset, a tab paged down inline would reopen mid-page.
+      // (Fires only on an explicit tab tap, never on the 10s poll.)
       document.body.scrollTop = 0;
       document.documentElement.scrollTop = 0;
+      const region = inlinePagerRegion();
+      if (region) region.scrollTop = 0;
 
       if (targetTab === "winprob") {
         void renderWinProb();
@@ -1807,6 +1903,7 @@ async function maybeNotifyPostgame(statusText: string): Promise<void> {
   setupWinProbDismiss();
   setupThemeToggle();
   setupExpand();
+  setupInlinePager();
 
   // When the post returns to view, refresh immediately (only while the poll is
   // still alive — i.e. not after a terminal-state stop).

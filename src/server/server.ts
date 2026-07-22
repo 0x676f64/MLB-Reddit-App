@@ -1198,11 +1198,7 @@ async function onMenuClearTodayDedup(): Promise<UiResponse> {
 
 const WELCOME_POST_BODY = `# Welcome to MLB Scoreboards
 
-# Welcome to MLB Scoreboards
-
 Thanks for installing **MLB Scoreboards** — a live Game Thread experience built for Major League Baseball communities, from team-focused subreddits to league-wide aggregators.
-
-I'm **u/0xgod** — I built this app and run it on r/MLBScoreboards myself. It's actively maintained, and I'm around for questions, bug reports, and feature requests. If anything ever looks off, message me directly.
 
 ## What it does
 
@@ -1294,7 +1290,7 @@ If you click the posting menu twice on the same day, the bot will skip games it 
 
 ## Questions or feedback
 
-Reach out to me — **u/0xgod** — with anything: feature requests, bug reports, suggestions. This is built for your community; it should work the way you want it to.
+Reach out to u/0xgod with anything — feature requests, bug reports, suggestions. This is built for your community; it should work the way you want it to.
 
 ---
 
