@@ -8812,6 +8812,67 @@ function isExpandedMode() {
     return false;
   }
 }
+var pagerScrollWired = /* @__PURE__ */ new WeakSet();
+var pagerRaf = 0;
+function scheduleInlinePagerSync() {
+  if (pagerRaf) return;
+  pagerRaf = requestAnimationFrame(() => {
+    pagerRaf = 0;
+    updateInlinePager();
+  });
+}
+function inlinePagerRegion() {
+  const active = document.querySelector(".tab-content.tab-content-active");
+  if (!active) return null;
+  return active.querySelector(".bs-panel-wrap") || active;
+}
+function updateInlinePager() {
+  const pager = document.getElementById("inline-pager");
+  if (!pager) return;
+  const inline = document.body.classList.contains("is-inline");
+  const region = inline ? inlinePagerRegion() : null;
+  const needed = !!region && region.scrollHeight > region.clientHeight + 2;
+  pager.classList.toggle("pager-active", inline && needed);
+  if (!needed || !region) return;
+  const bar = document.querySelector(".tab-bar");
+  pager.style.bottom = (bar ? bar.offsetHeight : 56) + 10 + "px";
+  const up = document.getElementById("inline-pager-up");
+  const down = document.getElementById("inline-pager-down");
+  if (up) up.disabled = region.scrollTop <= 1;
+  if (down) down.disabled = region.scrollTop >= region.scrollHeight - region.clientHeight - 1;
+  if (!pagerScrollWired.has(region)) {
+    region.addEventListener("scroll", scheduleInlinePagerSync, { passive: true });
+    pagerScrollWired.add(region);
+  }
+}
+function setupInlinePager() {
+  const host = $("scorebug-content");
+  if (!host || document.getElementById("inline-pager")) return;
+  const chev = (d) => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="' + d + '"/></svg>';
+  const pager = document.createElement("div");
+  pager.id = "inline-pager";
+  const mk = (id, label, path, dir) => {
+    const b = document.createElement("button");
+    b.id = id;
+    b.type = "button";
+    b.className = "inline-pager-btn";
+    b.setAttribute("aria-label", label);
+    b.innerHTML = chev(path);
+    b.addEventListener("click", () => {
+      const region = inlinePagerRegion();
+      if (!region) return;
+      region.scrollBy({ top: dir * Math.round(region.clientHeight * 0.8), behavior: "smooth" });
+    });
+    return b;
+  };
+  pager.appendChild(mk("inline-pager-up", "Scroll up", "M18 15l-6-6-6 6", -1));
+  pager.appendChild(mk("inline-pager-down", "Scroll down", "M6 9l6 6 6-6", 1));
+  host.appendChild(pager);
+  const obs = new MutationObserver(scheduleInlinePagerSync);
+  obs.observe(host, { childList: true, subtree: true, attributes: true, attributeFilter: ["class", "style"] });
+  window.addEventListener("resize", scheduleInlinePagerSync);
+  updateInlinePager();
+}
 function setupExpand() {
   if (document.getElementById("expand-btn")) return;
   const host = $("scorebug-content") || document.body;
@@ -8825,6 +8886,8 @@ function setupExpand() {
   const sync = () => {
     const expanded = isExpandedMode();
     btn.style.display = expanded ? "none" : "flex";
+    document.body.classList.toggle("is-inline", !expanded);
+    scheduleInlinePagerSync();
     if (expanded && !modePoll) {
       modePoll = window.setInterval(sync, 400);
     } else if (!expanded && modePoll) {
@@ -9183,6 +9246,8 @@ function setupBoxScoreTeamTabs() {
       $(`bs-${team}-panel`)?.classList.add("active");
       document.body.scrollTop = 0;
       document.documentElement.scrollTop = 0;
+      const wrap = document.querySelector(".bs-panel-wrap");
+      if (wrap) wrap.scrollTop = 0;
     });
   });
 }
@@ -9542,7 +9607,9 @@ var MLB_TEAM_COLORS = {
   145: "#C4CED4",
   146: "#00A3E0",
   147: "#C4CED3",
-  158: "#ffc52f"
+  158: "#ffc52f",
+  159: "#000088",
+  160: "#cc0000"
 };
 var WBC_COLORS = {
   "Japan": "#BC002D",
@@ -10010,6 +10077,8 @@ function setupTabs() {
       $(`tab-${targetTab}`)?.classList.add("tab-content-active");
       document.body.scrollTop = 0;
       document.documentElement.scrollTop = 0;
+      const region = inlinePagerRegion();
+      if (region) region.scrollTop = 0;
       if (targetTab === "winprob") {
         void renderWinProb();
       }
@@ -10045,6 +10114,7 @@ async function maybeNotifyPostgame(statusText) {
   setupWinProbDismiss();
   setupThemeToggle();
   setupExpand();
+  setupInlinePager();
   document.addEventListener("visibilitychange", () => {
     if (!document.hidden && pollInterval !== null && gamePk != null) {
       void fetchAndRender(gamePk);

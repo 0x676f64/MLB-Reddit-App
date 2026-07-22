@@ -2146,3 +2146,78 @@ body.is-live .status-badge {
     scroll-behavior: auto !important;
   }
 }
+/* ════════════════════════════════════════════════════════════════════════════
+   INLINE MODE (in-feed) — Reddit forbids scroll-trapping in inline web views.
+   So inline we lock the body (no native scroll → the feed scrolls past
+   untouched), bound the active panel to the visible area, and move through long
+   panels with the up/down pager buttons (see setupInlinePager). Expanded mode is
+   untouched and keeps native scroll. body.is-inline is toggled in setupExpand.
+   ════════════════════════════════════════════════════════════════════════════ */
+
+body.scorebug.is-inline {
+  overflow: hidden;                       /* no in-feed scroll trap */
+}
+
+/* Exact-viewport flex column so the header pins at top and the tab-bar at bottom
+   by layout, leaving the active panel a bounded middle region. */
+body.is-inline #scorebug-content { height: 100%; }
+
+body.is-inline .scorebug-top,
+body.is-inline .linescore { flex-shrink: 0; }
+
+/* The active panel is the bounded, clipped, button-paged region. overflow:hidden
+   clips it AND kills gesture capture, but scrollBy() from the buttons still works. */
+body.is-inline .tab-content.tab-content-active {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Box tab: keep the away/home toggle pinned; scroll the panel wrap instead. */
+body.is-inline #tab-box.tab-content-active {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: hidden;
+  display: flex !important;
+  flex-direction: column;
+}
+body.is-inline #tab-box .bs-team-tabs { flex-shrink: 0; }
+body.is-inline #tab-box .bs-panel-wrap {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Up/down pager — floats bottom-right above the tab-bar; shown only inline when
+   the active panel overflows (toggled by updateInlinePager). */
+#inline-pager {
+  display: none;
+  position: absolute;
+  right: 12px;
+  z-index: 30;                            /* bottom set in JS to clear the tab-bar */
+  flex-direction: column;
+  gap: 8px;
+}
+body.is-inline #inline-pager.pager-active { display: flex; }
+
+.inline-pager-btn {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: var(--bg-elev-2);
+  color: var(--text-primary);
+  border: 1px solid var(--border-medium);
+  border-radius: 50%;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  transition: transform var(--dur-1) var(--ease-out), opacity var(--dur-1) ease;
+}
+.inline-pager-btn svg { width: 18px; height: 18px; }
+.inline-pager-btn:active { transform: scale(0.92); }
+.inline-pager-btn:disabled { opacity: 0.28; cursor: default; }
