@@ -132,7 +132,6 @@ Postgame threads and postponement notices fire automatically via a background cr
 - **Frontend** — Vanilla TypeScript, no framework. Inline-rendered `splash.html` with state-aware tab navigation, CSS custom properties, and inline SVG (K-zone, Win Probability, mini-scorebugs)
 - **Backend** — Node.js server bundled as CommonJS, with Redis for dedup keys, post-to-gamePk mapping, and post-type tracking
 - **Data** — [MLB Stats API](https://statsapi.mlb.com) for schedule, live game feed, and win probability
-- **Logos** — mlbstatic.com SVG team logos, with dark-mode cap-only variants
 
 ---
 
