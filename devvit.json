@@ -101,6 +101,22 @@
         "label": "Postgame Loss Title (optional)",
         "helpText": "Custom title for postgame threads when your configured team LOSES. Leave blank for default format. Same placeholders as the win title. Only used when a specific team is configured in the Team Filter.",
         "defaultValue": ""
+      },
+      "threadType": {
+        "type": "select",
+        "label": "Thread type",
+        "helpText": "\"Game Thread\" is the standard mode — posts a Game Thread for each game, plus an automatic Postgame Thread if enabled above. \"Broadcast Thread\" runs the app as an advanced/analytics companion to your existing game threads: posts use the Broadcast label below instead of \"Game Thread\", and NO automatic postgame or postponement threads are posted (the app only posts the threads you create from the menu).",
+        "options": [
+          { "label": "Game Thread (standard — posts game + postgame threads)", "value": "game" },
+          { "label": "Broadcast Thread (companion — no automatic posts)", "value": "broadcast" }
+        ],
+        "defaultValue": "game"
+      },
+      "broadcastLabel": {
+        "type": "string",
+        "label": "Broadcast label (optional)",
+        "helpText": "Only used in Broadcast Thread mode — the wording used in place of \"Game Thread\" in the post title. Examples: \"Broadcast Thread\", \"Advanced View\", \"Live Scoreboard\". Leave blank to use \"Broadcast Thread\".",
+        "defaultValue": "Broadcast Thread"
       }
     }
   },

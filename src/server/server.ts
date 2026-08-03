@@ -332,7 +332,7 @@ async function onPostgameCheck(rsp: ServerResponse): Promise<void> {
     return;
   }
 
-  const enabled = await getAutoPostgameSetting();
+  const enabled = await autoPostgameEnabled();
   if (!enabled) {
     writeJSON<PartialJsonValue>(200, { created: false } as PartialJsonValue, rsp);
     return;
@@ -429,6 +429,40 @@ async function getAutoPostgameSetting(): Promise<boolean> {
     console.error("getAutoPostgameSetting error:", e);
     return true;
   }
+}
+
+async function getThreadTypeSetting(): Promise<string> {
+  try {
+    const raw = await settings.get<string | string[]>("threadType");
+    if (Array.isArray(raw)) return (raw[0] ?? "game").toString();
+    if (typeof raw === "string") return raw;
+    return "game";
+  } catch (e) {
+    console.error("getThreadTypeSetting error:", e);
+    return "game";
+  }
+}
+
+async function isBroadcastMode(): Promise<boolean> {
+  return (await getThreadTypeSetting()) === "broadcast";
+}
+
+async function getBroadcastLabel(): Promise<string> {
+  try {
+    const raw = await settings.get<string | string[]>("broadcastLabel");
+    const val = Array.isArray(raw) ? (raw[0] ?? "") : typeof raw === "string" ? raw : "";
+    return val.toString().trim() || "Broadcast Thread";
+  } catch (e) {
+    console.error("getBroadcastLabel error:", e);
+    return "Broadcast Thread";
+  }
+}
+
+// Automatic postgame threads fire only when the setting is on AND we are not in
+// Broadcast (companion) mode. Broadcast mode never auto-posts a postgame.
+async function autoPostgameEnabled(): Promise<boolean> {
+  if (await isBroadcastMode()) return false;
+  return getAutoPostgameSetting();
 }
 
 async function getCustomPostgameTitles(): Promise<{ win: string; loss: string }> {
@@ -662,12 +696,18 @@ function doubleHeaderSuffix(game: any): string {
 // Title builders
 // ════════════════════════════════════════════════════════════════════════
 
-function buildGameThreadTitle(game: any, teamId: string | null): string {
+function buildGameThreadTitle(
+  game: any,
+  teamId: string | null,
+  broadcastLabel?: string | null,
+): string {
   const away = game?.teams?.away?.team?.name || "Away";
   const home = game?.teams?.home?.team?.name || "Home";
   const homeId = String(game?.teams?.home?.team?.id ?? "");
   const time = formatGameTimeET(game?.gameDate || new Date().toISOString());
-  const prefix = getGamePrefix(game, false);
+  // Broadcast (companion) mode replaces the "Game Thread" prefix with the mod's label.
+  const prefix =
+    broadcastLabel && broadcastLabel.trim() ? broadcastLabel.trim() : getGamePrefix(game, false);
   const dhSuffix = doubleHeaderSuffix(game);
 
   if (teamId && teamId === homeId) {
@@ -996,6 +1036,7 @@ async function onMenuPostAllGames(): Promise<UiResponse> {
   }
 
   const teamId = await getTeamIdFilter();
+  const broadcastLabel = (await isBroadcastMode()) ? await getBroadcastLabel() : null;
   const games = await fetchGamesForDate(todayDateStr(), teamId);
 
   if (!games.length) {
@@ -1035,7 +1076,7 @@ async function onMenuPostAllGames(): Promise<UiResponse> {
 
     try {
       const post = await reddit.submitCustomPost({
-        title: buildGameThreadTitle(game, teamId),
+        title: buildGameThreadTitle(game, teamId, broadcastLabel),
       });
       await redis.set(`post-game:${post.id}`, String(pk), { expiration: renderExpiresAt() });
       await redis.set(`post-type:${post.id}`, "game", { expiration: renderExpiresAt() });
@@ -1110,6 +1151,11 @@ async function onMenuPostPostgame(): Promise<UiResponse> {
 async function onCronPostgameSweep(): Promise<void> {
   const subredditId = context.subredditId;
   if (!subredditId) return;
+
+  // Broadcast (companion) mode never auto-posts anything — no postgame threads and
+  // no postponement notices. The app only posts the threads a mod creates from the
+  // menu. (The manual "Post postgame threads" menu still works as an override.)
+  if (await isBroadcastMode()) return;
 
   const enabled = await getAutoPostgameSetting();
   const teamId = await getTeamIdFilter();
