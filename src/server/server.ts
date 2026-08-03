@@ -1040,7 +1040,10 @@ async function onMenuPostAllGames(): Promise<UiResponse> {
   const games = await fetchGamesForDate(todayDateStr(), teamId);
 
   if (!games.length) {
-    if (teamId) {
+    // Off-day discussion threads only post in Game Thread mode. In Broadcast
+    // (companion) mode the app stays hands-off — no off-day thread, just report
+    // there are no games (like the All-Star break).
+    if (teamId && !broadcastLabel) {
       const posted = await maybePostOffDayThread(subredditId, subredditName, teamId);
       if (posted) {
         return {
@@ -1285,6 +1288,17 @@ Plus, on off days for team-specific subs:
 
 If you prefer single-thread style, disable **Auto-post postgame threads** in the settings — postponement notices will still fire, since they're informational.
 
+## Thread type: Game Thread or Broadcast
+
+The **Thread type** setting controls how the app fits into your subreddit:
+
+- **Game Thread** (default) — the standard mode described above. The app posts a Game Thread for each game and, when enabled, an automatic Postgame Thread. Choose this if you want the app to be your subreddit's game threads.
+- **Broadcast Thread** — an advanced/analytics **companion** that runs *alongside* your existing game threads rather than replacing them. In this mode:
+  - Threads post with your **Broadcast label** (e.g. "Broadcast Thread", "Advanced View", "Live Scoreboard") in place of "Game Thread".
+  - The app **never auto-posts anything** — no automatic Postgame Threads and no postponement notices. It only posts the threads you create from the menu.
+
+  This is ideal for subreddits that want to keep their existing GameDay thread exactly as it is and simply *add* a live, interactive scoreboard as a second screen for the stats crowd. Set your wording in the **Broadcast label** setting.
+
 ## Custom postgame titles (optional)
 
 If your subreddit has a signature postgame phrase — "Theeee Yankees Win!", "Lets Go Mets!", "It's right there in front of us!" — you can set these as custom titles in the app settings:
@@ -1322,9 +1336,10 @@ This keeps the subreddit active on off days. Off-day threads aren't created for 
    - **Your team** — for team subreddits like r/Reds, r/Yankees, or r/Dodgers.
    - **All Teams (post every game)** — for league-wide subreddits.
 3. Confirm **Auto-post postgame threads** is set to your preference (on by default).
-4. (Optional) Set custom **Postgame Win Title** and **Postgame Loss Title** if your sub has signature phrases.
-5. Click **Save**.
-6. When you're ready to post today's threads, open the moderator menu on your subreddit and select **"Post today's MLB game threads."** Postgame threads, postponement notices, and off-day discussions will follow automatically based on context.
+4. Under **Thread type**, choose **Game Thread** (standard) or **Broadcast Thread** (advanced companion — see the "Thread type" section above). Most subs leave this on Game Thread.
+5. (Optional) Set custom **Postgame Win Title** and **Postgame Loss Title** if your sub has signature phrases.
+6. Click **Save**.
+7. When you're ready to post today's threads, open the moderator menu on your subreddit and select **"Post today's MLB game threads."** Postgame threads, postponement notices, and off-day discussions will follow automatically based on context.
 
 ## Recovering removed threads
 
