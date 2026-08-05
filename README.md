@@ -43,6 +43,10 @@ A single per-subreddit setting — **MLB Team Filter** — switches between thes
 | **Suspended Game Display** | An existing thread automatically detects mid-game suspension. Shows SUSPENDED headline with the inning where play stopped. Linescore stays visible. |
 | **Off-Day Discussion** | For team-specific subs only, Game Thread mode only. When the team has no game scheduled, the menu posts a discussion thread with last result and next scheduled game. In Broadcast mode, the menu simply reports no games. |
 
+### Broadcast delay (spoiler protection)
+
+An optional per-subreddit **Broadcast delay** holds the live scoreboard data back by a fixed number of seconds (Off / 5 / 8 / 10 / 12 / 15 / 20) so fans following along on a slightly delayed TV or stream aren't spoiled by seeing a play in the thread before it reaches their screen. It applies in **both** thread modes and is independent of the Thread type setting. Because each point-in-time snapshot from the MLB feed is complete and the selected moment only ever advances, no play or pitch is ever skipped — the game simply runs the chosen number of seconds behind.
+
 ### Scoreboard tabs
 
 | Tab | Contents |
@@ -112,6 +116,7 @@ After installation, configure via **Mod Tools → Community Apps → mlb-scores 
 | **Auto-post postgame threads** | When enabled (default), a Postgame Thread posts automatically when a game ends. Disable for single-thread subs — postponement notices still fire since they're informational. (No effect in Broadcast mode, which never auto-posts.) |
 | **Thread type** | **Game Thread** (default) for standard operation, or **Broadcast Thread** to run as a hands-off companion. See *Thread modes* above. |
 | **Broadcast label** | Only used in Broadcast mode — the wording used in place of "Game Thread" in post titles (e.g. "Broadcast Thread", "Advanced View", "Live Scoreboard"). Defaults to "Broadcast Thread". |
+| **Broadcast delay** | Delays the live scoreboard data by a fixed number of seconds (Off / 5 / 8 / 10 / 12 / 15 / 20) so viewers on a slightly delayed TV or stream aren't spoiled. Applies in **both** thread modes, independent of Thread type. No plays are skipped — the scoreboard just runs this far behind. Defaults to Off. |
 | **Postgame Win Title** | Optional custom title template used when the configured team wins. Supports the placeholders above. Leave blank for the default. |
 | **Postgame Loss Title** | Optional custom title template used when the configured team loses. Same placeholders. Leave blank for the default. |
 
