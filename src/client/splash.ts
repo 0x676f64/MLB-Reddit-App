@@ -741,7 +741,7 @@ function renderLiveContent(data: any): void {
     let resLbl = "BALL";
     if (isInPlay) { resCls = "live-pr-contact"; resLbl = "IN PLAY"; }
     else if (isFoul) { resCls = "live-pr-foul"; resLbl = "FOUL"; }
-    else if (isStrike) { resCls = "live-pr-strike"; resLbl = "STR"; }
+    else if (isStrike) { resCls = "live-pr-strike"; resLbl = "STRIKE"; }
     pitchEl.innerHTML = `
       <span class="live-pitch-num">PITCH ${pitches.length}</span>
       <span class="live-pitch-badge" style="background:${info.color}">${info.abbr}</span>
@@ -1396,6 +1396,20 @@ async function renderWinProb(): Promise<void> {
     return;
   }
 
+  // Broadcast delay: the game feed (lastGameData) may be time-shifted behind the
+  // full win-prob series, so trim win-prob to plays that have already happened in
+  // the current (possibly delayed) view — otherwise the chart would spoil upcoming
+  // swings. In real-time this is a no-op, since the feed is already current.
+  const curAbi = lastGameData?.liveData?.plays?.currentPlay?.about?.atBatIndex;
+  const wp =
+    typeof curAbi === "number"
+      ? wpData.filter((d: any) => typeof d.atBatIndex !== "number" || d.atBatIndex <= curAbi)
+      : wpData;
+  if (!wp.length) {
+    container.innerHTML = '<div class="placeholder">Win probability not available yet</div>';
+    return;
+  }
+
   const awayId: number = awayTeam.id;
   const homeId: number = homeTeam.id;
   const awayName: string = awayTeam.name || "";
@@ -1405,7 +1419,7 @@ async function renderWinProb(): Promise<void> {
   const awayColor = getTeamColor(awayId, awayName);
   const homeColor = getTeamColor(homeId, homeName);
 
-  const latest = wpData[wpData.length - 1];
+  const latest = wp[wp.length - 1];
   const homeProb = Math.round(latest.homeTeamWinProbability ?? 50);
   const awayProb = Math.round(latest.awayTeamWinProbability ?? 50);
 
@@ -1413,10 +1427,10 @@ async function renderWinProb(): Promise<void> {
   const PL = 36, PR = 16, PT = 10, PB = 22;
   const CW = W - PL - PR;
   const CH = H - PT - PB;
-  const stepX = CW / Math.max(1, wpData.length - 1);
+  const stepX = CW / Math.max(1, wp.length - 1);
   const midY = PT + CH / 2;
 
-  const pts = wpData.map((d: any, i: number) => ({
+  const pts = wp.map((d: any, i: number) => ({
     x: PL + i * stepX,
     y: PT + CH / 2 + (((d.homeTeamWinProbability ?? 50) - 50) / 50) * (CH / 2),
     homeProb: d.homeTeamWinProbability ?? 50,

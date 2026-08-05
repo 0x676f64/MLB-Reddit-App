@@ -117,6 +117,21 @@
         "label": "Broadcast label (optional)",
         "helpText": "Only used in Broadcast Thread mode — the wording used in place of \"Game Thread\" in the post title. Examples: \"Broadcast Thread\", \"Advanced View\", \"Live Scoreboard\". Leave blank to use \"Broadcast Thread\".",
         "defaultValue": "Broadcast Thread"
+      },
+      "broadcastDelay": {
+        "type": "select",
+        "label": "Broadcast delay",
+        "helpText": "Delay the live scoreboard by a few seconds so fans following along on a TV or streaming feed aren't spoiled by seeing plays before they happen on their screen. Off shows real-time data. Pick the delay that best matches how far behind your feed runs. No plays are skipped — the game just runs this far behind.",
+        "options": [
+          { "label": "Off (real-time)", "value": "0" },
+          { "label": "5 seconds", "value": "5" },
+          { "label": "8 seconds", "value": "8" },
+          { "label": "10 seconds", "value": "10" },
+          { "label": "12 seconds", "value": "12" },
+          { "label": "15 seconds", "value": "15" },
+          { "label": "20 seconds", "value": "20" }
+        ],
+        "defaultValue": "0"
       }
     }
   },

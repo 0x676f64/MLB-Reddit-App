@@ -275,10 +275,120 @@ async function onSchedule(urlObj: URL, rsp: ServerResponse): Promise<void> {
   );
 }
  
+// ── Broadcast delay ──────────────────────────────────────────────────────
+// When a subreddit sets a Broadcast delay, the game feed is served AS OF
+// (the feed's latest update − delay), using MLB's point-in-time `timecode`
+// feed. Nothing is skipped: each timecode snapshot is the COMPLETE game state
+// up to that moment, and the selected timecode only ever moves forward, so the
+// delayed view can never rewind or drop a play. Real-time (delay 0) is unchanged.
+
+// Timecodes look like "YYYYMMDD_HHMMSS". We only ever compare them relative to
+// the feed's own latest timecode, so the absolute timezone is irrelevant.
+// Parsed via fixed-width slices (slice() always returns a string) to avoid
+// possibly-undefined regex-group index access under strict TS settings.
+function parseTimecodeToEpoch(tc: string): number {
+  if (!/^\d{8}_\d{6}$/.test(tc)) return NaN;
+  const y = Number(tc.slice(0, 4));
+  const mo = Number(tc.slice(4, 6));
+  const d = Number(tc.slice(6, 8));
+  const h = Number(tc.slice(9, 11));
+  const mi = Number(tc.slice(11, 13));
+  const s = Number(tc.slice(13, 15));
+  return Date.UTC(y, mo - 1, d, h, mi, s);
+}
+
+async function fetchGameTimestamps(pk: string): Promise<string[]> {
+  const key = `mlbcache:tstamps:${pk}`;
+  try {
+    const cached = await redis.get(key);
+    if (cached) return JSON.parse(cached) as string[];
+  } catch (e) {
+    console.error(`timestamps cache read failed for ${pk}:`, e);
+  }
+  try {
+    const r = await fetch(`https://statsapi.mlb.com/api/v1.1/game/${pk}/feed/live/timestamps`);
+    if (!r.ok) return [];
+    const data = await r.json();
+    const list: string[] = Array.isArray(data)
+      ? data.map(String)
+      : Array.isArray((data as any)?.timestamps)
+        ? (data as any).timestamps.map(String)
+        : [];
+    try {
+      await redis.set(key, JSON.stringify(list), {
+        expiration: new Date(Date.now() + GAME_CACHE_TTL_S * 1000),
+      });
+    } catch (e) {
+      console.error(`timestamps cache write failed for ${pk}:`, e);
+    }
+    return list;
+  } catch (e) {
+    console.error(`timestamps fetch failed for ${pk}:`, e);
+    return [];
+  }
+}
+
+async function serveDelayedGame(
+  pk: string,
+  delaySeconds: number,
+  rsp: ServerResponse,
+): Promise<void> {
+  const liveUrl = `https://statsapi.mlb.com/api/v1.1/game/${pk}/feed/live`;
+  const parsed = (await fetchGameTimestamps(pk))
+    .map((tc) => ({ tc, t: parseTimecodeToEpoch(tc) }))
+    .filter((x) => !Number.isNaN(x.t))
+    .sort((a, b) => a.t - b.t);
+
+  const first = parsed[0];
+  const last = parsed[parsed.length - 1];
+  // No usable timestamps yet (pregame or endpoint hiccup) — serve the live feed.
+  if (!first || !last) {
+    await proxyMlbJsonCached(`mlbcache:game:${pk}`, liveUrl, GAME_CACHE_TTL_S, rsp);
+    return;
+  }
+
+  const target = last.t - delaySeconds * 1000;
+  // Latest snapshot at or before the target. If the game is younger than the
+  // delay, this stays at the earliest snapshot (delayed viewer sees the start).
+  let selected = first.tc;
+  for (const p of parsed) {
+    if (p.t <= target) selected = p.tc;
+    else break;
+  }
+
+  // Forward-only guard: never serve an earlier timecode than we already have for
+  // this (game, delay), so the delayed view can never appear to rewind.
+  const guardKey = `mlbcache:lasttc:${pk}:${delaySeconds}`;
+  try {
+    const prevTc = await redis.get(guardKey);
+    if (prevTc && parseTimecodeToEpoch(prevTc) > parseTimecodeToEpoch(selected)) {
+      selected = prevTc;
+    }
+    await redis.set(guardKey, selected, {
+      expiration: new Date(Date.now() + 6 * 3600 * 1000),
+    });
+  } catch (e) {
+    console.error(`delay guard failed for ${pk}:`, e);
+  }
+
+  // The snapshot at a given timecode is immutable, so it caches cleanly by key.
+  await proxyMlbJsonCached(
+    `mlbcache:game:${pk}:tc:${selected}`,
+    `${liveUrl}?timecode=${selected}`,
+    GAME_CACHE_TTL_S,
+    rsp,
+  );
+}
+
 async function onGame(pk: string, rsp: ServerResponse): Promise<void> {
   // Adds the gamePk guard onGame was missing (onWinProb already had it).
   if (!/^\d+$/.test(pk)) {
     writeJSON<ErrorResponse>(400, { error: "Invalid gamePk", status: 400 }, rsp);
+    return;
+  }
+  const delay = await getBroadcastDelaySetting();
+  if (delay > 0) {
+    await serveDelayedGame(pk, delay, rsp);
     return;
   }
   await proxyMlbJsonCached(
@@ -455,6 +565,20 @@ async function getBroadcastLabel(): Promise<string> {
   } catch (e) {
     console.error("getBroadcastLabel error:", e);
     return "Broadcast Thread";
+  }
+}
+
+// Broadcast delay in seconds (0 = real-time). Delays the live scoreboard so
+// viewers following a delayed TV/stream aren't spoiled. See serveDelayedGame.
+async function getBroadcastDelaySetting(): Promise<number> {
+  try {
+    const raw = await settings.get<string | string[]>("broadcastDelay");
+    const val = Array.isArray(raw) ? (raw[0] ?? "0") : raw ?? "0";
+    const n = parseInt(String(val), 10);
+    return Number.isFinite(n) && n > 0 ? n : 0;
+  } catch (e) {
+    console.error("getBroadcastDelaySetting error:", e);
+    return 0;
   }
 }
 
