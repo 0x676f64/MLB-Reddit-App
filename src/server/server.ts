@@ -442,6 +442,13 @@ async function onPostgameCheck(rsp: ServerResponse): Promise<void> {
     return;
   }
 
+  // Broadcast game threads never get an auto-postgame — even if the sub later
+  // switches to Game Thread mode. (Marker written by onMenuPostAllGames.)
+  if (await redis.get(`broadcast-game:${subId}:${gamePkStr}`)) {
+    writeJSON<PartialJsonValue>(200, { created: false } as PartialJsonValue, rsp);
+    return;
+  }
+
   const enabled = await autoPostgameEnabled();
   if (!enabled) {
     writeJSON<PartialJsonValue>(200, { created: false } as PartialJsonValue, rsp);
@@ -1091,6 +1098,13 @@ async function handlePostgameOrPostponement(
   const pk = game?.gamePk;
   if (!pk) return "skipped";
 
+  // Broadcast game threads are hands-off, permanently. If this game's thread was
+  // posted in Broadcast mode, never auto-post a postgame OR postponement for it —
+  // even if the sub has since switched to Game Thread mode. (Marker written by
+  // onMenuPostAllGames.) The manual "Post postgame threads" menu also routes here,
+  // so this makes Broadcast games postgame-free by every automatic and menu path.
+  if (await redis.get(`broadcast-game:${subredditId}:${pk}`)) return "skipped";
+
   const gameDedupKey = `posted:${subredditId}:${pk}`;
   if (!(await redis.get(gameDedupKey))) return "skipped";
 
@@ -1208,6 +1222,13 @@ async function onMenuPostAllGames(): Promise<UiResponse> {
       await redis.set(`post-game:${post.id}`, String(pk), { expiration: renderExpiresAt() });
       await redis.set(`post-type:${post.id}`, "game", { expiration: renderExpiresAt() });
       await redis.set(dedupKey, post.id, { expiration: dedupExpiresAt() });
+      // Broadcast mode: mark this game so no postgame/postponement ever auto-posts
+      // for it — even if the sub later switches to Game Thread mode. Broadcast game
+      // threads are hands-off, permanently. (handlePostgameOrPostponement and
+      // onPostgameCheck both honor this marker.)
+      if (broadcastLabel) {
+        await redis.set(`broadcast-game:${subredditId}:${pk}`, "1", { expiration: dedupExpiresAt() });
+      }
       // If this game was previously postponed, release the postponement lock so
       // the cron can fire another postponement notice if it happens again.
       await redis.del(`postponed:${subredditId}:${pk}`);
