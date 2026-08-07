@@ -4,10 +4,26 @@ If the app ever misbehaves during a game, this is how to stop it. Do the smalles
 
 ## Fastest path — pick your symptom
 
+- **The scoreboard is frozen or way behind the real game** → turn off Broadcast delay. **(Quick settings fix)**
 - **One post is wrong** (wrong game, broken scoreboard, bad title) → take that post down. **(Level 2)**
 - **It's auto-posting threads it shouldn't** (unwanted postgame threads) → turn off Auto-post postgame threads. **(Level 1)**
 - **Everything looks broken and you're not sure why** → uninstall the app. **(Level 3)**
 - **You (the developer) just shipped a build that broke it** → roll the deploy back. **(Level 3, developer note)**
+
+---
+
+## Quick settings fix — the scoreboard is frozen or far behind
+
+**When:** the scoreboard seems stuck, or it's running much further behind the live game than you'd expect.
+
+**Do:**
+1. Mod Tools → Community Apps → mlb-scores → Settings
+2. Set **Broadcast delay** to **Off**
+3. Save
+
+**Why:** Broadcast delay intentionally holds the scoreboard a few seconds behind live, so fans on a TV or streaming feed aren't spoiled. If it's set higher than you want, or something looks off, setting it to Off puts the scoreboard back to real time. This only changes data timing — it doesn't post or remove anything.
+
+**Undo:** set the delay back to your preferred number and Save.
 
 ---
 
@@ -31,6 +47,8 @@ Takes effect within about a minute (the next background check).
 
 **Undo:** turn it back on and Save.
 
+> **Running in Broadcast Thread mode?** Then the app already never auto-posts *anything* on its own — no postgame threads, no postponement notices, no off-day threads. It only posts the threads you create from the menu. So in Broadcast mode there's nothing here you need to turn off.
+
 ---
 
 ## Level 2 — Take down one bad post
@@ -53,7 +71,7 @@ Once it's down, no one sees its scoreboard, and the app automatically clears its
 
 **Stops:** everything new — auto-posts, menu actions, and the background sweep. Existing posts may stop showing live data once the app is gone. This is the definitive off.
 
-**Undo:** reinstall. You may need to re-enter your settings (team filter, custom titles, etc.).
+**Undo:** reinstall. You may need to re-enter your settings (team filter, thread type, delay, custom titles, etc.).
 
 ### Developer note (u/0xgod only)
 
@@ -68,4 +86,4 @@ This keeps the app installed; it just reverts the code.
 
 ## One thing no setting stops instantly
 
-A live scoreboard already open on someone's screen keeps refreshing until the game ends or **the post is removed**. There's no toggle that blanks a single running scoreboard — to stop a specific one, take that post down (Level 2).
+A live scoreboard already open on someone's screen keeps refreshing until the game ends or **the post is removed**. There's no toggle that blanks a single running scoreboard — to stop a specific one, take that post down (Level 2). (The Broadcast delay setting changes how far behind the scoreboard runs, but it doesn't stop one that's already open.)
