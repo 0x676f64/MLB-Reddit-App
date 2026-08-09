@@ -2099,14 +2099,17 @@ body.is-postponed .linescore {
    JS sets their base look inline but not transform/transition, so these add
    cleanly on top. */
 #expand-btn,
-#theme-btn {
+#theme-btn,
+.topbar-mini-btn {
   transition: transform var(--dur-1) var(--ease-out), background 0.15s ease;
   -webkit-tap-highlight-color: transparent;
 }
 #expand-btn:active,
-#theme-btn:active { transform: scale(0.9); }
+#theme-btn:active,
+.topbar-mini-btn:active { transform: scale(0.9); }
 #expand-btn:focus-visible,
-#theme-btn:focus-visible {
+#theme-btn:focus-visible,
+.topbar-mini-btn:focus-visible {
   outline: 2px solid var(--accent-dim);
   outline-offset: 2px;
 }
@@ -2226,7 +2229,7 @@ body.is-inline #inline-pager.pager-active { display: flex; }
 .inline-pager-btn:active { transform: scale(0.92); }
 .inline-pager-btn:disabled { opacity: 0.28; cursor: default; }
 /* ── Analytics / feeds overlay (graph + TV mini buttons) ──────────────────── */
-.topbar-mini-btn svg { width: 15px; height: 15px; }
+.topbar-mini-btn svg { width: 17px; height: 17px; }
 
 .info-overlay {
   position: fixed;
@@ -2392,7 +2395,7 @@ body.is-inline #inline-pager.pager-active { display: flex; }
   border-radius: 999px;
   border: 1px solid transparent;
   font-family: var(--font-sans);
-  font-size: 8px;
+  font-size: 9px;
   font-weight: 600;
   letter-spacing: 0.02em;
 }
