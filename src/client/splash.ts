@@ -496,7 +496,7 @@ function setupExpand(): void {
   btn.setAttribute("aria-label", "Open full screen");
   btn.innerHTML = EXPAND_ICON;
   btn.style.cssText =
-    "position:absolute;top:10px;right:12px;z-index:40;width:32px;height:32px;" +
+    "position:absolute;top:10px;right:12px;z-index:40;width:25px;height:25px;" +
     "display:flex;align-items:center;justify-content:center;padding:0;" +
     "background:var(--bg-elev-2);color:var(--text-primary);border:1px solid var(--border-medium);" +
     "border-radius:6px;cursor:pointer;-webkit-tap-highlight-color:transparent;" +
@@ -597,7 +597,7 @@ function setupThemeToggle(): void {
   btn.id = "theme-btn";
   btn.type = "button";
   btn.style.cssText =
-    "position:absolute;top:10px;left:12px;z-index:40;width:32px;height:32px;" +
+    "position:absolute;top:10px;left:12px;z-index:40;width:25px;height:25px;" +
     "display:flex;align-items:center;justify-content:center;padding:0;" +
     "background:var(--bg-elev-2);color:var(--text-primary);border:1px solid var(--border-medium);" +
     "border-radius:6px;cursor:pointer;-webkit-tap-highlight-color:transparent;" +
@@ -2252,11 +2252,11 @@ function mkTopMiniButton(
   b.setAttribute("aria-label", label);
   b.innerHTML = icon;
   b.style.cssText =
-    "position:absolute;top:13px;" +
+    "position:absolute;top:10px;" +
     side +
     ":" +
     offsetPx +
-    "px;z-index:40;width:26px;height:26px;" +
+    "px;z-index:40;width:25px;height:25px;" +
     "display:flex;align-items:center;justify-content:center;padding:0;" +
     "background:var(--bg-elev-2);color:var(--text-primary);border:1px solid var(--border-medium);" +
     "border-radius:6px;cursor:pointer;-webkit-tap-highlight-color:transparent;" +
