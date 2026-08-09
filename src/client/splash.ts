@@ -17,7 +17,7 @@
 // build runs esbuild with platform:"browser" (or conditions:["browser"]) so the
 // import resolves to the browser entry rather than the server-panic stub.
 
-import { requestExpandedMode, getWebViewMode } from "@devvit/web/client";
+import { requestExpandedMode, getWebViewMode, navigateTo } from "@devvit/web/client";
 
 // ── Constants ─────────────────────────────────────────────────────────────
 
@@ -789,7 +789,7 @@ function fmtAvg(v: any): string {
   return f < 1 ? "." + String(Math.round(f * 1000)).padStart(3, "0") : String(v);
 }
 
-function buildBattingRow(player: any, displayNum: number, s: any): string {
+function buildBattingRow(player: any, displayNum: number, s: any, isSub: boolean = false): string {
   const g = player.stats?.batting || {};
   const name = shortName(player.person?.fullName || "Unknown");
   const pos = player.position?.abbreviation || "";
@@ -801,10 +801,17 @@ function buildBattingRow(player: any, displayNum: number, s: any): string {
   const bb = g.baseOnBalls ?? 0;
   const so = g.strikeOuts ?? 0;
   const avg = fmtAvg(s?.avg);
-  return `<tr class="bs-row">
-    <td class="bs-num">${displayNum}</td>
+  // Substitutes share their slot's number: blank the number cell and indent the
+  // name so the sub reads as nested under the starter it replaced (like a real box
+  // score), instead of getting its own number and pushing the lineup past 9.
+  const numCell = isSub ? "" : String(displayNum);
+  const nameCell = isSub
+    ? `<div class="bs-pname" style="padding-left:15px;opacity:.72">${name}</div>`
+    : `<div class="bs-pname">${name}</div>`;
+  return `<tr class="bs-row${isSub ? " bs-sub" : ""}">
+    <td class="bs-num">${numCell}</td>
     <td class="bs-pos-cell"><span class="bs-pos">${pos}</span></td>
-    <td class="bs-player"><div class="bs-pname">${name}</div></td>
+    <td class="bs-player">${nameCell}</td>
     <td>${ab}</td>
     <td class="${h > 0 ? "bs-hit" : ""}">${h}</td>
     <td>${r}</td>
@@ -825,6 +832,7 @@ function buildPitchingRow(player: any, s: any): string {
   const er = g.earnedRuns ?? 0;
   const bb = g.baseOnBalls ?? 0;
   const so = g.strikeOuts ?? 0;
+  const np = g.numberOfPitches ?? g.pitchesThrown ?? "";
   const era = s?.era ?? "-.--";
   const erHasRuns = er > 0;
   return `<tr class="bs-row">
@@ -837,7 +845,8 @@ function buildPitchingRow(player: any, s: any): string {
     <td class="${erHasRuns ? "bs-er" : ""}">${er}</td>
     <td>${bb}</td>
     <td>${so}</td>
-    <td colspan="2" class="bs-avg">${era}</td>
+    <td>${np}</td>
+    <td class="bs-avg">${era}</td>
   </tr>`;
 }
 
@@ -857,12 +866,49 @@ function buildBoxPanel(teamStats: any): string {
     return '<div class="bs-empty">Lineups not yet available</div>';
   }
 
-  const battingRows = batters.map((id: number, i: number) => {
+  // Group batters into the 9 lineup slots using battingOrder. MLB encodes it as
+  // slot*100 for starters (100, 200, … 900) and slot*100 + a sequence for subs who
+  // entered that slot (e.g. 401, 402 in the 4-hole). Render nine numbered slots with
+  // any substitutes nested under the slot they came into, so a game with 3 subs still
+  // reads 1–9 instead of 10, 11, 12. Falls back to sequential numbering if the data
+  // has no usable battingOrder, so the box score always renders.
+  const slots: Record<number, any[]> = {};
+  let haveOrder = false;
+  for (const id of batters) {
     const player = teamStats.players?.[`ID${id}`];
-    if (!player) return "";
-    const s = player.seasonStats?.batting;
-    return buildBattingRow(player, i + 1, s);
-  }).filter(Boolean).join("");
+    if (!player) continue;
+    const bo = parseInt(String(player.battingOrder ?? ""), 10);
+    if (!Number.isFinite(bo) || bo <= 0) continue;
+    haveOrder = true;
+    const slot = Math.floor(bo / 100);
+    (slots[slot] = slots[slot] || []).push(player);
+  }
+
+  let battingRows: string;
+  if (haveOrder) {
+    const rows: string[] = [];
+    for (let slot = 1; slot <= 9; slot++) {
+      const group = slots[slot];
+      if (!group || !group.length) continue;
+      group.sort(
+        (a: any, b: any) =>
+          parseInt(String(a.battingOrder), 10) - parseInt(String(b.battingOrder), 10),
+      );
+      group.forEach((player: any, idx: number) => {
+        rows.push(buildBattingRow(player, slot, player.seasonStats?.batting, idx > 0));
+      });
+    }
+    battingRows = rows.join("");
+  } else {
+    battingRows = batters
+      .map((id: number, i: number) => {
+        const player = teamStats.players?.[`ID${id}`];
+        if (!player) return "";
+        return buildBattingRow(player, i + 1, player.seasonStats?.batting, false);
+      })
+      .filter(Boolean)
+      .join("");
+  }
 
   const pitchingRows = pitchers.map((id: number) => {
     const player = teamStats.players?.[`ID${id}`];
@@ -891,7 +937,7 @@ function buildBoxPanel(teamStats: any): string {
           <th class="bs-th-num"></th>
           <th class="bs-th-pos"></th>
           <th class="bs-th-player">Pitcher</th>
-          <th>IP</th><th>H</th><th>R</th><th>ER</th><th>BB</th><th>K</th><th colspan="2">ERA</th>
+          <th>IP</th><th>H</th><th>R</th><th>ER</th><th>BB</th><th>K</th><th>NP</th><th>ERA</th>
         </tr>
       </thead>
       <tbody>${pitchingRows || `<tr><td colspan="11" class="bs-empty">No pitching data yet</td></tr>`}</tbody>
@@ -1000,6 +1046,73 @@ function buildPlayScorebug(play: any): string {
   </div>`;
 }
 
+// ── Scoring-play video buttons ─────────────────────────────────────────────
+// A "VIDEO" button appears on a scoring play ONLY when MLB has posted a clip for
+// it. The server (/api/clips) returns a { playId-GUID: clipUrl } map; each play's
+// clip key is its last playEvent's playId. Buttons are injected after render and
+// re-checked each poll, so a clip that posts mid-game shows up automatically.
+const VIDEO_ICON =
+  '<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M8 5v14l11-7z"/></svg>';
+
+let clipMapCache: { pk: number; map: Record<string, string>; ts: number } | null = null;
+
+async function getClipMap(pk: number): Promise<Record<string, string>> {
+  const now = Date.now();
+  if (clipMapCache && clipMapCache.pk === pk && now - clipMapCache.ts < 30000) {
+    return clipMapCache.map;
+  }
+  try {
+    const res = await fetch(`/api/clips/${pk}`);
+    if (!res.ok) return clipMapCache?.map || {};
+    const map = (await res.json()) as Record<string, string>;
+    clipMapCache = { pk, map, ts: now };
+    return map;
+  } catch (e) {
+    reportError("getClipMap", e);
+    return clipMapCache?.map || {};
+  }
+}
+
+function playClipId(play: any): string {
+  const evs = play?.playEvents;
+  if (!Array.isArray(evs)) return "";
+  for (let i = evs.length - 1; i >= 0; i--) {
+    const pid = evs[i]?.playId;
+    if (pid) return String(pid);
+  }
+  return "";
+}
+
+async function augmentScoringVideos(): Promise<void> {
+  if (gamePk == null) return;
+  const container = $("scoring-plays-list");
+  if (!container) return;
+  const cards = container.querySelectorAll<HTMLElement>(".play-card[data-clip-key]");
+  if (cards.length === 0) return;
+  const map = await getClipMap(gamePk);
+  cards.forEach((card) => {
+    const key = card.getAttribute("data-clip-key");
+    if (!key) return;
+    const url = map[key];
+    if (!url) return;
+    if (card.querySelector(".play-video-btn")) return; // already added this render
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "play-video-btn";
+    btn.setAttribute("aria-label", "Watch this play");
+    btn.innerHTML = VIDEO_ICON + "<span>VIDEO</span>";
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      try {
+        navigateTo(url);
+      } catch (err) {
+        reportError("navigateTo(video)", err);
+      }
+    });
+    (card.querySelector(".play-main") || card).appendChild(btn);
+  });
+}
+
 function buildPlayCard(play: any, awayAbbr: string, homeAbbr: string, showScore: boolean): string {
   const inning = play.about?.inning ?? 1;
   const isTop = play.about?.isTopInning;
@@ -1032,7 +1145,7 @@ function buildPlayCard(play: any, awayAbbr: string, homeAbbr: string, showScore:
     statcastHtml = `<div class="play-statcast">${chips.join("")}</div>`;
   }
 
-  return `<div class="play-card">
+  return `<div class="play-card" data-clip-key="${playClipId(play)}">
     <div class="play-main">
       <div class="play-header">
         <span class="play-inning">${inningTxt}</span>
@@ -1072,6 +1185,7 @@ function renderScoringPlays(data: any): void {
 
   container.innerHTML = cards;
   if (tabEl) tabEl.scrollTop = savedScroll;
+  void augmentScoringVideos();
 }
 
 function renderAllPlays(data: any): void {
@@ -1176,13 +1290,23 @@ function renderFinalContent(data: any): void {
     }
     slot.style.display = "";
     const name = performer.player.person?.fullName || "—";
-    const type = performer.type;
-    const isPitcher = type === "pitcher" || type === "starter";
+    const type = String(performer.type || "").toLowerCase();
+    const pit = performer.player.stats?.pitching;
+    const ipVal = parseFloat(String(pit?.inningsPitched ?? "0"));
+    // Robust pitcher check: MLB's topPerformer type is "starter"/"reliever"/
+    // "closer" for pitchers — the old check only caught starters, so a reliever
+    // top performer rendered a (blank) hitting line. Fall back to "actually
+    // pitched" to catch any other pitcher type.
+    const isPitcher =
+      type === "starter" ||
+      type === "reliever" ||
+      type === "closer" ||
+      type.includes("pitch") ||
+      (Number.isFinite(ipVal) && ipVal > 0);
     let stats = "—";
     if (isPitcher) {
-      const p = performer.player.stats?.pitching;
-      if (p?.summary) stats = p.summary;
-      else if (p) stats = `${p.inningsPitched || "0"} IP · ${p.earnedRuns ?? 0} ER · ${p.strikeOuts ?? 0} K`;
+      if (pit?.summary) stats = pit.summary;
+      else if (pit) stats = `${pit.inningsPitched || "0"} IP · ${pit.earnedRuns ?? 0} ER · ${pit.strikeOuts ?? 0} K`;
     } else {
       const b = performer.player.stats?.batting;
       if (b?.summary) stats = b.summary;
@@ -1765,6 +1889,8 @@ function render(data: any): void {
     $("dynamic-tab-label")!.textContent = statusText.toUpperCase();
   }
 
+  try { renderWeather(data); } catch (e) { reportError("renderWeather", e); }
+
   try { renderLinescore(linescore, awayTeam, homeTeam, isFinalState(statusText)); }
   catch (e) { reportError("renderLinescore", e); }
 
@@ -1790,6 +1916,77 @@ function render(data: any): void {
 }
 
 // ── Linescore ─────────────────────────────────────────────────────────────
+
+// ── Weather strip (between the score row and the linescore) ────────────────
+// Condition icon + word + temp, straight from the game feed's gameData.weather
+// (no fetch). Domed/roofed games show "Roof Closed" instead. The strip is created
+// once (inserted just above the linescore) and updated on every render.
+const WX_SUN_ICON =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v2M12 20v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M2 12h2M20 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/></svg>';
+const WX_CLOUD_ICON =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 19a4.5 4.5 0 0 0 .5-8.97A6 6 0 0 0 6.34 9.5 4 4 0 0 0 7 19z"/></svg>';
+const WX_PARTLY_ICON =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8.5" r="2.6"/><path d="M8 3.4v1.2M4.1 4.6l.8.8M3 8.5h1.2M11.9 4.6l-.8.8"/><path d="M17 19a4 4 0 0 0 .4-7.98A5.2 5.2 0 0 0 7.6 12 4 4 0 0 0 8 19z"/></svg>';
+const WX_RAIN_ICON =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 14a4.5 4.5 0 0 0 .5-8.97A6 6 0 0 0 6.34 4.5 4 4 0 0 0 7 14z"/><path d="M8 18v1.5M12 18v2.5M16 18v1.5"/></svg>';
+const WX_SNOW_ICON =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 14a4.5 4.5 0 0 0 .5-8.97A6 6 0 0 0 6.34 4.5 4 4 0 0 0 7 14z"/><path d="M8 18.5v.01M12 20v.01M16 18.5v.01"/></svg>';
+const WX_ROOF_ICON =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 18 0"/><path d="M2 12h20M6 12v6M18 12v6M6 18h12"/></svg>';
+
+function weatherCategory(cond: string): string {
+  const c = cond.toLowerCase();
+  if (/(rain|drizzle|shower|thunder)/.test(c)) return "rain";
+  if (/(snow|flurr|wintry)/.test(c)) return "snow";
+  if (/(partly|mostly cloudy|partly sunny)/.test(c)) return "partly";
+  if (/(cloud|overcast|hazy|fog|mist)/.test(c)) return "cloud";
+  if (/(clear|sunny|fair)/.test(c)) return "sun";
+  return "cloud";
+}
+
+function weatherIconFor(cat: string): string {
+  switch (cat) {
+    case "rain": return WX_RAIN_ICON;
+    case "snow": return WX_SNOW_ICON;
+    case "partly": return WX_PARTLY_ICON;
+    case "sun": return WX_SUN_ICON;
+    default: return WX_CLOUD_ICON;
+  }
+}
+
+function renderWeather(data: any): void {
+  const lineEl = $("linescore-container");
+  const parent = lineEl?.parentElement;
+  if (!lineEl || !parent) return;
+  let strip = $("weather-strip");
+  if (!strip) {
+    strip = document.createElement("div");
+    strip.id = "weather-strip";
+    strip.className = "weather-strip";
+    parent.insertBefore(strip, lineEl);
+  }
+  const w = data?.gameData?.weather;
+  const cond = String(w?.condition || "").trim();
+  const temp = String(w?.temp || "").trim();
+  if (!cond && !temp) {
+    strip.style.display = "none";
+    return;
+  }
+  strip.style.display = "";
+  if (/dome|roof|indoor/i.test(cond)) {
+    strip.innerHTML =
+      '<span class="weather-pill wx-roof"><span class="weather-icon">' +
+      WX_ROOF_ICON +
+      '</span><span class="weather-text">Roof Closed</span></span>';
+    return;
+  }
+  const cat = weatherCategory(cond);
+  const tempTxt = temp ? `${temp}°` : "";
+  const sep = cond && tempTxt ? " · " : "";
+  strip.innerHTML =
+    `<span class="weather-pill wx-${cat}"><span class="weather-icon">${weatherIconFor(cat)}</span>` +
+    `<span class="weather-text">${cond}${sep}${tempTxt}</span></span>`;
+}
 
 function renderLinescore(linescore: any, awayTeam: any, homeTeam: any, isFinal: boolean): void {
   if (!linescore) return;
@@ -1911,12 +2108,269 @@ async function maybeNotifyPostgame(statusText: string): Promise<void> {
 
 // ── Init ──────────────────────────────────────────────────────────────────
 
+// ── Analytics / feeds overlay + top-bar mini buttons ───────────────────────
+// A frosted, full-viewport overlay listing destinations. Rows WITH a url use
+// navigateTo (Reddit shows its own "leaving Reddit" confirmation before the
+// browser opens); rows WITHOUT a url are static info (the feeds list). The same
+// overlay is reused by the graph (analytics) and TV (feeds) buttons.
+
+const GRAPH_ICON =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ' +
+  'stroke-linecap="round" stroke-linejoin="round"><path d="M3 18 L9 12 L13 16 L21 6"/>' +
+  '<polyline points="15 6 21 6 21 12"/></svg>';
+
+const TV_ICON =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ' +
+  'stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="13" rx="2"/>' +
+  '<path d="M8 3l4 4 4-4"/></svg>';
+
+const FEED_TV_ICON =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ' +
+  'stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="13" rx="2"/>' +
+  '<path d="M8 3l4 4 4-4"/></svg>';
+
+const FEED_RADIO_ICON =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ' +
+  'stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="14" r="2.5"/>' +
+  '<path d="M4.9 9.9a10 10 0 0 1 14.2 0"/><path d="M7.8 12.8a6 6 0 0 1 8.4 0"/></svg>';
+
+const OVERLAY_CLOSE_ICON =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" ' +
+  'stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6L6 18"/></svg>';
+
+interface OverlayItem {
+  label: string;
+  sub?: string;
+  url?: string;
+  img?: string; // logo image path (assets/)
+  icon?: string; // inline SVG (e.g. feed TV/radio type)
+}
+
+let infoOverlayEl: HTMLElement | null = null;
+
+function overlayRowsHtml(items: OverlayItem[]): string {
+  return items
+    .map((it, i) => {
+      const visual = it.img
+        ? `<img class="info-row-logo" src="${it.img}" alt="">`
+        : it.icon
+          ? `<span class="info-row-icon">${it.icon}</span>`
+          : "";
+      const inner =
+        visual +
+        '<span class="info-row-text"><span class="info-row-label">' +
+        it.label +
+        "</span>" +
+        (it.sub ? '<span class="info-row-sub">' + it.sub + "</span>" : "") +
+        "</span>";
+      const style = `animation-delay:${50 + i * 55}ms`;
+      return it.url
+        ? `<button class="info-row" type="button" data-url="${it.url}" style="${style}">${inner}</button>`
+        : `<div class="info-row is-static" style="${style}">${inner}</div>`;
+    })
+    .join("");
+}
+
+function wireOverlayRows(ov: HTMLElement): void {
+  ov.querySelectorAll<HTMLElement>(".info-row[data-url]").forEach((row) => {
+    row.addEventListener("click", () => {
+      const url = row.getAttribute("data-url");
+      if (!url) return;
+      try {
+        navigateTo(url);
+      } catch (e) {
+        reportError("navigateTo", e);
+      }
+    });
+  });
+  // Hide any logo that fails to load, leaving a clean text row.
+  ov.querySelectorAll<HTMLImageElement>(".info-row-logo").forEach((img) => {
+    img.addEventListener("error", () => {
+      img.style.display = "none";
+    });
+  });
+}
+
+function closeInfoOverlay(): void {
+  const ov = infoOverlayEl;
+  if (!ov) return;
+  ov.classList.remove("is-open");
+  window.setTimeout(() => {
+    if (ov && !ov.classList.contains("is-open")) ov.style.display = "none";
+  }, 220);
+}
+
+function openInfoOverlay(title: string, items: OverlayItem[]): void {
+  const host = $("scorebug-content") || document.body;
+  let ov = infoOverlayEl;
+  if (!ov) {
+    ov = document.createElement("div");
+    ov.className = "info-overlay";
+    ov.addEventListener("click", (e) => {
+      if (e.target === ov) closeInfoOverlay();
+    });
+    host.appendChild(ov);
+    infoOverlayEl = ov;
+  }
+  ov.innerHTML =
+    '<div class="info-panel"><div class="info-panel-head"><span class="info-panel-title">' +
+    title +
+    '</span><button class="info-panel-close" type="button" aria-label="Close">' +
+    OVERLAY_CLOSE_ICON +
+    '</button></div><div class="info-panel-body">' +
+    overlayRowsHtml(items) +
+    "</div></div>";
+  ov.querySelector(".info-panel-close")?.addEventListener("click", closeInfoOverlay);
+  wireOverlayRows(ov);
+  ov.style.display = "flex";
+  void ov.offsetWidth; // reflow so the open transition plays from the start
+  ov.classList.add("is-open");
+}
+
+// Replace just the row list of the already-open overlay (used after an async
+// fetch, so the panel itself doesn't re-animate).
+function setOverlayRows(items: OverlayItem[]): void {
+  const ov = infoOverlayEl;
+  if (!ov) return;
+  const body = ov.querySelector(".info-panel-body");
+  if (!body) return;
+  body.innerHTML = overlayRowsHtml(items);
+  wireOverlayRows(ov);
+}
+
+function mkTopMiniButton(
+  id: string,
+  label: string,
+  icon: string,
+  side: "left" | "right",
+  offsetPx: number,
+): HTMLButtonElement {
+  const b = document.createElement("button");
+  b.id = id;
+  b.type = "button";
+  b.className = "topbar-mini-btn";
+  b.setAttribute("aria-label", label);
+  b.innerHTML = icon;
+  b.style.cssText =
+    "position:absolute;top:13px;" +
+    side +
+    ":" +
+    offsetPx +
+    "px;z-index:40;width:26px;height:26px;" +
+    "display:flex;align-items:center;justify-content:center;padding:0;" +
+    "background:var(--bg-elev-2);color:var(--text-primary);border:1px solid var(--border-medium);" +
+    "border-radius:6px;cursor:pointer;-webkit-tap-highlight-color:transparent;" +
+    "backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);";
+  return b;
+}
+
+function setupGraphButton(): void {
+  if (document.getElementById("graph-btn")) return;
+  const host = $("scorebug-content") || document.body;
+  const btn = mkTopMiniButton("graph-btn", "Analytics links", GRAPH_ICON, "right", 50);
+  btn.addEventListener("click", () => {
+    if (gamePk == null) return;
+    const od = lastGameData?.gameData?.datetime?.officialDate;
+    const date = typeof od === "string" && od ? od : new Date().toISOString().slice(0, 10);
+    openInfoOverlay("Analytics", [
+      {
+        label: "Baseball Savant",
+        sub: "Statcast game feed",
+        img: "assets/logos/savant.png",
+        url: `https://baseballsavant.mlb.com/gamefeed?gamePk=${gamePk}`,
+      },
+      {
+        label: "MLB.com Gameday",
+        sub: "Official game page",
+        img: "assets/logos/mlb.png",
+        url: `https://www.mlb.com/gameday/${gamePk}`,
+      },
+      {
+        label: "FanGraphs",
+        sub: "Live scoreboard for the day",
+        img: "assets/logos/fangraphs.png",
+        url: `https://www.fangraphs.com/scores?date=${date}`,
+      },
+      {
+        label: "Baseball-Reference",
+        sub: "Box scores (posts next day)",
+        img: "assets/logos/baseball-reference.png",
+        url: "https://www.baseball-reference.com/boxes/index.fcgi",
+      },
+    ]);
+  });
+  host.appendChild(btn);
+}
+
+// Where-to-watch feeds for the current game (schedule hydrate=broadcasts), ordered
+// national → away → home. Static info rows (no navigation — Devvit/IP-safe, and
+// blackouts are per-viewer so we only list what's airing).
+async function fetchBroadcastItems(pk: number): Promise<OverlayItem[]> {
+  try {
+    const res = await fetch(`/api/broadcasts/${pk}`);
+    if (!res.ok) return [{ label: "Broadcast info unavailable" }];
+    const data: any = await res.json();
+    const game: any = data?.dates?.[0]?.games?.[0];
+    const casts: any[] = game?.broadcasts || [];
+    if (casts.length === 0) return [{ label: "No listed broadcasts" }];
+    const tier = (b: any): string => {
+      if (b?.isNational) return "National";
+      const ha = String(b?.homeAway || "").toLowerCase();
+      if (ha === "away") return "Away feed";
+      if (ha === "home") return "Home feed";
+      return "Broadcast";
+    };
+    const rank = (b: any): number => {
+      const t = tier(b);
+      return t === "National" ? 0 : t === "Away feed" ? 1 : t === "Home feed" ? 2 : 3;
+    };
+    const seen = new Set<string>();
+    const items: OverlayItem[] = [];
+    casts
+      .slice()
+      .sort((a, b) => rank(a) - rank(b))
+      .forEach((b) => {
+        const name = String(b?.name || b?.callSign || "").trim();
+        if (!name) return;
+        const kind = String(b?.type || "").toUpperCase(); // TV / FM / AM
+        const dedup = name + "|" + kind + "|" + tier(b);
+        if (seen.has(dedup)) return;
+        seen.add(dedup);
+        const isTv = kind.includes("TV");
+        items.push({
+          label: name,
+          sub: kind ? `${tier(b)} · ${kind}` : tier(b),
+          icon: isTv ? FEED_TV_ICON : FEED_RADIO_ICON,
+        });
+      });
+    return items.length ? items : [{ label: "No listed broadcasts" }];
+  } catch (e) {
+    reportError("fetchBroadcastItems", e);
+    return [{ label: "Broadcast info unavailable" }];
+  }
+}
+
+function setupTvButton(): void {
+  if (document.getElementById("tv-btn")) return;
+  const host = $("scorebug-content") || document.body;
+  const btn = mkTopMiniButton("tv-btn", "Where to watch", TV_ICON, "left", 50);
+  btn.addEventListener("click", async () => {
+    if (gamePk == null) return;
+    openInfoOverlay("Where to Watch", [{ label: "Loading…" }]);
+    const items = await fetchBroadcastItems(gamePk);
+    setOverlayRows(items);
+  });
+  host.appendChild(btn);
+}
+
 (async (): Promise<void> => {
   setupTabs();
   setupBoxScoreTeamTabs();
   setupWinProbDismiss();
   setupThemeToggle();
   setupExpand();
+  setupGraphButton();
+  setupTvButton();
   setupInlinePager();
 
   // When the post returns to view, refresh immediately (only while the poll is
