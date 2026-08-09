@@ -30,7 +30,7 @@
 
   --font-sans: 'Rubik', system-ui, -apple-system, sans-serif;
   --font-display: 'Oswald', 'Rubik', sans-serif;
-  --font-mono: 'DM Mono', 'SF Mono', Consolas, monospace;
+  --font-mono: 'Rubik', 'SF Mono', Consolas, monospace;
 
   --radius-sm: 4px;
   --radius-md: 8px;
@@ -65,8 +65,8 @@ body.scorebug {
   color: var(--text-primary);
   border-radius: var(--radius-xl);
   font-family: var(--font-sans);
-  font-size: 13px;
-  line-height: 1.4;
+  font-size: 14px;
+  line-height: 1.45;
   /* No box-shadow on the body: the body is exactly one viewport tall (height:
      100%), so its bottom edge — and anything painted there — sits partway down
      the taller, scrolling scoreboard rather than at the visual bottom of the
@@ -217,7 +217,7 @@ body.scorebug {
 .venue {
   color: var(--text-primary);
   font-family: var(--font-display);
-  font-weight: 800;
+  font-weight: 700;
   font-size: 13px;
   letter-spacing: -0.005em;
   text-transform: uppercase;
@@ -239,7 +239,7 @@ body.scorebug {
 .game-context {
   font-family: var(--font-sans);
   font-size: 9px;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 0.12em;
   color: var(--accent);
   background: rgba(191, 13, 61, 0.12);
@@ -320,7 +320,7 @@ body.scorebug {
   color: var(--text-primary);
   font-family: var(--font-sans);
   font-size: 9px;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 0.14em;
   padding: 3px 10px;
   border-radius: var(--radius-sm);
@@ -366,14 +366,14 @@ body.scorebug {
 .linescore-compact td {
   padding: 5px 3px;
   text-align: center;
-  font-size: 10px;
-  font-weight: 700;
+  font-size: 12px;
+  font-weight: 600;
   color: var(--text-primary);
   min-width: 20px;
 }
 
 .linescore-compact thead th {
-  font-size: 9px;
+  font-size: 10px;
   color: var(--text-muted);
   letter-spacing: 0.1em;
   padding-bottom: 10px;
@@ -398,7 +398,7 @@ body.scorebug {
 .linescore-compact .ls-team-abbr {
   vertical-align: middle;
   font-size: 10px;
-  font-weight: 700;
+  font-weight: 600;
   color: var(--text-primary);
   letter-spacing: 0.06em;
 }
@@ -410,7 +410,7 @@ body.scorebug {
 .linescore-compact .ls-zero    { color: rgba(255, 255, 255, 0.35); }
 .linescore-compact .ls-nonzero { color: var(--text-primary); }
 .linescore-compact .ls-empty   { color: rgba(255, 255, 255, 0.2); }
-.linescore-compact .ls-total   { font-weight: 800; }
+.linescore-compact .ls-total   { font-weight: 700; }
 
 .linescore-compact .ls-row-loser td:not(.ls-team-col):not(.ls-e-value) {
   opacity: 0.55;
@@ -459,7 +459,7 @@ body.on-box-tab .linescore { display: none; }
 
 .pregame-pitcher-label {
   font-family: var(--font-sans);
-  font-weight: 700;
+  font-weight: 600;
   font-size: 10px;
   color: var(--accent);
   letter-spacing: 0.1em;
@@ -468,7 +468,7 @@ body.on-box-tab .linescore { display: none; }
 
 .pregame-pitcher-name {
   font-family: var(--font-display);
-  font-weight: 700;
+  font-weight: 600;
   font-size: 20px;
   color: var(--text-primary);
   letter-spacing: 0.01em;
@@ -499,7 +499,7 @@ body.on-box-tab .linescore { display: none; }
 
 .pregame-info-label {
   font-family: var(--font-sans);
-  font-weight: 700;
+  font-weight: 600;
   font-size: 10px;
   color: var(--text-muted);
   letter-spacing: 0.12em;
@@ -508,7 +508,7 @@ body.on-box-tab .linescore { display: none; }
 
 .pregame-info-value {
   font-family: var(--font-display);
-  font-weight: 700;
+  font-weight: 600;
   font-size: 22px;
   color: var(--text-primary);
   letter-spacing: 0.02em;
@@ -599,7 +599,7 @@ body.is-pregame .status-block {
 
 .live-slot-role {
   font-family: var(--font-sans);
-  font-weight: 700;
+  font-weight: 600;
   font-size: 8px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -612,7 +612,7 @@ body.is-pregame .status-block {
 
 .live-slot-name {
   font-family: var(--font-display);
-  font-weight: 700;
+  font-weight: 600;
   font-size: 12px;
   letter-spacing: 0.01em;
   text-transform: uppercase;
@@ -645,7 +645,7 @@ body.is-pregame .status-block {
 .live-count {
   font-family: var(--font-sans);
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 600;
   color: var(--accent);
   letter-spacing: 0.05em;
 }
@@ -669,8 +669,9 @@ body.is-pregame .status-block {
 
 .live-zone svg {
   display: block;
-  width: 100%;
-  height: auto;
+  width: auto;
+  height: 100%;
+  max-width: 100%;
 }
 
 .live-ab-side {
@@ -704,7 +705,7 @@ body.is-pregame .status-block {
 
 .live-pitch-badge {
   font-family: var(--font-sans);
-  font-weight: 700;
+  font-weight: 600;
   font-size: 8px;
   color: #fff;
   padding: 1px 4px;
@@ -729,7 +730,7 @@ body.is-pregame .status-block {
 
 .live-pitch-result {
   font-family: var(--font-sans);
-  font-weight: 700;
+  font-weight: 600;
   font-size: 8px;
   padding: 1px 4px;
   border-radius: 2px;
@@ -749,7 +750,7 @@ body.is-pregame .status-block {
 
 .live-event {
   font-family: var(--font-display);
-  font-weight: 700;
+  font-weight: 600;
   font-size: 13px;
   text-transform: uppercase;
   color: var(--text-primary);
@@ -813,7 +814,7 @@ body.is-pregame .status-block {
 
 .final-slot-decision {
   font-family: var(--font-display);
-  font-weight: 800;
+  font-weight: 700;
   font-size: 12px;
   letter-spacing: 0.05em;
   color: var(--text-muted);
@@ -824,7 +825,7 @@ body.is-pregame .status-block {
 
 .final-slot-role {
   font-family: var(--font-sans);
-  font-weight: 700;
+  font-weight: 600;
   font-size: 8px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -833,7 +834,7 @@ body.is-pregame .status-block {
 
 .final-slot-name {
   font-family: var(--font-display);
-  font-weight: 700;
+  font-weight: 600;
   font-size: 12px;
   letter-spacing: 0.01em;
   text-transform: uppercase;
@@ -856,7 +857,7 @@ body.is-pregame .status-block {
 
 .final-section-header {
   font-family: var(--font-sans);
-  font-weight: 700;
+  font-weight: 600;
   font-size: 8px;
   letter-spacing: 0.15em;
   text-transform: uppercase;
@@ -885,7 +886,7 @@ body.is-pregame .status-block {
 
 .final-performer-name {
   font-family: var(--font-display);
-  font-weight: 700;
+  font-weight: 600;
   font-size: 11px;
   letter-spacing: 0.01em;
   text-transform: uppercase;
@@ -964,7 +965,7 @@ body.is-pregame .status-block {
   border: none;
   cursor: pointer;
   font-family: var(--font-sans);
-  font-weight: 700;
+  font-weight: 600;
   color: var(--text-muted);
   transition: color var(--dur-1) ease, transform var(--dur-1) var(--ease-out);
   -webkit-tap-highlight-color: transparent;
@@ -1004,7 +1005,7 @@ body.is-pregame .status-block {
 .bs-team-tab-abbr {
   font-family: var(--font-display);
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 0.06em;
 }
 
@@ -1030,7 +1031,7 @@ body.is-pregame .status-block {
   gap: 5px;
   font-family: var(--font-sans);
   font-size: 8px;
-  font-weight: 800;
+  font-weight: 700;
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.15em;
@@ -1062,7 +1063,7 @@ body.is-pregame .status-block {
   text-align: center;
   font-family: var(--font-sans);
   font-size: 7px;
-  font-weight: 700;
+  font-weight: 600;
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -1085,16 +1086,18 @@ body.is-pregame .status-block {
   padding: 7px 1px;
   text-align: center;
   font-family: var(--font-mono);
-  font-size: 9px;
-  font-weight: 600;
+  font-size: 11px;
+  font-weight: 500;
   color: var(--text-primary);
   vertical-align: middle;
+  white-space: nowrap;
+  overflow: hidden;
 }
 
 .bs-num {
   font-family: var(--font-sans);
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 600;
   color: var(--text-muted);
 }
 
@@ -1116,12 +1119,12 @@ body.is-pregame .status-block {
 .bs-pname {
   font-family: var(--font-display);
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
   color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.05em;
   line-height: 1.1;
 }
 
@@ -1129,7 +1132,7 @@ body.is-pregame .status-block {
   display: inline-block;
   font-family: var(--font-sans);
   font-size: 7px;
-  font-weight: 800;
+  font-weight: 700;
   color: #fff;
   background: var(--bg-elev-2);
   padding: 2px 5px;
@@ -1141,13 +1144,14 @@ body.is-pregame .status-block {
 
 .bs-pos.p { background: var(--accent-dim); }
 
-.bs-hit { font-weight: 800; color: var(--text-primary); }
-.bs-hr  { font-weight: 800; color: var(--accent); }
+.bs-hit { font-weight: 700; color: var(--text-primary); }
+.bs-hr  { font-weight: 700; color: var(--accent); }
 .bs-er  { color: var(--accent-dim); }
 
 .bs-avg {
-  font-size: 8px !important;
+  font-size: 11px !important;
   color: var(--text-secondary) !important;
+  font-weight: 500 !important;
 }
 
 .bs-empty {
@@ -1237,7 +1241,7 @@ body.is-pregame .status-block {
   color: var(--text-muted);
   font-family: var(--font-sans);
   font-size: 9px;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   text-align: center;
@@ -1256,7 +1260,7 @@ body.is-pregame .status-block {
 .tab span {
   font-family: var(--font-sans);
   font-size: 9px;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 0.1em;
 }
 
@@ -1318,7 +1322,7 @@ body.is-pregame .status-block {
 .play-count-mini {
   font-family: var(--font-mono);
   font-size: 10px;
-  font-weight: 700;
+  font-weight: 600;
   color: var(--accent);
   letter-spacing: 0.05em;
 }
@@ -1337,7 +1341,7 @@ body.is-pregame .status-block {
 .play-inning {
   font-family: var(--font-sans);
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 600;
   color: var(--accent);
   letter-spacing: 0.05em;
   flex-shrink: 0;
@@ -1347,7 +1351,7 @@ body.is-pregame .status-block {
 .play-event-badge {
   font-family: var(--font-sans);
   font-size: 9px;
-  font-weight: 800;
+  font-weight: 700;
   color: #fff;
   background: var(--accent);
   padding: 2px 6px;
@@ -1361,7 +1365,7 @@ body.is-pregame .status-block {
 .play-event-text {
   font-family: var(--font-display);
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 600;
   color: var(--text-primary);
   text-transform: uppercase;
   letter-spacing: 0.02em;
@@ -1389,12 +1393,12 @@ body.is-pregame .status-block {
 }
 
 .play-score {
-  font-weight: 700;
+  font-weight: 600;
   color: var(--text-primary);
 }
 
 .play-rbi {
-  font-weight: 700;
+  font-weight: 600;
   color: #2d6a4f;
 }
 
@@ -1417,7 +1421,7 @@ body.is-pregame .status-block {
 
 .play-chip-l {
   font-size: 7px;
-  font-weight: 700;
+  font-weight: 600;
   color: var(--text-muted);
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -1425,7 +1429,7 @@ body.is-pregame .status-block {
 
 .play-chip-v {
   font-size: 10px;
-  font-weight: 700;
+  font-weight: 600;
   color: var(--accent);
 }
 
@@ -1469,7 +1473,7 @@ body.is-pregame .status-block {
 .wp-team-pct {
   font-family: var(--font-display);
   font-size: 18px;
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: 0.01em;
   line-height: 1;
 }
@@ -1477,7 +1481,7 @@ body.is-pregame .status-block {
 .wp-title {
   font-family: var(--font-sans);
   font-size: 8px;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 0.15em;
   text-transform: uppercase;
   color: var(--text-muted);
@@ -1556,7 +1560,7 @@ body.is-pregame .status-block {
 .wp-tt-event {
   font-family: var(--font-display);
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 600;
   color: var(--accent);
   text-transform: uppercase;
   letter-spacing: 0.02em;
@@ -1573,7 +1577,7 @@ body.is-pregame .status-block {
 .wp-pos {
   font-family: var(--font-mono);
   font-size: 9px;
-  font-weight: 700;
+  font-weight: 600;
   color: #2d6a4f;
   margin-bottom: 2px;
 }
@@ -1581,7 +1585,7 @@ body.is-pregame .status-block {
 .wp-neg {
   font-family: var(--font-mono);
   font-size: 9px;
-  font-weight: 700;
+  font-weight: 600;
   color: var(--accent);
   margin-bottom: 2px;
 }
@@ -1595,7 +1599,7 @@ body.is-pregame .status-block {
   border-top: 1px solid var(--border-subtle);
   font-family: var(--font-mono);
   font-size: 9px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .wp-legend {
@@ -1692,7 +1696,7 @@ body.is-pregame .status-block {
 .postponed-headline {
   font-family: "Oswald", sans-serif;
   font-size: 44px;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 0.04em;
   color: #bf0d3d;
   text-transform: uppercase;
@@ -1753,7 +1757,7 @@ body.is-pregame .status-block {
 .postponed-info-label {
   font-family: "Rubik", sans-serif;
   font-size: 9px;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 0.14em;
   color: rgba(255, 255, 255, 0.5);
   text-transform: uppercase;
@@ -1839,7 +1843,7 @@ body.is-postponed .linescore {
 .suspended-headline {
   font-family: "Oswald", sans-serif;
   font-size: 44px;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 0.04em;
   color: #bf0d3d;
   text-transform: uppercase;
@@ -1983,7 +1987,7 @@ body.is-postponed .linescore {
 .ended-headline {
   font-family: var(--font-display);
   font-size: 30px;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--text-primary);
@@ -2221,3 +2225,195 @@ body.is-inline #inline-pager.pager-active { display: flex; }
 .inline-pager-btn svg { width: 18px; height: 18px; }
 .inline-pager-btn:active { transform: scale(0.92); }
 .inline-pager-btn:disabled { opacity: 0.28; cursor: default; }
+/* ── Analytics / feeds overlay (graph + TV mini buttons) ──────────────────── */
+.topbar-mini-btn svg { width: 15px; height: 15px; }
+
+.info-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 22px;
+  background: rgba(2, 9, 26, 0.5);
+  backdrop-filter: blur(10px) saturate(1.05);
+  -webkit-backdrop-filter: blur(10px) saturate(1.05);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+.info-overlay.is-open { opacity: 1; }
+
+.info-panel {
+  width: 100%;
+  max-width: 320px;
+  background: var(--bg-elev-2);
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-lg, 12px);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+  transform: translateY(10px) scale(0.96);
+  opacity: 0;
+  transition: transform 0.24s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.22s ease;
+}
+.info-overlay.is-open .info-panel { transform: translateY(0) scale(1); opacity: 1; }
+
+.info-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.info-panel-title {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.info-panel-close {
+  width: 24px; height: 24px;
+  display: flex; align-items: center; justify-content: center;
+  padding: 0;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: 5px;
+  -webkit-tap-highlight-color: transparent;
+}
+.info-panel-close svg { width: 15px; height: 15px; }
+.info-panel-close:hover { color: var(--text-primary); }
+
+.info-panel-body { padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+
+.info-row {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 11px 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 9px;
+  cursor: pointer;
+  text-align: left;
+  color: var(--text-primary);
+  opacity: 0;
+  transform: translateY(6px);
+  animation: infoRowIn 0.28s ease forwards;
+  transition: background 0.15s, border-color 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+.info-row:hover { background: var(--bg-elev-2); border-color: var(--border-medium); }
+.info-row-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.info-row-label { font-family: var(--font-sans); font-size: 13px; font-weight: 600; }
+.info-row-sub { font-family: var(--font-sans); font-size: 10px; font-weight: 400; color: var(--text-muted); }
+
+@keyframes infoRowIn {
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Static (non-link) overlay rows — used by the feeds list */
+.info-row.is-static { cursor: default; }
+.info-row.is-static:hover { background: var(--bg-card); border-color: var(--border-subtle); }
+
+/* Scoring-play VIDEO button (only rendered when a clip exists) */
+.play-video-btn {
+  display: inline-flex;
+  align-self: flex-start;          /* size to content — stop at the word */
+  align-items: center;
+  gap: 5px;
+  margin-top: 8px;
+  padding: 5px 11px;
+  background: var(--accent-red, #bf0d3d);
+  color: #fff;
+  border: none;
+  border-radius: 999px;
+  font-family: var(--font-sans);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  /* depth: colored drop shadow + glossy top-inner highlight */
+  box-shadow: 0 2px 6px rgba(191, 13, 61, 0.38), inset 0 1px 0 rgba(255, 255, 255, 0.28);
+  /* springy easing so hover + release feel bubbly */
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1),
+              box-shadow 0.2s ease, filter 0.2s ease;
+  will-change: transform;
+}
+.play-video-btn:hover {
+  transform: translateY(-1px) scale(1.07);
+  box-shadow: 0 6px 16px rgba(191, 13, 61, 0.48), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  filter: brightness(1.06);
+}
+.play-video-btn:active {
+  transform: translateY(0) scale(0.93);
+  box-shadow: 0 1px 4px rgba(191, 13, 61, 0.4), inset 0 2px 4px rgba(0, 0, 0, 0.25);
+  transition-duration: 0.07s;      /* snappy press-in; springs back on release */
+}
+.play-video-btn svg { width: 11px; height: 11px; }
+
+/* Overlay row leading visual — analytics logos + feed type icons */
+.info-row-logo {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+  margin-right: 11px;
+  flex-shrink: 0;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.9);
+  padding: 2px;
+}
+.info-row-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  margin-right: 11px;
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+.info-row-icon svg { width: 18px; height: 18px; }
+
+/* Weather strip — between the score row and the linescore */
+.weather-strip {
+  display: flex;
+  justify-content: center;
+  padding: 1px 0 2px;
+}
+.weather-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 9px 2px 7px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-family: var(--font-sans);
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.weather-icon { display: inline-flex; align-items: center; }
+.weather-icon svg { width: 12px; height: 12px; }
+.weather-text { white-space: nowrap; }
+
+/* Condition color-coding (tuned for the dark theme; nudge to taste) */
+.wx-sun    { background: rgba(234, 179, 8, 0.16);   color: #eab308; border-color: rgba(234, 179, 8, 0.34); }
+.wx-partly { background: rgba(125, 211, 252, 0.16); color: #7dd3fc; border-color: rgba(125, 211, 252, 0.36); }
+.wx-cloud  { background: rgba(148, 163, 184, 0.18); color: #94a3b8; border-color: rgba(148, 163, 184, 0.34); }
+.wx-rain   { background: rgba(96, 165, 250, 0.18);  color: #60a5fa; border-color: rgba(96, 165, 250, 0.40); }
+.wx-snow   { background: rgba(186, 230, 253, 0.20); color: #bae6fd; border-color: rgba(186, 230, 253, 0.42); }
+.wx-roof   { background: rgba(161, 161, 170, 0.18); color: #a1a1aa; border-color: rgba(161, 161, 170, 0.34); }
+
+/* Light theme: solid fills instead of tints (the tinted/colored-text version
+   washes out on a light background). Pale fills get dark text, deeper fills white. */
+[data-theme="light"] .weather-pill { border-color: transparent; }
+[data-theme="light"] .wx-sun    { background: #f5c518; color: #1c1917; }
+[data-theme="light"] .wx-partly { background: #7dd3fc; color: #0c4a6e; }
+[data-theme="light"] .wx-cloud  { background: #64748b; color: #ffffff; }
+[data-theme="light"] .wx-rain   { background: #3b82f6; color: #ffffff; }
+[data-theme="light"] .wx-snow   { background: #bae6fd; color: #0c4a6e; }
+[data-theme="light"] .wx-roof   { background: #71717a; color: #ffffff; }
