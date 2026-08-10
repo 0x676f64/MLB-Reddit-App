@@ -231,17 +231,29 @@
         </div>
       </div>
 
-      <div class="tab-content" id="tab-scoring">
-        <div class="plays-list" id="scoring-plays-list"></div>
-      </div>
       <div class="tab-content" id="tab-plays">
-        <div class="plays-list" id="all-plays-list"></div>
+        <div class="plays-toggle" id="plays-toggle" data-active="scoring">
+          <span class="plays-toggle-thumb"></span>
+          <button class="plays-seg is-active" type="button" data-plays="scoring">Scoring</button>
+          <button class="plays-seg" type="button" data-plays="all">All Plays</button>
+        </div>
+        <div class="plays-list" id="scoring-plays-list"></div>
+        <div class="plays-list" id="all-plays-list" hidden></div>
       </div>
 
       <!-- ─────────────── OTHER TABS (placeholders) ─────────────── -->
 
       <div class="tab-content" id="tab-winprob">
         <div class="placeholder"></div>
+      </div>
+
+      <div class="tab-content" id="tab-standings">
+        <div class="stand-nav" id="stand-nav" data-active="AL">
+          <button class="stand-seg is-active" type="button" data-league="AL">AL</button>
+          <button class="stand-seg" type="button" data-league="NL">NL</button>
+          <button class="stand-seg" type="button" data-league="WC">Wild Card</button>
+        </div>
+        <div class="stand-body" id="stand-body"></div>
       </div>
 
       <!-- Tab buttons — pinned at the bottom of the card -->
@@ -254,13 +266,13 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
           <span>BOX</span>
         </button>
-        <button class="tab" data-tab="scoring">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M 12 7 L 16 12 L 12 17 Z" fill="currentColor"/></svg>
-          <span>SCORING</span>
-        </button>
         <button class="tab" data-tab="plays">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="6" r="1.5" fill="currentColor"/><line x1="10" y1="6" x2="21" y2="6"/><circle cx="5" cy="12" r="1.5" fill="currentColor"/><line x1="10" y1="12" x2="21" y2="12"/><circle cx="5" cy="18" r="1.5" fill="currentColor"/><line x1="10" y1="18" x2="21" y2="18"/></svg>
           <span>PLAYS</span>
+        </button>
+        <button class="tab" data-tab="standings">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="16" y2="12"/><line x1="4" y1="17" x2="12" y2="17"/></svg>
+          <span>STANDINGS</span>
         </button>
         <button class="tab" data-tab="winprob">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18 L9 12 L13 16 L21 6"/><polyline points="15 6 21 6 21 12"/></svg>

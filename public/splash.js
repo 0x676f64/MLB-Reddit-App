@@ -799,7 +799,7 @@ function setupExpand() {
   btn.type = "button";
   btn.setAttribute("aria-label", "Open full screen");
   btn.innerHTML = EXPAND_ICON;
-  btn.style.cssText = "position:absolute;top:10px;right:12px;z-index:40;width:32px;height:32px;display:flex;align-items:center;justify-content:center;padding:0;background:var(--bg-elev-2);color:var(--text-primary);border:1px solid var(--border-medium);border-radius:6px;cursor:pointer;-webkit-tap-highlight-color:transparent;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);";
+  btn.style.cssText = "position:absolute;top:10px;right:12px;z-index:40;width:25px;height:25px;display:flex;align-items:center;justify-content:center;padding:0;background:var(--bg-elev-2);color:var(--text-primary);border:1px solid var(--border-medium);border-radius:6px;cursor:pointer;-webkit-tap-highlight-color:transparent;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);";
   let modePoll = 0;
   const sync = () => {
     const expanded = isExpandedMode();
@@ -863,7 +863,7 @@ function setupThemeToggle() {
   const btn = document.createElement("button");
   btn.id = "theme-btn";
   btn.type = "button";
-  btn.style.cssText = "position:absolute;top:10px;left:12px;z-index:40;width:32px;height:32px;display:flex;align-items:center;justify-content:center;padding:0;background:var(--bg-elev-2);color:var(--text-primary);border:1px solid var(--border-medium);border-radius:6px;cursor:pointer;-webkit-tap-highlight-color:transparent;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);";
+  btn.style.cssText = "position:absolute;top:10px;left:12px;z-index:40;width:25px;height:25px;display:flex;align-items:center;justify-content:center;padding:0;background:var(--bg-elev-2);color:var(--text-primary);border:1px solid var(--border-medium);border-radius:6px;cursor:pointer;-webkit-tap-highlight-color:transparent;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);";
   const paint = () => {
     btn.innerHTML = theme === "light" ? MOON_ICON : SUN_ICON;
     btn.setAttribute("aria-label", theme === "light" ? "Switch to dark mode" : "Switch to light mode");
@@ -1044,7 +1044,7 @@ function buildBattingRow(player, displayNum, s, isSub = false) {
   const avg = fmtAvg(s?.avg);
   const numCell = isSub ? "" : String(displayNum);
   const nameCell = isSub ? `<div class="bs-pname" style="padding-left:15px;opacity:.72">${name}</div>` : `<div class="bs-pname">${name}</div>`;
-  return `<tr class="bs-row${isSub ? " bs-sub" : ""}">
+  return `<tr class="bs-row${isSub ? " bs-sub" : ""}" data-player-id="${player.person?.id ?? ""}">
     <td class="bs-num">${numCell}</td>
     <td class="bs-pos-cell"><span class="bs-pos">${pos}</span></td>
     <td class="bs-player">${nameCell}</td>
@@ -1070,7 +1070,7 @@ function buildPitchingRow(player, s) {
   const np = g.numberOfPitches ?? g.pitchesThrown ?? "";
   const era = s?.era ?? "-.--";
   const erHasRuns = er > 0;
-  return `<tr class="bs-row">
+  return `<tr class="bs-row" data-player-id="${player.person?.id ?? ""}">
     <td class="bs-num"></td>
     <td class="bs-pos-cell"><span class="bs-pos p">P</span></td>
     <td class="bs-player"><div class="bs-pname">${name}</div></td>
@@ -1249,7 +1249,7 @@ function buildPlayScorebug(play) {
   const baseFill = (b) => b ? "#bf0d3d" : ink.empty;
   return `<div class="play-scorebug">
     <div class="play-count-mini">${balls}-${strikes}</div>
-    <svg width="48" height="48" viewBox="0 0 58 79" xmlns="http://www.w3.org/2000/svg">
+    <svg width="60" height="60" viewBox="0 0 58 79" xmlns="http://www.w3.org/2000/svg">
       <circle cx="13" cy="61" r="5" fill="${outFill(1)}" stroke="#bf0d3d" stroke-width="1"/>
       <circle cx="30" cy="61" r="5" fill="${outFill(2)}" stroke="#bf0d3d" stroke-width="1"/>
       <circle cx="47" cy="61" r="5" fill="${outFill(3)}" stroke="#bf0d3d" stroke-width="1"/>
@@ -1261,62 +1261,6 @@ function buildPlayScorebug(play) {
         fill="${baseFill(onBase.first)}"  stroke="#bf0d3d" stroke-width="1"/>
     </svg>
   </div>`;
-}
-var VIDEO_ICON = '<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M8 5v14l11-7z"/></svg>';
-var clipMapCache = null;
-async function getClipMap(pk) {
-  const now = Date.now();
-  if (clipMapCache && clipMapCache.pk === pk && now - clipMapCache.ts < 3e4) {
-    return clipMapCache.map;
-  }
-  try {
-    const res = await fetch(`/api/clips/${pk}`);
-    if (!res.ok) return clipMapCache?.map || {};
-    const map = await res.json();
-    clipMapCache = { pk, map, ts: now };
-    return map;
-  } catch (e) {
-    reportError("getClipMap", e);
-    return clipMapCache?.map || {};
-  }
-}
-function playClipId(play) {
-  const evs = play?.playEvents;
-  if (!Array.isArray(evs)) return "";
-  for (let i = evs.length - 1; i >= 0; i--) {
-    const pid = evs[i]?.playId;
-    if (pid) return String(pid);
-  }
-  return "";
-}
-async function augmentScoringVideos() {
-  if (gamePk == null) return;
-  const container = $("scoring-plays-list");
-  if (!container) return;
-  const cards = container.querySelectorAll(".play-card[data-clip-key]");
-  if (cards.length === 0) return;
-  const map = await getClipMap(gamePk);
-  cards.forEach((card) => {
-    const key = card.getAttribute("data-clip-key");
-    if (!key) return;
-    const url = map[key];
-    if (!url) return;
-    if (card.querySelector(".play-video-btn")) return;
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "play-video-btn";
-    btn.setAttribute("aria-label", "Watch this play");
-    btn.innerHTML = VIDEO_ICON + "<span>VIDEO</span>";
-    btn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      try {
-        navigateTo(url);
-      } catch (err) {
-        reportError("navigateTo(video)", err);
-      }
-    });
-    (card.querySelector(".play-main") || card).appendChild(btn);
-  });
 }
 function buildPlayCard(play, awayAbbr, homeAbbr, showScore) {
   const inning = play.about?.inning ?? 1;
@@ -1380,7 +1324,6 @@ function renderScoringPlays(data) {
   }).filter(Boolean).join("");
   container.innerHTML = cards;
   if (tabEl) tabEl.scrollTop = savedScroll;
-  void augmentScoringVideos();
 }
 function renderAllPlays(data) {
   const container = $("all-plays-list");
@@ -1471,14 +1414,13 @@ function renderFinalContent(data) {
     }
     slot.style.display = "";
     const name = performer.player.person?.fullName || "\u2014";
-    const type = String(performer.type || "").toLowerCase();
-    const pit = performer.player.stats?.pitching;
-    const ipVal = parseFloat(String(pit?.inningsPitched ?? "0"));
-    const isPitcher = type === "starter" || type === "reliever" || type === "closer" || type.includes("pitch") || Number.isFinite(ipVal) && ipVal > 0;
+    const type = performer.type;
+    const isPitcher = type === "pitcher" || type === "starter";
     let stats = "\u2014";
     if (isPitcher) {
-      if (pit?.summary) stats = pit.summary;
-      else if (pit) stats = `${pit.inningsPitched || "0"} IP \xB7 ${pit.earnedRuns ?? 0} ER \xB7 ${pit.strikeOuts ?? 0} K`;
+      const p = performer.player.stats?.pitching;
+      if (p?.summary) stats = p.summary;
+      else if (p) stats = `${p.inningsPitched || "0"} IP \xB7 ${p.earnedRuns ?? 0} ER \xB7 ${p.strikeOuts ?? 0} K`;
     } else {
       const b = performer.player.stats?.batting;
       if (b?.summary) stats = b.summary;
@@ -2008,20 +1950,25 @@ function render(data) {
   } catch (e) {
     reportError("renderLinescore", e);
   }
-  try {
-    renderBoxScore(data);
-  } catch (e) {
-    reportError("renderBoxScore", e);
+  if ($("tab-box")?.classList.contains("tab-content-active")) {
+    try {
+      renderBoxScore(data);
+    } catch (e) {
+      reportError("renderBoxScore", e);
+    }
   }
-  try {
-    renderScoringPlays(data);
-  } catch (e) {
-    reportError("renderScoringPlays", e);
-  }
-  try {
-    renderAllPlays(data);
-  } catch (e) {
-    reportError("renderAllPlays", e);
+  if ($("tab-plays")?.classList.contains("tab-content-active")) {
+    try {
+      renderScoringPlays(data);
+    } catch (e) {
+      reportError("renderScoringPlays", e);
+    }
+    void augmentScoringVideos();
+    try {
+      renderAllPlays(data);
+    } catch (e) {
+      reportError("renderAllPlays", e);
+    }
   }
   if ($("tab-winprob")?.classList.contains("tab-content-active")) {
     void renderWinProb();
@@ -2030,63 +1977,6 @@ function render(data) {
     gameIsTerminal = true;
     stopPolling();
   }
-}
-var WX_SUN_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v2M12 20v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M2 12h2M20 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/></svg>';
-var WX_CLOUD_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 19a4.5 4.5 0 0 0 .5-8.97A6 6 0 0 0 6.34 9.5 4 4 0 0 0 7 19z"/></svg>';
-var WX_PARTLY_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8.5" r="2.6"/><path d="M8 3.4v1.2M4.1 4.6l.8.8M3 8.5h1.2M11.9 4.6l-.8.8"/><path d="M17 19a4 4 0 0 0 .4-7.98A5.2 5.2 0 0 0 7.6 12 4 4 0 0 0 8 19z"/></svg>';
-var WX_RAIN_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 14a4.5 4.5 0 0 0 .5-8.97A6 6 0 0 0 6.34 4.5 4 4 0 0 0 7 14z"/><path d="M8 18v1.5M12 18v2.5M16 18v1.5"/></svg>';
-var WX_SNOW_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 14a4.5 4.5 0 0 0 .5-8.97A6 6 0 0 0 6.34 4.5 4 4 0 0 0 7 14z"/><path d="M8 18.5v.01M12 20v.01M16 18.5v.01"/></svg>';
-var WX_ROOF_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 18 0"/><path d="M2 12h20M6 12v6M18 12v6M6 18h12"/></svg>';
-function weatherCategory(cond) {
-  const c = cond.toLowerCase();
-  if (/(rain|drizzle|shower|thunder)/.test(c)) return "rain";
-  if (/(snow|flurr|wintry)/.test(c)) return "snow";
-  if (/(partly|mostly cloudy|partly sunny)/.test(c)) return "partly";
-  if (/(cloud|overcast|hazy|fog|mist)/.test(c)) return "cloud";
-  if (/(clear|sunny|fair)/.test(c)) return "sun";
-  return "cloud";
-}
-function weatherIconFor(cat) {
-  switch (cat) {
-    case "rain":
-      return WX_RAIN_ICON;
-    case "snow":
-      return WX_SNOW_ICON;
-    case "partly":
-      return WX_PARTLY_ICON;
-    case "sun":
-      return WX_SUN_ICON;
-    default:
-      return WX_CLOUD_ICON;
-  }
-}
-function renderWeather(data) {
-  const lineEl = $("linescore-container");
-  const parent2 = lineEl?.parentElement;
-  if (!lineEl || !parent2) return;
-  let strip = $("weather-strip");
-  if (!strip) {
-    strip = document.createElement("div");
-    strip.id = "weather-strip";
-    strip.className = "weather-strip";
-    parent2.insertBefore(strip, lineEl);
-  }
-  const w = data?.gameData?.weather;
-  const cond = String(w?.condition || "").trim();
-  const temp = String(w?.temp || "").trim();
-  if (!cond && !temp) {
-    strip.style.display = "none";
-    return;
-  }
-  strip.style.display = "";
-  if (/dome|roof|indoor/i.test(cond)) {
-    strip.innerHTML = '<span class="weather-pill wx-roof"><span class="weather-icon">' + WX_ROOF_ICON + '</span><span class="weather-text">Roof Closed</span></span>';
-    return;
-  }
-  const cat = weatherCategory(cond);
-  const tempTxt = temp ? `${temp}\xB0` : "";
-  const sep = cond && tempTxt ? " \xB7 " : "";
-  strip.innerHTML = `<span class="weather-pill wx-${cat}"><span class="weather-icon">${weatherIconFor(cat)}</span><span class="weather-text">${cond}${sep}${tempTxt}</span></span>`;
 }
 function renderLinescore(linescore, awayTeam, homeTeam, isFinal) {
   if (!linescore) return;
@@ -2139,12 +2029,40 @@ function renderLinescore(linescore, awayTeam, homeTeam, isFinal) {
       </tbody>
     </table>`;
 }
+function setPlaysView(which) {
+  const toggle = $("plays-toggle");
+  const scoringList = $("scoring-plays-list");
+  const allList = $("all-plays-list");
+  if (!toggle || !scoringList || !allList) return;
+  toggle.setAttribute("data-active", which);
+  toggle.querySelectorAll(".plays-seg").forEach((seg) => {
+    seg.classList.toggle("is-active", seg.getAttribute("data-plays") === which);
+  });
+  const show = which === "all" ? allList : scoringList;
+  const hide = which === "all" ? scoringList : allList;
+  hide.hidden = true;
+  show.hidden = false;
+  show.classList.remove("plays-list-enter");
+  void show.offsetWidth;
+  show.classList.add("plays-list-enter");
+}
+function setupPlaysToggle() {
+  const toggle = $("plays-toggle");
+  if (!toggle) return;
+  toggle.querySelectorAll(".plays-seg").forEach((seg) => {
+    seg.addEventListener("click", () => {
+      const which = seg.getAttribute("data-plays");
+      if (which === "scoring" || which === "all") setPlaysView(which);
+    });
+  });
+}
 function setupTabs() {
   document.querySelectorAll(".tab").forEach((btn) => {
     btn.addEventListener("click", () => {
       const targetTab = btn.dataset.tab;
       if (!targetTab) return;
       document.body.classList.toggle("on-box-tab", targetTab === "box");
+      document.body.classList.toggle("on-standings-tab", targetTab === "standings");
       document.querySelectorAll(".tab").forEach((t) => t.classList.remove("tab-active"));
       btn.classList.add("tab-active");
       document.querySelectorAll(".tab-content").forEach((c) => c.classList.remove("tab-content-active"));
@@ -2153,8 +2071,34 @@ function setupTabs() {
       document.documentElement.scrollTop = 0;
       const region = inlinePagerRegion();
       if (region) region.scrollTop = 0;
+      if (targetTab === "box" && lastGameData) {
+        try {
+          renderBoxScore(lastGameData);
+        } catch (e) {
+          reportError("renderBoxScore", e);
+        }
+      }
+      if (targetTab === "plays") {
+        if (lastGameData) {
+          try {
+            renderScoringPlays(lastGameData);
+          } catch (e) {
+            reportError("renderScoringPlays", e);
+          }
+          try {
+            renderAllPlays(lastGameData);
+          } catch (e) {
+            reportError("renderAllPlays", e);
+          }
+          void augmentScoringVideos();
+        }
+        setPlaysView("scoring");
+      }
       if (targetTab === "winprob") {
         void renderWinProb();
+      }
+      if (targetTab === "standings") {
+        setStandLeague("AL");
       }
     });
   });
@@ -2184,9 +2128,16 @@ async function maybeNotifyPostgame(statusText) {
 }
 var GRAPH_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18 L9 12 L13 16 L21 6"/><polyline points="15 6 21 6 21 12"/></svg>';
 var TV_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="13" rx="2"/><path d="M8 3l4 4 4-4"/></svg>';
-var FEED_TV_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="13" rx="2"/><path d="M8 3l4 4 4-4"/></svg>';
+var FEED_TV_ICON = TV_ICON;
 var FEED_RADIO_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="14" r="2.5"/><path d="M4.9 9.9a10 10 0 0 1 14.2 0"/><path d="M7.8 12.8a6 6 0 0 1 8.4 0"/></svg>';
 var OVERLAY_CLOSE_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6L6 18"/></svg>';
+var VIDEO_ICON = '<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M8 5v14l11-7z"/></svg>';
+var WX_SUN_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v2M12 20v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M2 12h2M20 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/></svg>';
+var WX_CLOUD_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 19a4.5 4.5 0 0 0 .5-8.97A6 6 0 0 0 6.34 9.5 4 4 0 0 0 7 19z"/></svg>';
+var WX_PARTLY_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8.5" r="2.6"/><path d="M8 3.4v1.2M4.1 4.6l.8.8M3 8.5h1.2M11.9 4.6l-.8.8"/><path d="M17 19a4 4 0 0 0 .4-7.98A5.2 5.2 0 0 0 7.6 12 4 4 0 0 0 8 19z"/></svg>';
+var WX_RAIN_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 14a4.5 4.5 0 0 0 .5-8.97A6 6 0 0 0 6.34 4.5 4 4 0 0 0 7 14z"/><path d="M8 18v1.5M12 18v2.5M16 18v1.5"/></svg>';
+var WX_SNOW_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 14a4.5 4.5 0 0 0 .5-8.97A6 6 0 0 0 6.34 4.5 4 4 0 0 0 7 14z"/><path d="M8 18.5v.01M12 20v.01M16 18.5v.01"/></svg>';
+var WX_ROOF_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 18 0"/><path d="M2 12h20M6 12v6M18 12v6M6 18h12"/></svg>';
 var infoOverlayEl = null;
 function overlayRowsHtml(items) {
   return items.map((it, i) => {
@@ -2256,42 +2207,22 @@ function mkTopMiniButton(id, label, icon, side, offsetPx) {
   b.className = "topbar-mini-btn";
   b.setAttribute("aria-label", label);
   b.innerHTML = icon;
-  b.style.cssText = "position:absolute;top:13px;" + side + ":" + offsetPx + "px;z-index:40;width:26px;height:26px;display:flex;align-items:center;justify-content:center;padding:0;background:var(--bg-elev-2);color:var(--text-primary);border:1px solid var(--border-medium);border-radius:6px;cursor:pointer;-webkit-tap-highlight-color:transparent;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);";
+  b.style.cssText = "position:absolute;top:10px;" + side + ":" + offsetPx + "px;z-index:40;width:25px;height:25px;display:flex;align-items:center;justify-content:center;padding:0;background:var(--bg-elev-2);color:var(--text-primary);border:1px solid var(--border-medium);border-radius:6px;cursor:pointer;-webkit-tap-highlight-color:transparent;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);";
   return b;
 }
 function setupGraphButton() {
   if (document.getElementById("graph-btn")) return;
   const host = $("scorebug-content") || document.body;
-  const btn = mkTopMiniButton("graph-btn", "Analytics links", GRAPH_ICON, "right", 50);
+  const btn = mkTopMiniButton("graph-btn", "Analytics links", GRAPH_ICON, "right", 44);
   btn.addEventListener("click", () => {
     if (gamePk == null) return;
     const od = lastGameData?.gameData?.datetime?.officialDate;
     const date = typeof od === "string" && od ? od : (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
     openInfoOverlay("Analytics", [
-      {
-        label: "Baseball Savant",
-        sub: "Statcast game feed",
-        img: "assets/logos/savant.png",
-        url: `https://baseballsavant.mlb.com/gamefeed?gamePk=${gamePk}`
-      },
-      {
-        label: "MLB.com Gameday",
-        sub: "Official game page",
-        img: "assets/logos/mlb.png",
-        url: `https://www.mlb.com/gameday/${gamePk}`
-      },
-      {
-        label: "FanGraphs",
-        sub: "Live scoreboard for the day",
-        img: "assets/logos/fangraphs.png",
-        url: `https://www.fangraphs.com/scores?date=${date}`
-      },
-      {
-        label: "Baseball-Reference",
-        sub: "Box scores (posts next day)",
-        img: "assets/logos/baseball-reference.png",
-        url: "https://www.baseball-reference.com/boxes/index.fcgi"
-      }
+      { label: "Baseball Savant", sub: "Statcast game feed", img: "assets/logos/savant.png", url: `https://baseballsavant.mlb.com/gamefeed?gamePk=${gamePk}` },
+      { label: "MLB.com Gameday", sub: "Official game page", img: "assets/logos/mlb.png", url: `https://www.mlb.com/gameday/${gamePk}` },
+      { label: "FanGraphs", sub: "Live scoreboard for the day", img: "assets/logos/fangraphs.png", url: `https://www.fangraphs.com/scores?date=${date}` },
+      { label: "Baseball-Reference", sub: "Box scores (posts next day)", img: "assets/logos/baseball-reference.png", url: "https://www.baseball-reference.com/boxes/index.fcgi" }
     ]);
   });
   host.appendChild(btn);
@@ -2325,11 +2256,7 @@ async function fetchBroadcastItems(pk) {
       if (seen.has(dedup)) return;
       seen.add(dedup);
       const isTv = kind.includes("TV");
-      items.push({
-        label: name,
-        sub: kind ? `${tier(b)} \xB7 ${kind}` : tier(b),
-        icon: isTv ? FEED_TV_ICON : FEED_RADIO_ICON
-      });
+      items.push({ label: name, sub: kind ? `${tier(b)} \xB7 ${kind}` : tier(b), icon: isTv ? FEED_TV_ICON : FEED_RADIO_ICON });
     });
     return items.length ? items : [{ label: "No listed broadcasts" }];
   } catch (e) {
@@ -2340,7 +2267,7 @@ async function fetchBroadcastItems(pk) {
 function setupTvButton() {
   if (document.getElementById("tv-btn")) return;
   const host = $("scorebug-content") || document.body;
-  const btn = mkTopMiniButton("tv-btn", "Where to watch", TV_ICON, "left", 50);
+  const btn = mkTopMiniButton("tv-btn", "Where to watch", TV_ICON, "left", 44);
   btn.addEventListener("click", async () => {
     if (gamePk == null) return;
     openInfoOverlay("Where to Watch", [{ label: "Loading\u2026" }]);
@@ -2349,14 +2276,429 @@ function setupTvButton() {
   });
   host.appendChild(btn);
 }
+function weatherCategory(cond) {
+  const c = cond.toLowerCase();
+  if (/(rain|drizzle|shower|thunder)/.test(c)) return "rain";
+  if (/(snow|flurr|wintry)/.test(c)) return "snow";
+  if (/(partly|mostly cloudy|partly sunny)/.test(c)) return "partly";
+  if (/(cloud|overcast|hazy|fog|mist)/.test(c)) return "cloud";
+  if (/(clear|sunny|fair)/.test(c)) return "sun";
+  return "cloud";
+}
+function weatherIconFor(cat) {
+  switch (cat) {
+    case "rain":
+      return WX_RAIN_ICON;
+    case "snow":
+      return WX_SNOW_ICON;
+    case "partly":
+      return WX_PARTLY_ICON;
+    case "sun":
+      return WX_SUN_ICON;
+    default:
+      return WX_CLOUD_ICON;
+  }
+}
+function renderWeather(data) {
+  const lineEl = $("linescore-container");
+  const parent2 = lineEl?.parentElement;
+  if (!lineEl || !parent2) return;
+  let strip = $("weather-strip");
+  if (!strip) {
+    strip = document.createElement("div");
+    strip.id = "weather-strip";
+    strip.className = "weather-strip";
+    parent2.insertBefore(strip, lineEl);
+  }
+  const w = data?.gameData?.weather;
+  const cond = String(w?.condition || "").trim();
+  const temp = String(w?.temp || "").trim();
+  if (!cond && !temp) {
+    strip.style.display = "none";
+    return;
+  }
+  strip.style.display = "";
+  if (/dome|roof|indoor/i.test(cond)) {
+    strip.innerHTML = '<span class="weather-pill wx-roof"><span class="weather-icon">' + WX_ROOF_ICON + '</span><span class="weather-text">Roof Closed</span></span>';
+    return;
+  }
+  const cat = weatherCategory(cond);
+  const tempTxt = temp ? `${temp}\xB0` : "";
+  const sep = cond && tempTxt ? " \xB7 " : "";
+  strip.innerHTML = `<span class="weather-pill wx-${cat}"><span class="weather-icon">${weatherIconFor(cat)}</span><span class="weather-text">${cond}${sep}${tempTxt}</span></span>`;
+}
+var clipMapCache = null;
+async function getClipMap(pk) {
+  const now = Date.now();
+  if (clipMapCache && clipMapCache.pk === pk && now - clipMapCache.ts < 3e4) return clipMapCache.map;
+  try {
+    const res = await fetch(`/api/clips/${pk}`);
+    if (!res.ok) return clipMapCache?.map || {};
+    const map = await res.json();
+    clipMapCache = { pk, map, ts: now };
+    return map;
+  } catch (e) {
+    reportError("getClipMap", e);
+    return clipMapCache?.map || {};
+  }
+}
+function playClipId(play) {
+  const evs = play?.playEvents;
+  if (!Array.isArray(evs)) return "";
+  for (let i = evs.length - 1; i >= 0; i--) {
+    const pid = evs[i]?.playId;
+    if (pid) return String(pid);
+  }
+  return "";
+}
+async function augmentScoringVideos() {
+  if (gamePk == null) return;
+  const container = $("scoring-plays-list");
+  if (!container) return;
+  const cards = container.querySelectorAll(".play-card[data-clip-key]");
+  if (cards.length === 0) return;
+  const map = await getClipMap(gamePk);
+  cards.forEach((card) => {
+    const key = card.getAttribute("data-clip-key");
+    if (!key) return;
+    const url = map[key];
+    if (!url) return;
+    if (card.querySelector(".play-video-btn")) return;
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "play-video-btn";
+    btn.setAttribute("aria-label", "Watch this play");
+    btn.innerHTML = VIDEO_ICON + "<span>VIDEO</span>";
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      try {
+        navigateTo(url);
+      } catch (err) {
+        reportError("navigateTo(video)", err);
+      }
+    });
+    (card.querySelector(".play-main") || card).appendChild(btn);
+  });
+}
+var STAND_DIVISION_NAMES = { 201: "AL East", 202: "AL Central", 200: "AL West", 204: "NL East", 205: "NL Central", 203: "NL West" };
+var STAND_TEAM_ABBR = { 108: "LAA", 109: "ARI", 110: "BAL", 111: "BOS", 112: "CHC", 113: "CIN", 114: "CLE", 115: "COL", 116: "DET", 117: "HOU", 118: "KC", 119: "LAD", 120: "WSH", 121: "NYM", 133: "OAK", 134: "PIT", 135: "SD", 136: "SEA", 137: "SF", 138: "STL", 139: "TB", 140: "TEX", 141: "TOR", 142: "MIN", 143: "PHI", 144: "ATL", 145: "CWS", 146: "MIA", 147: "NYY", 158: "MIL" };
+var standCache = null;
+var standCacheTs = 0;
+var standActiveLeague = "AL";
+var standLoaded = false;
+async function fetchStandingsData() {
+  const now = Date.now();
+  if (standCache && now - standCacheTs < 12e4) return standCache;
+  const res = await fetch("/api/standings");
+  if (!res.ok) throw new Error("standings fetch failed");
+  const data = await res.json();
+  standCache = data;
+  standCacheTs = now;
+  return data;
+}
+function standAbbr(team) {
+  const id = team?.id;
+  return id != null && STAND_TEAM_ABBR[id] || String(team?.abbreviation || team?.name?.split(" ").pop() || "").toUpperCase();
+}
+function standPct(p) {
+  if (!p || p === "0") return ".000";
+  const f = parseFloat(p);
+  return f < 1 ? "." + String(Math.round(f * 1e3)).padStart(3, "0") : f.toFixed(3);
+}
+function standGB(leadW, leadL, w, l) {
+  if (w === leadW && l === leadL) return "\u2014";
+  const gb = (leadW - w + (l - leadL)) / 2;
+  return gb % 1 === 0 ? String(gb) : gb.toFixed(1);
+}
+function standTeamRow(team, rank, isFirst, gb, clinchLine) {
+  const id = team?.team?.id;
+  const abbr = standAbbr(team?.team);
+  const p = parseFloat(team?.winningPercentage) || 0;
+  const barPct = Math.max(0, Math.min(100, (p - 0.35) / 0.35 * 100));
+  return `<div class="stand-row${isFirst ? " leader" : ""}${clinchLine ? " playoff-line" : ""}"><span class="stand-pos${isFirst ? " first" : ""}">${rank}</span><span class="stand-team"><img class="stand-logo" src="${getLogoPath(id)}" onerror="${logoFallbackAttr(id)}" alt="${abbr}"><span class="stand-abbr">${abbr}</span></span><span class="stand-stat">${team?.wins ?? 0}</span><span class="stand-stat">${team?.losses ?? 0}</span><span class="stand-stat muted">${gb}</span><span class="stand-pct"><span class="stand-pct-val">${standPct(team?.winningPercentage)}</span><span class="stand-bar"><span class="stand-bar-fill" style="width:${barPct}%"></span></span></span></div>`;
+}
+function standColHdr() {
+  return '<div class="stand-col-hdr"><span>#</span><span class="stand-col-team">Team</span><span>W</span><span>L</span><span>GB</span><span class="stand-col-pct">PCT</span></div>';
+}
+function standDivisionCard(record) {
+  const name = STAND_DIVISION_NAMES[record?.division?.id] || "Division";
+  const teams = [...record?.teamRecords || []].sort((a, b) => parseFloat(b.winningPercentage) - parseFloat(a.winningPercentage));
+  const lead = teams[0];
+  const rows = teams.map((t, i) => standTeamRow(t, i + 1, i === 0, standGB(lead?.wins || 0, lead?.losses || 0, t.wins, t.losses), false)).join("");
+  return `<div class="stand-card"><div class="stand-card-hdr"><span class="stand-card-dot"></span><span class="stand-card-name">${name}</span></div>${standColHdr()}${rows}</div>`;
+}
+function standWildcardCards(data) {
+  return ["AL", "NL"].map((lg) => {
+    const leagueId = lg === "AL" ? 103 : 104;
+    const wc = [];
+    (data?.records || []).forEach((rec) => {
+      if (rec?.league?.id !== leagueId) return;
+      (rec.teamRecords || []).forEach((t) => {
+        if (t.wildCardRank && parseInt(t.wildCardRank) <= 8) wc.push(t);
+      });
+    });
+    wc.sort((a, b) => parseInt(a.wildCardRank) - parseInt(b.wildCardRank));
+    const rows = wc.map((t) => {
+      const rank = parseInt(t.wildCardRank);
+      const gbRaw = t.wildCardGamesBack || t.gamesBack;
+      const gb = !gbRaw || gbRaw === "-" || gbRaw === "0.0" || gbRaw === 0 ? "\u2014" : gbRaw;
+      return standTeamRow(t, rank, rank <= 3, gb, rank === 4);
+    }).join("");
+    return `<div class="stand-card"><div class="stand-card-hdr"><span class="stand-card-dot"></span><span class="stand-card-name">${lg} Wild Card</span><span class="stand-wc-badge">3 spots</span></div>${standColHdr()}${rows}</div>`;
+  }).join("");
+}
+async function loadStandingsView() {
+  standLoaded = true;
+  const body = $("stand-body");
+  if (!body) return;
+  const lg = standActiveLeague;
+  body.innerHTML = '<div class="stand-msg">Loading\u2026</div>';
+  try {
+    const data = await fetchStandingsData();
+    if (lg === "WC") {
+      body.innerHTML = standWildcardCards(data);
+      return;
+    }
+    const divIds = lg === "AL" ? [201, 202, 200] : [204, 205, 203];
+    const cards = divIds.map((id) => {
+      const rec = (data?.records || []).find((r) => r?.division?.id === id);
+      return rec ? standDivisionCard(rec) : "";
+    }).join("");
+    body.innerHTML = cards || '<div class="stand-msg">No standings available.</div>';
+  } catch (e) {
+    reportError("loadStandingsView", e);
+    body.innerHTML = '<div class="stand-msg">Could not load standings.</div>';
+  }
+}
+function setStandLeague(lg) {
+  standActiveLeague = lg;
+  const nav = $("stand-nav");
+  if (nav) {
+    nav.setAttribute("data-active", lg);
+    nav.querySelectorAll(".stand-seg").forEach((s) => s.classList.toggle("is-active", s.getAttribute("data-league") === lg));
+  }
+  void loadStandingsView();
+}
+function setupStandings() {
+  const nav = $("stand-nav");
+  if (!nav) return;
+  nav.querySelectorAll(".stand-seg").forEach((seg) => {
+    seg.addEventListener("click", () => {
+      const lg = seg.getAttribute("data-league");
+      if (lg) setStandLeague(lg);
+    });
+  });
+  const obs = new MutationObserver(() => {
+    if (standLoaded) void loadStandingsView();
+  });
+  obs.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+}
+var PL_RATE = (v) => {
+  const f = parseFloat(v);
+  return isNaN(f) ? "-" : f.toFixed(3).replace(/^0+/, "");
+};
+var PL_F2 = (v) => {
+  const f = parseFloat(v);
+  return isNaN(f) ? "-" : f.toFixed(2);
+};
+var PL_F1 = (v) => {
+  const f = parseFloat(v);
+  return isNaN(f) ? "-" : f.toFixed(1);
+};
+var PLAYER_HITTING_STATS = [
+  { name: "avg", label: "AVG", fmt: PL_RATE },
+  { name: "homeRuns", label: "HR" },
+  { name: "rbi", label: "RBI" },
+  { name: "ops", label: "OPS", fmt: PL_RATE },
+  { name: "obp", label: "OBP", fmt: PL_RATE },
+  { name: "slg", label: "SLG", fmt: PL_RATE },
+  { name: "hits", label: "H" },
+  { name: "runs", label: "R" },
+  { name: "doubles", label: "2B" },
+  { name: "triples", label: "3B" },
+  { name: "stolenBases", label: "SB" },
+  { name: "baseOnBalls", label: "BB" },
+  { name: "strikeOuts", label: "SO" },
+  { name: "plateAppearances", label: "PA" },
+  { name: "totalBases", label: "TB" }
+];
+var PLAYER_PITCHING_STATS = [
+  { name: "era", label: "ERA", fmt: PL_F2 },
+  { name: "whip", label: "WHIP", fmt: PL_RATE },
+  { name: "strikeOuts", label: "K" },
+  { name: "wins", label: "W" },
+  { name: "losses", label: "L" },
+  { name: "saves", label: "SV" },
+  { name: "holds", label: "HLD" },
+  { name: "inningsPitched", label: "IP", fmt: PL_F1 },
+  { name: "strikeoutWalkRatio", label: "K/BB", fmt: PL_F2 },
+  { name: "hits", label: "H" },
+  { name: "runs", label: "R" },
+  { name: "homeRuns", label: "HR" },
+  { name: "baseOnBalls", label: "BB" },
+  { name: "gamesPlayed", label: "G" },
+  { name: "gamesStarted", label: "GS" }
+];
+function plAdvancedCells(stats, isPitcher) {
+  if (!stats) return "";
+  const num = (v) => parseFloat(v);
+  const cell = (val, lbl) => `<div class="pl-stat"><div class="pl-stat-val">${val}</div><div class="pl-stat-lbl">${lbl}</div></div>`;
+  const out = [];
+  if (isPitcher) {
+    const ip = num(stats.inningsPitched), so = num(stats.strikeOuts), bb = num(stats.baseOnBalls), hr = num(stats.homeRuns);
+    if (ip > 0) {
+      if (!isNaN(so)) out.push(cell((so * 9 / ip).toFixed(1), "K/9"));
+      if (!isNaN(bb)) out.push(cell((bb * 9 / ip).toFixed(1), "BB/9"));
+      if (!isNaN(hr)) out.push(cell((hr * 9 / ip).toFixed(1), "HR/9"));
+    }
+  } else {
+    const slg = num(stats.slg), avg = num(stats.avg), pa = num(stats.plateAppearances), bb = num(stats.baseOnBalls), so = num(stats.strikeOuts);
+    if (!isNaN(slg) && !isNaN(avg)) out.push(cell((slg - avg).toFixed(3).replace(/^0+/, ""), "ISO"));
+    if (pa > 0 && !isNaN(bb)) out.push(cell((bb / pa * 100).toFixed(1) + "%", "BB%"));
+    if (pa > 0 && !isNaN(so)) out.push(cell((so / pa * 100).toFixed(1) + "%", "K%"));
+  }
+  return out.join("");
+}
+function buildPlayerBox(playerId) {
+  const data = lastGameData;
+  if (!data) return '<div class="pl-box"><div class="pl-msg">No player data available.</div></div>';
+  const bio = data.gameData?.players?.["ID" + playerId] || {};
+  let seasonBat = null, seasonPit = null, teamId = null, teamName = "";
+  const teams = data.liveData?.boxscore?.teams || {};
+  for (const side of ["away", "home"]) {
+    const p = teams[side]?.players?.["ID" + playerId];
+    if (p) {
+      seasonBat = p.seasonStats?.batting;
+      seasonPit = p.seasonStats?.pitching;
+      teamId = teams[side]?.team?.id;
+      teamName = teams[side]?.team?.name || "";
+      break;
+    }
+  }
+  const name = bio.fullName || "Player";
+  const pos = bio.primaryPosition?.abbreviation || "";
+  const posName = bio.primaryPosition?.name || pos;
+  const isPitcher = pos === "P";
+  const stats = isPitcher ? seasonPit : seasonBat;
+  let logoSrc = "";
+  if (teamId != null) logoSrc = MLB_TEAM_IDS.has(teamId) ? `/teams/dark/${teamId}.svg` : `/teams/${teamId}.svg`;
+  const logo = teamId != null ? `<img class="pl-team-logo" src="${logoSrc}" onerror="${logoFallbackAttr(teamId)}" alt="">` : "";
+  const details = [];
+  if (bio.primaryNumber) details.push(`<span>#${bio.primaryNumber}</span>`);
+  if (bio.currentAge) details.push(`<span>Age ${bio.currentAge}</span>`);
+  if (bio.batSide?.code && bio.pitchHand?.code) details.push(`<span>B/T ${bio.batSide.code}/${bio.pitchHand.code}</span>`);
+  const cfg = isPitcher ? PLAYER_PITCHING_STATS : PLAYER_HITTING_STATS;
+  const cells = cfg.map((c) => {
+    const raw = stats ? stats[c.name] : null;
+    if (raw == null || raw === "") return "";
+    const val = c.fmt ? c.fmt(raw) : String(raw);
+    return `<div class="pl-stat"><div class="pl-stat-val">${val}</div><div class="pl-stat-lbl">${c.label}</div></div>`;
+  }).filter(Boolean).join("") + plAdvancedCells(stats, isPitcher);
+  const body = stats && cells ? `<div class="pl-grid">${cells}</div>` : '<div class="pl-msg">No season stats yet.</div>';
+  return `<div class="pl-box"><div class="pl-hdr"><button class="info-panel-close" type="button" aria-label="Close">${OVERLAY_CLOSE_ICON}</button><div class="pl-name">${name}</div><div class="pl-meta"><span>${posName}</span><span class="pl-dot"></span>${logo}<span>${teamName}</span></div>` + (details.length ? `<div class="pl-meta pl-details">${details.join('<span class="pl-dot"></span>')}</div>` : "") + `</div><div class="pl-form" id="pl-form"></div>` + body + "</div>";
+}
+var plCurrentId = "";
+async function fetchPlayerRecent(id, group) {
+  try {
+    const res = await fetch(`/api/player-recent/${id}/${group}`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    const games = data?.stats?.[0]?.splits || [];
+    if (!games.length) return null;
+    if (group === "hitting") {
+      let ab = 0, h = 0;
+      games.forEach((g) => {
+        ab += Number(g.stat?.atBats) || 0;
+        h += Number(g.stat?.hits) || 0;
+      });
+      if (ab <= 0) return null;
+      const avg = h / ab;
+      const disp = avg.toFixed(3).replace(/^0+/, "");
+      const cls = avg > 0.285 ? "hot" : avg >= 0.225 ? "steady" : "cold";
+      const word = cls === "hot" ? "Hot" : cls === "steady" ? "Steady" : "Cold";
+      return { label: `${word} \xB7 last ${games.length}`, sub: `${disp} AVG`, cls };
+    } else {
+      let er = 0, ip = 0;
+      games.forEach((g) => {
+        er += Number(g.stat?.earnedRuns) || 0;
+        const s = String(g.stat?.inningsPitched || "0");
+        if (s.includes(".")) {
+          const p = s.split(".");
+          ip += (Number(p[0]) || 0) + (Number(p[1]) || 0) / 3;
+        } else ip += Number(s) || 0;
+      });
+      if (ip <= 0) return null;
+      const era = er / ip * 9;
+      const disp = era.toFixed(2);
+      const cls = era < 3 ? "hot" : era <= 3.9 ? "steady" : "cold";
+      const word = cls === "hot" ? "Hot" : cls === "steady" ? "Steady" : "Cold";
+      return { label: `${word} \xB7 last ${games.length}`, sub: `${disp} ERA`, cls };
+    }
+  } catch (e) {
+    reportError("fetchPlayerRecent", e);
+    return null;
+  }
+}
+async function openPlayer(playerId) {
+  plCurrentId = playerId;
+  openPlayerOverlay(buildPlayerBox(playerId));
+  const data = lastGameData;
+  if (!data) return;
+  const bio = data.gameData?.players?.["ID" + playerId];
+  const group = bio?.primaryPosition?.abbreviation === "P" ? "pitching" : "hitting";
+  const loadEl = $("pl-form");
+  if (loadEl) loadEl.innerHTML = '<span class="pl-form-load">Checking recent form\u2026</span>';
+  const form = await fetchPlayerRecent(playerId, group);
+  if (plCurrentId !== playerId) return;
+  const el = $("pl-form");
+  if (!el) return;
+  if (!form) {
+    el.innerHTML = "";
+    return;
+  }
+  el.innerHTML = `<span class="pl-badge pl-${form.cls}"><span class="pl-badge-word">${form.label}</span><span class="pl-badge-val">${form.sub}</span></span>`;
+}
+function openPlayerOverlay(html) {
+  const host = $("scorebug-content") || document.body;
+  let ov = infoOverlayEl;
+  if (!ov) {
+    ov = document.createElement("div");
+    ov.className = "info-overlay";
+    ov.addEventListener("click", (e) => {
+      if (e.target === ov) closeInfoOverlay();
+    });
+    host.appendChild(ov);
+    infoOverlayEl = ov;
+  }
+  ov.innerHTML = '<div class="info-panel pl-panel">' + html + "</div>";
+  ov.querySelector(".info-panel-close")?.addEventListener("click", closeInfoOverlay);
+  ov.style.display = "flex";
+  void ov.offsetWidth;
+  ov.classList.add("is-open");
+}
+function setupPlayerTaps() {
+  const box = $("tab-box");
+  if (!box) return;
+  box.addEventListener("click", (e) => {
+    const target = e.target;
+    const row = target?.closest?.(".bs-row[data-player-id]");
+    if (!row) return;
+    const id = row.getAttribute("data-player-id");
+    if (!id) return;
+    void openPlayer(id);
+  });
+}
 (async () => {
   setupTabs();
+  setupPlaysToggle();
   setupBoxScoreTeamTabs();
   setupWinProbDismiss();
   setupThemeToggle();
   setupExpand();
   setupGraphButton();
   setupTvButton();
+  setupStandings();
+  setupPlayerTaps();
   setupInlinePager();
   document.addEventListener("visibilitychange", () => {
     if (!document.hidden && pollInterval !== null && gamePk != null) {
