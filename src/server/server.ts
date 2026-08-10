@@ -109,6 +109,14 @@ async function onRequest(
     await onClips(pathname.slice("/api/clips/".length), rsp);
     return;
   }
+  if (pathname.startsWith("/api/standings")) {
+    await onStandings(rsp);
+    return;
+  }
+  if (pathname.startsWith("/api/player-recent/")) {
+    await onPlayerRecent(pathname.slice("/api/player-recent/".length), rsp);
+    return;
+  }
   if (pathname === "/api/post-game") {
     await onPostGame(rsp);
     return;
@@ -414,6 +422,34 @@ async function gameIsFinalCached(pk: string): Promise<boolean> {
     console.error(`final-check fetch failed for ${pk}:`, e);
     return false;
   }
+}
+
+async function onPlayerRecent(idGroup: string, rsp: ServerResponse): Promise<void> {
+  const parts = idGroup.split("/");
+  const id = parts[0] || "";
+  const group = parts[1] === "pitching" ? "pitching" : "hitting";
+  if (!/^\d+$/.test(id)) {
+    writeJSON<ErrorResponse>(400, { error: "Invalid player id", status: 400 }, rsp);
+    return;
+  }
+  const limit = group === "pitching" ? 3 : 5;
+  const yr = new Date().getFullYear();
+  await proxyMlbJsonCached(
+    `mlbcache:precent:${id}:${group}`,
+    `https://statsapi.mlb.com/api/v1/people/${id}/stats?stats=gameLog&group=${group}&season=${yr}&gameType=R&limit=${limit}`,
+    600,
+    rsp,
+  );
+}
+
+async function onStandings(rsp: ServerResponse): Promise<void> {
+  const yr = new Date().getFullYear();
+  await proxyMlbJsonCached(
+    `mlbcache:standings:${yr}`,
+    `https://statsapi.mlb.com/api/v1/standings?leagueId=103,104&season=${yr}&standingsTypes=regularSeason`,
+    300,
+    rsp,
+  );
 }
 
 async function onBroadcasts(pk: string, rsp: ServerResponse): Promise<void> {

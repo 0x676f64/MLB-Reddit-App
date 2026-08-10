@@ -808,7 +808,7 @@ function buildBattingRow(player: any, displayNum: number, s: any, isSub: boolean
   const nameCell = isSub
     ? `<div class="bs-pname" style="padding-left:15px;opacity:.72">${name}</div>`
     : `<div class="bs-pname">${name}</div>`;
-  return `<tr class="bs-row${isSub ? " bs-sub" : ""}">
+  return `<tr class="bs-row${isSub ? " bs-sub" : ""}" data-player-id="${player.person?.id ?? ""}">
     <td class="bs-num">${numCell}</td>
     <td class="bs-pos-cell"><span class="bs-pos">${pos}</span></td>
     <td class="bs-player">${nameCell}</td>
@@ -835,7 +835,7 @@ function buildPitchingRow(player: any, s: any): string {
   const np = g.numberOfPitches ?? g.pitchesThrown ?? "";
   const era = s?.era ?? "-.--";
   const erHasRuns = er > 0;
-  return `<tr class="bs-row">
+  return `<tr class="bs-row" data-player-id="${player.person?.id ?? ""}">
     <td class="bs-num"></td>
     <td class="bs-pos-cell"><span class="bs-pos p">P</span></td>
     <td class="bs-player"><div class="bs-pname">${name}</div></td>
@@ -1032,7 +1032,7 @@ function buildPlayScorebug(play: any): string {
 
   return `<div class="play-scorebug">
     <div class="play-count-mini">${balls}-${strikes}</div>
-    <svg width="48" height="48" viewBox="0 0 58 79" xmlns="http://www.w3.org/2000/svg">
+    <svg width="60" height="60" viewBox="0 0 58 79" xmlns="http://www.w3.org/2000/svg">
       <circle cx="13" cy="61" r="5" fill="${outFill(1)}" stroke="#bf0d3d" stroke-width="1"/>
       <circle cx="30" cy="61" r="5" fill="${outFill(2)}" stroke="#bf0d3d" stroke-width="1"/>
       <circle cx="47" cy="61" r="5" fill="${outFill(3)}" stroke="#bf0d3d" stroke-width="1"/>
@@ -1044,73 +1044,6 @@ function buildPlayScorebug(play: any): string {
         fill="${baseFill(onBase.first)}"  stroke="#bf0d3d" stroke-width="1"/>
     </svg>
   </div>`;
-}
-
-// ── Scoring-play video buttons ─────────────────────────────────────────────
-// A "VIDEO" button appears on a scoring play ONLY when MLB has posted a clip for
-// it. The server (/api/clips) returns a { playId-GUID: clipUrl } map; each play's
-// clip key is its last playEvent's playId. Buttons are injected after render and
-// re-checked each poll, so a clip that posts mid-game shows up automatically.
-const VIDEO_ICON =
-  '<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M8 5v14l11-7z"/></svg>';
-
-let clipMapCache: { pk: number; map: Record<string, string>; ts: number } | null = null;
-
-async function getClipMap(pk: number): Promise<Record<string, string>> {
-  const now = Date.now();
-  if (clipMapCache && clipMapCache.pk === pk && now - clipMapCache.ts < 30000) {
-    return clipMapCache.map;
-  }
-  try {
-    const res = await fetch(`/api/clips/${pk}`);
-    if (!res.ok) return clipMapCache?.map || {};
-    const map = (await res.json()) as Record<string, string>;
-    clipMapCache = { pk, map, ts: now };
-    return map;
-  } catch (e) {
-    reportError("getClipMap", e);
-    return clipMapCache?.map || {};
-  }
-}
-
-function playClipId(play: any): string {
-  const evs = play?.playEvents;
-  if (!Array.isArray(evs)) return "";
-  for (let i = evs.length - 1; i >= 0; i--) {
-    const pid = evs[i]?.playId;
-    if (pid) return String(pid);
-  }
-  return "";
-}
-
-async function augmentScoringVideos(): Promise<void> {
-  if (gamePk == null) return;
-  const container = $("scoring-plays-list");
-  if (!container) return;
-  const cards = container.querySelectorAll<HTMLElement>(".play-card[data-clip-key]");
-  if (cards.length === 0) return;
-  const map = await getClipMap(gamePk);
-  cards.forEach((card) => {
-    const key = card.getAttribute("data-clip-key");
-    if (!key) return;
-    const url = map[key];
-    if (!url) return;
-    if (card.querySelector(".play-video-btn")) return; // already added this render
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "play-video-btn";
-    btn.setAttribute("aria-label", "Watch this play");
-    btn.innerHTML = VIDEO_ICON + "<span>VIDEO</span>";
-    btn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      try {
-        navigateTo(url);
-      } catch (err) {
-        reportError("navigateTo(video)", err);
-      }
-    });
-    (card.querySelector(".play-main") || card).appendChild(btn);
-  });
 }
 
 function buildPlayCard(play: any, awayAbbr: string, homeAbbr: string, showScore: boolean): string {
@@ -1185,7 +1118,6 @@ function renderScoringPlays(data: any): void {
 
   container.innerHTML = cards;
   if (tabEl) tabEl.scrollTop = savedScroll;
-  void augmentScoringVideos();
 }
 
 function renderAllPlays(data: any): void {
@@ -1290,23 +1222,13 @@ function renderFinalContent(data: any): void {
     }
     slot.style.display = "";
     const name = performer.player.person?.fullName || "—";
-    const type = String(performer.type || "").toLowerCase();
-    const pit = performer.player.stats?.pitching;
-    const ipVal = parseFloat(String(pit?.inningsPitched ?? "0"));
-    // Robust pitcher check: MLB's topPerformer type is "starter"/"reliever"/
-    // "closer" for pitchers — the old check only caught starters, so a reliever
-    // top performer rendered a (blank) hitting line. Fall back to "actually
-    // pitched" to catch any other pitcher type.
-    const isPitcher =
-      type === "starter" ||
-      type === "reliever" ||
-      type === "closer" ||
-      type.includes("pitch") ||
-      (Number.isFinite(ipVal) && ipVal > 0);
+    const type = performer.type;
+    const isPitcher = type === "pitcher" || type === "starter";
     let stats = "—";
     if (isPitcher) {
-      if (pit?.summary) stats = pit.summary;
-      else if (pit) stats = `${pit.inningsPitched || "0"} IP · ${pit.earnedRuns ?? 0} ER · ${pit.strikeOuts ?? 0} K`;
+      const p = performer.player.stats?.pitching;
+      if (p?.summary) stats = p.summary;
+      else if (p) stats = `${p.inningsPitched || "0"} IP · ${p.earnedRuns ?? 0} ER · ${p.strikeOuts ?? 0} K`;
     } else {
       const b = performer.player.stats?.batting;
       if (b?.summary) stats = b.summary;
@@ -1894,14 +1816,18 @@ function render(data: any): void {
   try { renderLinescore(linescore, awayTeam, homeTeam, isFinalState(statusText)); }
   catch (e) { reportError("renderLinescore", e); }
 
-  try { renderBoxScore(data); }
-  catch (e) { reportError("renderBoxScore", e); }
+  if ($("tab-box")?.classList.contains("tab-content-active")) {
+    try { renderBoxScore(data); }
+    catch (e) { reportError("renderBoxScore", e); }
+  }
 
-  try { renderScoringPlays(data); }
-  catch (e) { reportError("renderScoringPlays", e); }
-
-  try { renderAllPlays(data); }
-  catch (e) { reportError("renderAllPlays", e); }
+  if ($("tab-plays")?.classList.contains("tab-content-active")) {
+    try { renderScoringPlays(data); }
+    catch (e) { reportError("renderScoringPlays", e); }
+    void augmentScoringVideos();
+    try { renderAllPlays(data); }
+    catch (e) { reportError("renderAllPlays", e); }
+  }
 
   if ($("tab-winprob")?.classList.contains("tab-content-active")) {
     void renderWinProb();
@@ -1916,77 +1842,6 @@ function render(data: any): void {
 }
 
 // ── Linescore ─────────────────────────────────────────────────────────────
-
-// ── Weather strip (between the score row and the linescore) ────────────────
-// Condition icon + word + temp, straight from the game feed's gameData.weather
-// (no fetch). Domed/roofed games show "Roof Closed" instead. The strip is created
-// once (inserted just above the linescore) and updated on every render.
-const WX_SUN_ICON =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v2M12 20v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M2 12h2M20 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/></svg>';
-const WX_CLOUD_ICON =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 19a4.5 4.5 0 0 0 .5-8.97A6 6 0 0 0 6.34 9.5 4 4 0 0 0 7 19z"/></svg>';
-const WX_PARTLY_ICON =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8.5" r="2.6"/><path d="M8 3.4v1.2M4.1 4.6l.8.8M3 8.5h1.2M11.9 4.6l-.8.8"/><path d="M17 19a4 4 0 0 0 .4-7.98A5.2 5.2 0 0 0 7.6 12 4 4 0 0 0 8 19z"/></svg>';
-const WX_RAIN_ICON =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 14a4.5 4.5 0 0 0 .5-8.97A6 6 0 0 0 6.34 4.5 4 4 0 0 0 7 14z"/><path d="M8 18v1.5M12 18v2.5M16 18v1.5"/></svg>';
-const WX_SNOW_ICON =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 14a4.5 4.5 0 0 0 .5-8.97A6 6 0 0 0 6.34 4.5 4 4 0 0 0 7 14z"/><path d="M8 18.5v.01M12 20v.01M16 18.5v.01"/></svg>';
-const WX_ROOF_ICON =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 18 0"/><path d="M2 12h20M6 12v6M18 12v6M6 18h12"/></svg>';
-
-function weatherCategory(cond: string): string {
-  const c = cond.toLowerCase();
-  if (/(rain|drizzle|shower|thunder)/.test(c)) return "rain";
-  if (/(snow|flurr|wintry)/.test(c)) return "snow";
-  if (/(partly|mostly cloudy|partly sunny)/.test(c)) return "partly";
-  if (/(cloud|overcast|hazy|fog|mist)/.test(c)) return "cloud";
-  if (/(clear|sunny|fair)/.test(c)) return "sun";
-  return "cloud";
-}
-
-function weatherIconFor(cat: string): string {
-  switch (cat) {
-    case "rain": return WX_RAIN_ICON;
-    case "snow": return WX_SNOW_ICON;
-    case "partly": return WX_PARTLY_ICON;
-    case "sun": return WX_SUN_ICON;
-    default: return WX_CLOUD_ICON;
-  }
-}
-
-function renderWeather(data: any): void {
-  const lineEl = $("linescore-container");
-  const parent = lineEl?.parentElement;
-  if (!lineEl || !parent) return;
-  let strip = $("weather-strip");
-  if (!strip) {
-    strip = document.createElement("div");
-    strip.id = "weather-strip";
-    strip.className = "weather-strip";
-    parent.insertBefore(strip, lineEl);
-  }
-  const w = data?.gameData?.weather;
-  const cond = String(w?.condition || "").trim();
-  const temp = String(w?.temp || "").trim();
-  if (!cond && !temp) {
-    strip.style.display = "none";
-    return;
-  }
-  strip.style.display = "";
-  if (/dome|roof|indoor/i.test(cond)) {
-    strip.innerHTML =
-      '<span class="weather-pill wx-roof"><span class="weather-icon">' +
-      WX_ROOF_ICON +
-      '</span><span class="weather-text">Roof Closed</span></span>';
-    return;
-  }
-  const cat = weatherCategory(cond);
-  const tempTxt = temp ? `${temp}°` : "";
-  const sep = cond && tempTxt ? " · " : "";
-  strip.innerHTML =
-    `<span class="weather-pill wx-${cat}"><span class="weather-icon">${weatherIconFor(cat)}</span>` +
-    `<span class="weather-text">${cond}${sep}${tempTxt}</span></span>`;
-}
 
 function renderLinescore(linescore: any, awayTeam: any, homeTeam: any, isFinal: boolean): void {
   if (!linescore) return;
@@ -2047,12 +1902,45 @@ function renderLinescore(linescore: any, awayTeam: any, homeTeam: any, isFinal: 
 
 // ── Tab switching ─────────────────────────────────────────────────────────
 
+// Plays tab: a sliding Scoring / All toggle over the two play lists (merged from
+// the old separate tabs). Scoring is the default. Switching slides the thumb and
+// animates the newly-shown list in.
+function setPlaysView(which: "scoring" | "all"): void {
+  const toggle = $("plays-toggle");
+  const scoringList = $("scoring-plays-list");
+  const allList = $("all-plays-list");
+  if (!toggle || !scoringList || !allList) return;
+  toggle.setAttribute("data-active", which);
+  toggle.querySelectorAll<HTMLElement>(".plays-seg").forEach((seg) => {
+    seg.classList.toggle("is-active", seg.getAttribute("data-plays") === which);
+  });
+  const show = which === "all" ? allList : scoringList;
+  const hide = which === "all" ? scoringList : allList;
+  hide.hidden = true;
+  show.hidden = false;
+  show.classList.remove("plays-list-enter");
+  void show.offsetWidth; // reflow so the enter animation replays each switch
+  show.classList.add("plays-list-enter");
+}
+
+function setupPlaysToggle(): void {
+  const toggle = $("plays-toggle");
+  if (!toggle) return;
+  toggle.querySelectorAll<HTMLElement>(".plays-seg").forEach((seg) => {
+    seg.addEventListener("click", () => {
+      const which = seg.getAttribute("data-plays");
+      if (which === "scoring" || which === "all") setPlaysView(which);
+    });
+  });
+}
+
 function setupTabs(): void {
   document.querySelectorAll(".tab").forEach((btn) => {
     btn.addEventListener("click", () => {
       const targetTab = (btn as HTMLElement).dataset.tab;
       if (!targetTab) return;
       document.body.classList.toggle("on-box-tab", targetTab === "box");
+      document.body.classList.toggle("on-standings-tab", targetTab === "standings");
       document.querySelectorAll(".tab").forEach((t) => t.classList.remove("tab-active"));
       btn.classList.add("tab-active");
       document.querySelectorAll(".tab-content").forEach((c) => c.classList.remove("tab-content-active"));
@@ -2068,8 +1956,22 @@ function setupTabs(): void {
       const region = inlinePagerRegion();
       if (region) region.scrollTop = 0;
 
+      if (targetTab === "box" && lastGameData) {
+        try { renderBoxScore(lastGameData); } catch (e) { reportError("renderBoxScore", e); }
+      }
+      if (targetTab === "plays") {
+        if (lastGameData) {
+          try { renderScoringPlays(lastGameData); } catch (e) { reportError("renderScoringPlays", e); }
+          try { renderAllPlays(lastGameData); } catch (e) { reportError("renderAllPlays", e); }
+          void augmentScoringVideos();
+        }
+        setPlaysView("scoring");
+      }
       if (targetTab === "winprob") {
         void renderWinProb();
+      }
+      if (targetTab === "standings") {
+        setStandLeague("AL");
       }
     });
   });
@@ -2108,203 +2010,81 @@ async function maybeNotifyPostgame(statusText: string): Promise<void> {
 
 // ── Init ──────────────────────────────────────────────────────────────────
 
-// ── Analytics / feeds overlay + top-bar mini buttons ───────────────────────
-// A frosted, full-viewport overlay listing destinations. Rows WITH a url use
-// navigateTo (Reddit shows its own "leaving Reddit" confirmation before the
-// browser opens); rows WITHOUT a url are static info (the feeds list). The same
-// overlay is reused by the graph (analytics) and TV (feeds) buttons.
+// ═══ Restored features: top-bar buttons + overlay, weather, scoring videos ═══
 
-const GRAPH_ICON =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ' +
-  'stroke-linecap="round" stroke-linejoin="round"><path d="M3 18 L9 12 L13 16 L21 6"/>' +
-  '<polyline points="15 6 21 6 21 12"/></svg>';
+const GRAPH_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18 L9 12 L13 16 L21 6"/><polyline points="15 6 21 6 21 12"/></svg>';
+const TV_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="13" rx="2"/><path d="M8 3l4 4 4-4"/></svg>';
+const FEED_TV_ICON = TV_ICON;
+const FEED_RADIO_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="14" r="2.5"/><path d="M4.9 9.9a10 10 0 0 1 14.2 0"/><path d="M7.8 12.8a6 6 0 0 1 8.4 0"/></svg>';
+const OVERLAY_CLOSE_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6L6 18"/></svg>';
+const VIDEO_ICON = '<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M8 5v14l11-7z"/></svg>';
+const WX_SUN_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v2M12 20v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M2 12h2M20 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/></svg>';
+const WX_CLOUD_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 19a4.5 4.5 0 0 0 .5-8.97A6 6 0 0 0 6.34 9.5 4 4 0 0 0 7 19z"/></svg>';
+const WX_PARTLY_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8.5" r="2.6"/><path d="M8 3.4v1.2M4.1 4.6l.8.8M3 8.5h1.2M11.9 4.6l-.8.8"/><path d="M17 19a4 4 0 0 0 .4-7.98A5.2 5.2 0 0 0 7.6 12 4 4 0 0 0 8 19z"/></svg>';
+const WX_RAIN_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 14a4.5 4.5 0 0 0 .5-8.97A6 6 0 0 0 6.34 4.5 4 4 0 0 0 7 14z"/><path d="M8 18v1.5M12 18v2.5M16 18v1.5"/></svg>';
+const WX_SNOW_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 14a4.5 4.5 0 0 0 .5-8.97A6 6 0 0 0 6.34 4.5 4 4 0 0 0 7 14z"/><path d="M8 18.5v.01M12 20v.01M16 18.5v.01"/></svg>';
+const WX_ROOF_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 18 0"/><path d="M2 12h20M6 12v6M18 12v6M6 18h12"/></svg>';
 
-const TV_ICON =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ' +
-  'stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="13" rx="2"/>' +
-  '<path d="M8 3l4 4 4-4"/></svg>';
-
-const FEED_TV_ICON =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ' +
-  'stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="13" rx="2"/>' +
-  '<path d="M8 3l4 4 4-4"/></svg>';
-
-const FEED_RADIO_ICON =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ' +
-  'stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="14" r="2.5"/>' +
-  '<path d="M4.9 9.9a10 10 0 0 1 14.2 0"/><path d="M7.8 12.8a6 6 0 0 1 8.4 0"/></svg>';
-
-const OVERLAY_CLOSE_ICON =
-  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" ' +
-  'stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6L6 18"/></svg>';
-
-interface OverlayItem {
-  label: string;
-  sub?: string;
-  url?: string;
-  img?: string; // logo image path (assets/)
-  icon?: string; // inline SVG (e.g. feed TV/radio type)
-}
-
+interface OverlayItem { label: string; sub?: string; url?: string; img?: string; icon?: string; }
 let infoOverlayEl: HTMLElement | null = null;
 
 function overlayRowsHtml(items: OverlayItem[]): string {
-  return items
-    .map((it, i) => {
-      const visual = it.img
-        ? `<img class="info-row-logo" src="${it.img}" alt="">`
-        : it.icon
-          ? `<span class="info-row-icon">${it.icon}</span>`
-          : "";
-      const inner =
-        visual +
-        '<span class="info-row-text"><span class="info-row-label">' +
-        it.label +
-        "</span>" +
-        (it.sub ? '<span class="info-row-sub">' + it.sub + "</span>" : "") +
-        "</span>";
-      const style = `animation-delay:${50 + i * 55}ms`;
-      return it.url
-        ? `<button class="info-row" type="button" data-url="${it.url}" style="${style}">${inner}</button>`
-        : `<div class="info-row is-static" style="${style}">${inner}</div>`;
-    })
-    .join("");
+  return items.map((it, i) => {
+    const visual = it.img ? `<img class="info-row-logo" src="${it.img}" alt="">` : it.icon ? `<span class="info-row-icon">${it.icon}</span>` : "";
+    const inner = visual + '<span class="info-row-text"><span class="info-row-label">' + it.label + "</span>" + (it.sub ? '<span class="info-row-sub">' + it.sub + "</span>" : "") + "</span>";
+    const style = `animation-delay:${50 + i * 55}ms`;
+    return it.url ? `<button class="info-row" type="button" data-url="${it.url}" style="${style}">${inner}</button>` : `<div class="info-row is-static" style="${style}">${inner}</div>`;
+  }).join("");
 }
-
 function wireOverlayRows(ov: HTMLElement): void {
   ov.querySelectorAll<HTMLElement>(".info-row[data-url]").forEach((row) => {
-    row.addEventListener("click", () => {
-      const url = row.getAttribute("data-url");
-      if (!url) return;
-      try {
-        navigateTo(url);
-      } catch (e) {
-        reportError("navigateTo", e);
-      }
-    });
+    row.addEventListener("click", () => { const url = row.getAttribute("data-url"); if (!url) return; try { navigateTo(url); } catch (e) { reportError("navigateTo", e); } });
   });
-  // Hide any logo that fails to load, leaving a clean text row.
-  ov.querySelectorAll<HTMLImageElement>(".info-row-logo").forEach((img) => {
-    img.addEventListener("error", () => {
-      img.style.display = "none";
-    });
-  });
+  ov.querySelectorAll<HTMLImageElement>(".info-row-logo").forEach((img) => { img.addEventListener("error", () => { img.style.display = "none"; }); });
 }
-
 function closeInfoOverlay(): void {
-  const ov = infoOverlayEl;
-  if (!ov) return;
+  const ov = infoOverlayEl; if (!ov) return;
   ov.classList.remove("is-open");
-  window.setTimeout(() => {
-    if (ov && !ov.classList.contains("is-open")) ov.style.display = "none";
-  }, 220);
+  window.setTimeout(() => { if (ov && !ov.classList.contains("is-open")) ov.style.display = "none"; }, 220);
 }
-
 function openInfoOverlay(title: string, items: OverlayItem[]): void {
   const host = $("scorebug-content") || document.body;
   let ov = infoOverlayEl;
-  if (!ov) {
-    ov = document.createElement("div");
-    ov.className = "info-overlay";
-    ov.addEventListener("click", (e) => {
-      if (e.target === ov) closeInfoOverlay();
-    });
-    host.appendChild(ov);
-    infoOverlayEl = ov;
-  }
-  ov.innerHTML =
-    '<div class="info-panel"><div class="info-panel-head"><span class="info-panel-title">' +
-    title +
-    '</span><button class="info-panel-close" type="button" aria-label="Close">' +
-    OVERLAY_CLOSE_ICON +
-    '</button></div><div class="info-panel-body">' +
-    overlayRowsHtml(items) +
-    "</div></div>";
+  if (!ov) { ov = document.createElement("div"); ov.className = "info-overlay"; ov.addEventListener("click", (e) => { if (e.target === ov) closeInfoOverlay(); }); host.appendChild(ov); infoOverlayEl = ov; }
+  ov.innerHTML = '<div class="info-panel"><div class="info-panel-head"><span class="info-panel-title">' + title + '</span><button class="info-panel-close" type="button" aria-label="Close">' + OVERLAY_CLOSE_ICON + '</button></div><div class="info-panel-body">' + overlayRowsHtml(items) + "</div></div>";
   ov.querySelector(".info-panel-close")?.addEventListener("click", closeInfoOverlay);
   wireOverlayRows(ov);
-  ov.style.display = "flex";
-  void ov.offsetWidth; // reflow so the open transition plays from the start
-  ov.classList.add("is-open");
+  ov.style.display = "flex"; void ov.offsetWidth; ov.classList.add("is-open");
 }
-
-// Replace just the row list of the already-open overlay (used after an async
-// fetch, so the panel itself doesn't re-animate).
 function setOverlayRows(items: OverlayItem[]): void {
-  const ov = infoOverlayEl;
-  if (!ov) return;
-  const body = ov.querySelector(".info-panel-body");
-  if (!body) return;
-  body.innerHTML = overlayRowsHtml(items);
-  wireOverlayRows(ov);
+  const ov = infoOverlayEl; if (!ov) return;
+  const body = ov.querySelector(".info-panel-body"); if (!body) return;
+  body.innerHTML = overlayRowsHtml(items); wireOverlayRows(ov);
 }
 
-function mkTopMiniButton(
-  id: string,
-  label: string,
-  icon: string,
-  side: "left" | "right",
-  offsetPx: number,
-): HTMLButtonElement {
+function mkTopMiniButton(id: string, label: string, icon: string, side: "left" | "right", offsetPx: number): HTMLButtonElement {
   const b = document.createElement("button");
-  b.id = id;
-  b.type = "button";
-  b.className = "topbar-mini-btn";
-  b.setAttribute("aria-label", label);
-  b.innerHTML = icon;
-  b.style.cssText =
-    "position:absolute;top:10px;" +
-    side +
-    ":" +
-    offsetPx +
-    "px;z-index:40;width:25px;height:25px;" +
-    "display:flex;align-items:center;justify-content:center;padding:0;" +
-    "background:var(--bg-elev-2);color:var(--text-primary);border:1px solid var(--border-medium);" +
-    "border-radius:6px;cursor:pointer;-webkit-tap-highlight-color:transparent;" +
-    "backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);";
+  b.id = id; b.type = "button"; b.className = "topbar-mini-btn"; b.setAttribute("aria-label", label); b.innerHTML = icon;
+  b.style.cssText = "position:absolute;top:10px;" + side + ":" + offsetPx + "px;z-index:40;width:25px;height:25px;display:flex;align-items:center;justify-content:center;padding:0;background:var(--bg-elev-2);color:var(--text-primary);border:1px solid var(--border-medium);border-radius:6px;cursor:pointer;-webkit-tap-highlight-color:transparent;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);";
   return b;
 }
-
 function setupGraphButton(): void {
   if (document.getElementById("graph-btn")) return;
   const host = $("scorebug-content") || document.body;
-  const btn = mkTopMiniButton("graph-btn", "Analytics links", GRAPH_ICON, "right", 50);
+  const btn = mkTopMiniButton("graph-btn", "Analytics links", GRAPH_ICON, "right", 44);
   btn.addEventListener("click", () => {
     if (gamePk == null) return;
     const od = lastGameData?.gameData?.datetime?.officialDate;
     const date = typeof od === "string" && od ? od : new Date().toISOString().slice(0, 10);
     openInfoOverlay("Analytics", [
-      {
-        label: "Baseball Savant",
-        sub: "Statcast game feed",
-        img: "assets/logos/savant.png",
-        url: `https://baseballsavant.mlb.com/gamefeed?gamePk=${gamePk}`,
-      },
-      {
-        label: "MLB.com Gameday",
-        sub: "Official game page",
-        img: "assets/logos/mlb.png",
-        url: `https://www.mlb.com/gameday/${gamePk}`,
-      },
-      {
-        label: "FanGraphs",
-        sub: "Live scoreboard for the day",
-        img: "assets/logos/fangraphs.png",
-        url: `https://www.fangraphs.com/scores?date=${date}`,
-      },
-      {
-        label: "Baseball-Reference",
-        sub: "Box scores (posts next day)",
-        img: "assets/logos/baseball-reference.png",
-        url: "https://www.baseball-reference.com/boxes/index.fcgi",
-      },
+      { label: "Baseball Savant", sub: "Statcast game feed", img: "assets/logos/savant.png", url: `https://baseballsavant.mlb.com/gamefeed?gamePk=${gamePk}` },
+      { label: "MLB.com Gameday", sub: "Official game page", img: "assets/logos/mlb.png", url: `https://www.mlb.com/gameday/${gamePk}` },
+      { label: "FanGraphs", sub: "Live scoreboard for the day", img: "assets/logos/fangraphs.png", url: `https://www.fangraphs.com/scores?date=${date}` },
+      { label: "Baseball-Reference", sub: "Box scores (posts next day)", img: "assets/logos/baseball-reference.png", url: "https://www.baseball-reference.com/boxes/index.fcgi" },
     ]);
   });
   host.appendChild(btn);
 }
-
-// Where-to-watch feeds for the current game (schedule hydrate=broadcasts), ordered
-// national → away → home. Static info rows (no navigation — Devvit/IP-safe, and
-// blackouts are per-viewer so we only list what's airing).
 async function fetchBroadcastItems(pk: number): Promise<OverlayItem[]> {
   try {
     const res = await fetch(`/api/broadcasts/${pk}`);
@@ -2313,47 +2093,26 @@ async function fetchBroadcastItems(pk: number): Promise<OverlayItem[]> {
     const game: any = data?.dates?.[0]?.games?.[0];
     const casts: any[] = game?.broadcasts || [];
     if (casts.length === 0) return [{ label: "No listed broadcasts" }];
-    const tier = (b: any): string => {
-      if (b?.isNational) return "National";
-      const ha = String(b?.homeAway || "").toLowerCase();
-      if (ha === "away") return "Away feed";
-      if (ha === "home") return "Home feed";
-      return "Broadcast";
-    };
-    const rank = (b: any): number => {
-      const t = tier(b);
-      return t === "National" ? 0 : t === "Away feed" ? 1 : t === "Home feed" ? 2 : 3;
-    };
+    const tier = (b: any): string => { if (b?.isNational) return "National"; const ha = String(b?.homeAway || "").toLowerCase(); if (ha === "away") return "Away feed"; if (ha === "home") return "Home feed"; return "Broadcast"; };
+    const rank = (b: any): number => { const t = tier(b); return t === "National" ? 0 : t === "Away feed" ? 1 : t === "Home feed" ? 2 : 3; };
     const seen = new Set<string>();
     const items: OverlayItem[] = [];
-    casts
-      .slice()
-      .sort((a, b) => rank(a) - rank(b))
-      .forEach((b) => {
-        const name = String(b?.name || b?.callSign || "").trim();
-        if (!name) return;
-        const kind = String(b?.type || "").toUpperCase(); // TV / FM / AM
-        const dedup = name + "|" + kind + "|" + tier(b);
-        if (seen.has(dedup)) return;
-        seen.add(dedup);
-        const isTv = kind.includes("TV");
-        items.push({
-          label: name,
-          sub: kind ? `${tier(b)} · ${kind}` : tier(b),
-          icon: isTv ? FEED_TV_ICON : FEED_RADIO_ICON,
-        });
-      });
+    casts.slice().sort((a, b) => rank(a) - rank(b)).forEach((b) => {
+      const name = String(b?.name || b?.callSign || "").trim();
+      if (!name) return;
+      const kind = String(b?.type || "").toUpperCase();
+      const dedup = name + "|" + kind + "|" + tier(b);
+      if (seen.has(dedup)) return; seen.add(dedup);
+      const isTv = kind.includes("TV");
+      items.push({ label: name, sub: kind ? `${tier(b)} · ${kind}` : tier(b), icon: isTv ? FEED_TV_ICON : FEED_RADIO_ICON });
+    });
     return items.length ? items : [{ label: "No listed broadcasts" }];
-  } catch (e) {
-    reportError("fetchBroadcastItems", e);
-    return [{ label: "Broadcast info unavailable" }];
-  }
+  } catch (e) { reportError("fetchBroadcastItems", e); return [{ label: "Broadcast info unavailable" }]; }
 }
-
 function setupTvButton(): void {
   if (document.getElementById("tv-btn")) return;
   const host = $("scorebug-content") || document.body;
-  const btn = mkTopMiniButton("tv-btn", "Where to watch", TV_ICON, "left", 50);
+  const btn = mkTopMiniButton("tv-btn", "Where to watch", TV_ICON, "left", 44);
   btn.addEventListener("click", async () => {
     if (gamePk == null) return;
     openInfoOverlay("Where to Watch", [{ label: "Loading…" }]);
@@ -2363,14 +2122,326 @@ function setupTvButton(): void {
   host.appendChild(btn);
 }
 
+function weatherCategory(cond: string): string {
+  const c = cond.toLowerCase();
+  if (/(rain|drizzle|shower|thunder)/.test(c)) return "rain";
+  if (/(snow|flurr|wintry)/.test(c)) return "snow";
+  if (/(partly|mostly cloudy|partly sunny)/.test(c)) return "partly";
+  if (/(cloud|overcast|hazy|fog|mist)/.test(c)) return "cloud";
+  if (/(clear|sunny|fair)/.test(c)) return "sun";
+  return "cloud";
+}
+function weatherIconFor(cat: string): string {
+  switch (cat) { case "rain": return WX_RAIN_ICON; case "snow": return WX_SNOW_ICON; case "partly": return WX_PARTLY_ICON; case "sun": return WX_SUN_ICON; default: return WX_CLOUD_ICON; }
+}
+function renderWeather(data: any): void {
+  const lineEl = $("linescore-container");
+  const parent = lineEl?.parentElement;
+  if (!lineEl || !parent) return;
+  let strip = $("weather-strip");
+  if (!strip) { strip = document.createElement("div"); strip.id = "weather-strip"; strip.className = "weather-strip"; parent.insertBefore(strip, lineEl); }
+  const w = data?.gameData?.weather;
+  const cond = String(w?.condition || "").trim();
+  const temp = String(w?.temp || "").trim();
+  if (!cond && !temp) { strip.style.display = "none"; return; }
+  strip.style.display = "";
+  if (/dome|roof|indoor/i.test(cond)) { strip.innerHTML = '<span class="weather-pill wx-roof"><span class="weather-icon">' + WX_ROOF_ICON + '</span><span class="weather-text">Roof Closed</span></span>'; return; }
+  const cat = weatherCategory(cond);
+  const tempTxt = temp ? `${temp}°` : "";
+  const sep = cond && tempTxt ? " · " : "";
+  strip.innerHTML = `<span class="weather-pill wx-${cat}"><span class="weather-icon">${weatherIconFor(cat)}</span><span class="weather-text">${cond}${sep}${tempTxt}</span></span>`;
+}
+
+let clipMapCache: { pk: number; map: Record<string, string>; ts: number } | null = null;
+async function getClipMap(pk: number): Promise<Record<string, string>> {
+  const now = Date.now();
+  if (clipMapCache && clipMapCache.pk === pk && now - clipMapCache.ts < 30000) return clipMapCache.map;
+  try { const res = await fetch(`/api/clips/${pk}`); if (!res.ok) return clipMapCache?.map || {}; const map = (await res.json()) as Record<string, string>; clipMapCache = { pk, map, ts: now }; return map; } catch (e) { reportError("getClipMap", e); return clipMapCache?.map || {}; }
+}
+function playClipId(play: any): string {
+  const evs = play?.playEvents;
+  if (!Array.isArray(evs)) return "";
+  for (let i = evs.length - 1; i >= 0; i--) { const pid = evs[i]?.playId; if (pid) return String(pid); }
+  return "";
+}
+async function augmentScoringVideos(): Promise<void> {
+  if (gamePk == null) return;
+  const container = $("scoring-plays-list");
+  if (!container) return;
+  const cards = container.querySelectorAll<HTMLElement>(".play-card[data-clip-key]");
+  if (cards.length === 0) return;
+  const map = await getClipMap(gamePk);
+  cards.forEach((card) => {
+    const key = card.getAttribute("data-clip-key");
+    if (!key) return;
+    const url = map[key];
+    if (!url) return;
+    if (card.querySelector(".play-video-btn")) return;
+    const btn = document.createElement("button");
+    btn.type = "button"; btn.className = "play-video-btn"; btn.setAttribute("aria-label", "Watch this play");
+    btn.innerHTML = VIDEO_ICON + "<span>VIDEO</span>";
+    btn.addEventListener("click", (e) => { e.stopPropagation(); try { navigateTo(url); } catch (err) { reportError("navigateTo(video)", err); } });
+    (card.querySelector(".play-main") || card).appendChild(btn);
+  });
+}
+
+// ═══ Standings tab (AL / NL / Wild Card / Bracket) ═══
+const STAND_DIVISION_NAMES: Record<number, string> = { 201: "AL East", 202: "AL Central", 200: "AL West", 204: "NL East", 205: "NL Central", 203: "NL West" };
+const STAND_TEAM_ABBR: Record<number, string> = { 108:"LAA",109:"ARI",110:"BAL",111:"BOS",112:"CHC",113:"CIN",114:"CLE",115:"COL",116:"DET",117:"HOU",118:"KC",119:"LAD",120:"WSH",121:"NYM",133:"OAK",134:"PIT",135:"SD",136:"SEA",137:"SF",138:"STL",139:"TB",140:"TEX",141:"TOR",142:"MIN",143:"PHI",144:"ATL",145:"CWS",146:"MIA",147:"NYY",158:"MIL" };
+
+let standCache: any = null;
+let standCacheTs = 0;
+let standActiveLeague = "AL";
+let standLoaded = false;
+
+async function fetchStandingsData(): Promise<any> {
+  const now = Date.now();
+  if (standCache && now - standCacheTs < 120000) return standCache;
+  const res = await fetch("/api/standings");
+  if (!res.ok) throw new Error("standings fetch failed");
+  const data = await res.json();
+  standCache = data; standCacheTs = now;
+  return data;
+}
+function standAbbr(team: any): string {
+  const id = team?.id;
+  return (id != null && STAND_TEAM_ABBR[id]) || String(team?.abbreviation || team?.name?.split(" ").pop() || "").toUpperCase();
+}
+function standPct(p: any): string {
+  if (!p || p === "0") return ".000";
+  const f = parseFloat(p);
+  return f < 1 ? "." + String(Math.round(f * 1000)).padStart(3, "0") : f.toFixed(3);
+}
+function standGB(leadW: number, leadL: number, w: number, l: number): string {
+  if (w === leadW && l === leadL) return "—";
+  const gb = ((leadW - w) + (l - leadL)) / 2;
+  return gb % 1 === 0 ? String(gb) : gb.toFixed(1);
+}
+function standTeamRow(team: any, rank: number, isFirst: boolean, gb: string, clinchLine: boolean): string {
+  const id = team?.team?.id;
+  const abbr = standAbbr(team?.team);
+  const p = parseFloat(team?.winningPercentage) || 0;
+  const barPct = Math.max(0, Math.min(100, ((p - 0.35) / 0.35) * 100));
+  return `<div class="stand-row${isFirst ? " leader" : ""}${clinchLine ? " playoff-line" : ""}">` +
+    `<span class="stand-pos${isFirst ? " first" : ""}">${rank}</span>` +
+    `<span class="stand-team"><img class="stand-logo" src="${getLogoPath(id)}" onerror="${logoFallbackAttr(id)}" alt="${abbr}"><span class="stand-abbr">${abbr}</span></span>` +
+    `<span class="stand-stat">${team?.wins ?? 0}</span>` +
+    `<span class="stand-stat">${team?.losses ?? 0}</span>` +
+    `<span class="stand-stat muted">${gb}</span>` +
+    `<span class="stand-pct"><span class="stand-pct-val">${standPct(team?.winningPercentage)}</span><span class="stand-bar"><span class="stand-bar-fill" style="width:${barPct}%"></span></span></span>` +
+    `</div>`;
+}
+function standColHdr(): string {
+  return '<div class="stand-col-hdr"><span>#</span><span class="stand-col-team">Team</span><span>W</span><span>L</span><span>GB</span><span class="stand-col-pct">PCT</span></div>';
+}
+function standDivisionCard(record: any): string {
+  const name = STAND_DIVISION_NAMES[record?.division?.id] || "Division";
+  const teams = [...(record?.teamRecords || [])].sort((a: any, b: any) => parseFloat(b.winningPercentage) - parseFloat(a.winningPercentage));
+  const lead = teams[0];
+  const rows = teams.map((t: any, i: number) => standTeamRow(t, i + 1, i === 0, standGB(lead?.wins || 0, lead?.losses || 0, t.wins, t.losses), false)).join("");
+  return `<div class="stand-card"><div class="stand-card-hdr"><span class="stand-card-dot"></span><span class="stand-card-name">${name}</span></div>${standColHdr()}${rows}</div>`;
+}
+function standWildcardCards(data: any): string {
+  return ["AL", "NL"].map((lg) => {
+    const leagueId = lg === "AL" ? 103 : 104;
+    const wc: any[] = [];
+    (data?.records || []).forEach((rec: any) => { if (rec?.league?.id !== leagueId) return; (rec.teamRecords || []).forEach((t: any) => { if (t.wildCardRank && parseInt(t.wildCardRank) <= 8) wc.push(t); }); });
+    wc.sort((a, b) => parseInt(a.wildCardRank) - parseInt(b.wildCardRank));
+    const rows = wc.map((t) => { const rank = parseInt(t.wildCardRank); const gbRaw = t.wildCardGamesBack || t.gamesBack; const gb = !gbRaw || gbRaw === "-" || gbRaw === "0.0" || gbRaw === 0 ? "—" : gbRaw; return standTeamRow(t, rank, rank <= 3, gb, rank === 4); }).join("");
+    return `<div class="stand-card"><div class="stand-card-hdr"><span class="stand-card-dot"></span><span class="stand-card-name">${lg} Wild Card</span><span class="stand-wc-badge">3 spots</span></div>${standColHdr()}${rows}</div>`;
+  }).join("");
+}
+async function loadStandingsView(): Promise<void> {
+  standLoaded = true;
+  const body = $("stand-body");
+  if (!body) return;
+  const lg = standActiveLeague;
+  body.innerHTML = '<div class="stand-msg">Loading…</div>';
+  try {
+    const data = await fetchStandingsData();
+    if (lg === "WC") { body.innerHTML = standWildcardCards(data); return; }
+    const divIds = lg === "AL" ? [201, 202, 200] : [204, 205, 203];
+    const cards = divIds.map((id) => { const rec = (data?.records || []).find((r: any) => r?.division?.id === id); return rec ? standDivisionCard(rec) : ""; }).join("");
+    body.innerHTML = cards || '<div class="stand-msg">No standings available.</div>';
+  } catch (e) {
+    reportError("loadStandingsView", e);
+    body.innerHTML = '<div class="stand-msg">Could not load standings.</div>';
+  }
+}
+function setStandLeague(lg: string): void {
+  standActiveLeague = lg;
+  const nav = $("stand-nav");
+  if (nav) { nav.setAttribute("data-active", lg); nav.querySelectorAll<HTMLElement>(".stand-seg").forEach((s) => s.classList.toggle("is-active", s.getAttribute("data-league") === lg)); }
+  void loadStandingsView();
+}
+function setupStandings(): void {
+  const nav = $("stand-nav");
+  if (!nav) return;
+  nav.querySelectorAll<HTMLElement>(".stand-seg").forEach((seg) => { seg.addEventListener("click", () => { const lg = seg.getAttribute("data-league"); if (lg) setStandLeague(lg); }); });
+  // Re-render on theme change so team logos swap to the correct light/dark variant.
+  const obs = new MutationObserver(() => { if (standLoaded) void loadStandingsView(); });
+  obs.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+}
+
+// ═══ Tap-a-player → season stat box (Stage 1: bio + season stats, no fetch) ═══
+interface PlStat { name: string; label: string; fmt?: (v: any) => string; }
+const PL_RATE = (v: any): string => { const f = parseFloat(v); return isNaN(f) ? "-" : f.toFixed(3).replace(/^0+/, ""); };
+const PL_F2 = (v: any): string => { const f = parseFloat(v); return isNaN(f) ? "-" : f.toFixed(2); };
+const PL_F1 = (v: any): string => { const f = parseFloat(v); return isNaN(f) ? "-" : f.toFixed(1); };
+const PLAYER_HITTING_STATS: PlStat[] = [
+  { name: "avg", label: "AVG", fmt: PL_RATE }, { name: "homeRuns", label: "HR" }, { name: "rbi", label: "RBI" },
+  { name: "ops", label: "OPS", fmt: PL_RATE }, { name: "obp", label: "OBP", fmt: PL_RATE }, { name: "slg", label: "SLG", fmt: PL_RATE },
+  { name: "hits", label: "H" }, { name: "runs", label: "R" }, { name: "doubles", label: "2B" }, { name: "triples", label: "3B" },
+  { name: "stolenBases", label: "SB" }, { name: "baseOnBalls", label: "BB" }, { name: "strikeOuts", label: "SO" }, { name: "plateAppearances", label: "PA" }, { name: "totalBases", label: "TB" },
+];
+const PLAYER_PITCHING_STATS: PlStat[] = [
+  { name: "era", label: "ERA", fmt: PL_F2 }, { name: "whip", label: "WHIP", fmt: PL_RATE }, { name: "strikeOuts", label: "K" }, { name: "wins", label: "W" }, { name: "losses", label: "L" },
+  { name: "saves", label: "SV" }, { name: "holds", label: "HLD" }, { name: "inningsPitched", label: "IP", fmt: PL_F1 },
+  { name: "strikeoutWalkRatio", label: "K/BB", fmt: PL_F2 }, { name: "hits", label: "H" }, { name: "runs", label: "R" }, { name: "homeRuns", label: "HR" },
+  { name: "baseOnBalls", label: "BB" }, { name: "gamesPlayed", label: "G" }, { name: "gamesStarted", label: "GS" },
+];
+
+function plAdvancedCells(stats: any, isPitcher: boolean): string {
+  if (!stats) return "";
+  const num = (v: any): number => parseFloat(v);
+  const cell = (val: string, lbl: string): string => `<div class="pl-stat"><div class="pl-stat-val">${val}</div><div class="pl-stat-lbl">${lbl}</div></div>`;
+  const out: string[] = [];
+  if (isPitcher) {
+    const ip = num(stats.inningsPitched), so = num(stats.strikeOuts), bb = num(stats.baseOnBalls), hr = num(stats.homeRuns);
+    if (ip > 0) {
+      if (!isNaN(so)) out.push(cell(((so * 9) / ip).toFixed(1), "K/9"));
+      if (!isNaN(bb)) out.push(cell(((bb * 9) / ip).toFixed(1), "BB/9"));
+      if (!isNaN(hr)) out.push(cell(((hr * 9) / ip).toFixed(1), "HR/9"));
+    }
+  } else {
+    const slg = num(stats.slg), avg = num(stats.avg), pa = num(stats.plateAppearances), bb = num(stats.baseOnBalls), so = num(stats.strikeOuts);
+    if (!isNaN(slg) && !isNaN(avg)) out.push(cell((slg - avg).toFixed(3).replace(/^0+/, ""), "ISO"));
+    if (pa > 0 && !isNaN(bb)) out.push(cell(((bb / pa) * 100).toFixed(1) + "%", "BB%"));
+    if (pa > 0 && !isNaN(so)) out.push(cell(((so / pa) * 100).toFixed(1) + "%", "K%"));
+  }
+  return out.join("");
+}
+
+function buildPlayerBox(playerId: string): string {
+  const data = lastGameData;
+  if (!data) return '<div class="pl-box"><div class="pl-msg">No player data available.</div></div>';
+  const bio: any = data.gameData?.players?.["ID" + playerId] || {};
+  let seasonBat: any = null, seasonPit: any = null, teamId: any = null, teamName = "";
+  const teams: any = data.liveData?.boxscore?.teams || {};
+  for (const side of ["away", "home"]) {
+    const p: any = teams[side]?.players?.["ID" + playerId];
+    if (p) { seasonBat = p.seasonStats?.batting; seasonPit = p.seasonStats?.pitching; teamId = teams[side]?.team?.id; teamName = teams[side]?.team?.name || ""; break; }
+  }
+  const name = bio.fullName || "Player";
+  const pos = bio.primaryPosition?.abbreviation || "";
+  const posName = bio.primaryPosition?.name || pos;
+  const isPitcher = pos === "P";
+  const stats: any = isPitcher ? seasonPit : seasonBat;
+  let logoSrc = "";
+  if (teamId != null) logoSrc = MLB_TEAM_IDS.has(teamId) ? `/teams/dark/${teamId}.svg` : `/teams/${teamId}.svg`;
+  const logo = teamId != null ? `<img class="pl-team-logo" src="${logoSrc}" onerror="${logoFallbackAttr(teamId)}" alt="">` : "";
+  const details: string[] = [];
+  if (bio.primaryNumber) details.push(`<span>#${bio.primaryNumber}</span>`);
+  if (bio.currentAge) details.push(`<span>Age ${bio.currentAge}</span>`);
+  if (bio.batSide?.code && bio.pitchHand?.code) details.push(`<span>B/T ${bio.batSide.code}/${bio.pitchHand.code}</span>`);
+  const cfg = isPitcher ? PLAYER_PITCHING_STATS : PLAYER_HITTING_STATS;
+  const cells = cfg.map((c) => {
+    const raw = stats ? stats[c.name] : null;
+    if (raw == null || raw === "") return "";
+    const val = c.fmt ? c.fmt(raw) : String(raw);
+    return `<div class="pl-stat"><div class="pl-stat-val">${val}</div><div class="pl-stat-lbl">${c.label}</div></div>`;
+  }).filter(Boolean).join("") + plAdvancedCells(stats, isPitcher);
+  const body = stats && cells ? `<div class="pl-grid">${cells}</div>` : '<div class="pl-msg">No season stats yet.</div>';
+  return `<div class="pl-box"><div class="pl-hdr"><button class="info-panel-close" type="button" aria-label="Close">${OVERLAY_CLOSE_ICON}</button><div class="pl-name">${name}</div>` +
+    `<div class="pl-meta"><span>${posName}</span><span class="pl-dot"></span>${logo}<span>${teamName}</span></div>` +
+    (details.length ? `<div class="pl-meta pl-details">${details.join('<span class="pl-dot"></span>')}</div>` : "") +
+    `</div><div class="pl-form" id="pl-form"></div>` + body + "</div>";
+}
+
+let plCurrentId = "";
+async function fetchPlayerRecent(id: string, group: string): Promise<{ label: string; sub: string; cls: string } | null> {
+  try {
+    const res = await fetch(`/api/player-recent/${id}/${group}`);
+    if (!res.ok) return null;
+    const data: any = await res.json();
+    const games: any[] = data?.stats?.[0]?.splits || [];
+    if (!games.length) return null;
+    if (group === "hitting") {
+      let ab = 0, h = 0;
+      games.forEach((g) => { ab += Number(g.stat?.atBats) || 0; h += Number(g.stat?.hits) || 0; });
+      if (ab <= 0) return null;
+      const avg = h / ab;
+      const disp = avg.toFixed(3).replace(/^0+/, "");
+      const cls = avg > 0.285 ? "hot" : avg >= 0.225 ? "steady" : "cold";
+      const word = cls === "hot" ? "Hot" : cls === "steady" ? "Steady" : "Cold";
+      return { label: `${word} · last ${games.length}`, sub: `${disp} AVG`, cls };
+    } else {
+      let er = 0, ip = 0;
+      games.forEach((g) => {
+        er += Number(g.stat?.earnedRuns) || 0;
+        const s = String(g.stat?.inningsPitched || "0");
+        if (s.includes(".")) { const p = s.split("."); ip += (Number(p[0]) || 0) + (Number(p[1]) || 0) / 3; }
+        else ip += Number(s) || 0;
+      });
+      if (ip <= 0) return null;
+      const era = (er / ip) * 9;
+      const disp = era.toFixed(2);
+      const cls = era < 3.0 ? "hot" : era <= 3.9 ? "steady" : "cold";
+      const word = cls === "hot" ? "Hot" : cls === "steady" ? "Steady" : "Cold";
+      return { label: `${word} · last ${games.length}`, sub: `${disp} ERA`, cls };
+    }
+  } catch (e) { reportError("fetchPlayerRecent", e); return null; }
+}
+async function openPlayer(playerId: string): Promise<void> {
+  plCurrentId = playerId;
+  openPlayerOverlay(buildPlayerBox(playerId));
+  const data = lastGameData;
+  if (!data) return;
+  const bio: any = data.gameData?.players?.["ID" + playerId];
+  const group = bio?.primaryPosition?.abbreviation === "P" ? "pitching" : "hitting";
+  const loadEl = $("pl-form");
+  if (loadEl) loadEl.innerHTML = '<span class="pl-form-load">Checking recent form…</span>';
+  const form = await fetchPlayerRecent(playerId, group);
+  if (plCurrentId !== playerId) return; // user tapped a different player mid-fetch
+  const el = $("pl-form");
+  if (!el) return;
+  if (!form) { el.innerHTML = ""; return; }
+  el.innerHTML = `<span class="pl-badge pl-${form.cls}"><span class="pl-badge-word">${form.label}</span><span class="pl-badge-val">${form.sub}</span></span>`;
+}
+
+function openPlayerOverlay(html: string): void {
+  const host = $("scorebug-content") || document.body;
+  let ov = infoOverlayEl;
+  if (!ov) { ov = document.createElement("div"); ov.className = "info-overlay"; ov.addEventListener("click", (e) => { if (e.target === ov) closeInfoOverlay(); }); host.appendChild(ov); infoOverlayEl = ov; }
+  ov.innerHTML = '<div class="info-panel pl-panel">' + html + "</div>";
+  ov.querySelector(".info-panel-close")?.addEventListener("click", closeInfoOverlay);
+  ov.style.display = "flex"; void ov.offsetWidth; ov.classList.add("is-open");
+}
+
+function setupPlayerTaps(): void {
+  const box = $("tab-box");
+  if (!box) return;
+  box.addEventListener("click", (e) => {
+    const target = e.target as HTMLElement | null;
+    const row = target?.closest?.(".bs-row[data-player-id]") as HTMLElement | null;
+    if (!row) return;
+    const id = row.getAttribute("data-player-id");
+    if (!id) return;
+    void openPlayer(id);
+  });
+}
+
 (async (): Promise<void> => {
   setupTabs();
+  setupPlaysToggle();
   setupBoxScoreTeamTabs();
   setupWinProbDismiss();
   setupThemeToggle();
   setupExpand();
   setupGraphButton();
   setupTvButton();
+  setupStandings();
+  setupPlayerTaps();
   setupInlinePager();
 
   // When the post returns to view, refresh immediately (only while the poll is
