@@ -101,22 +101,6 @@ async function onRequest(
     await onWinProb(pathname.slice("/api/winprob/".length), rsp);
     return;
   }
-  if (pathname.startsWith("/api/broadcasts/")) {
-    await onBroadcasts(pathname.slice("/api/broadcasts/".length), rsp);
-    return;
-  }
-  if (pathname.startsWith("/api/clips/")) {
-    await onClips(pathname.slice("/api/clips/".length), rsp);
-    return;
-  }
-  if (pathname.startsWith("/api/standings")) {
-    await onStandings(rsp);
-    return;
-  }
-  if (pathname.startsWith("/api/player-recent/")) {
-    await onPlayerRecent(pathname.slice("/api/player-recent/".length), rsp);
-    return;
-  }
   if (pathname === "/api/post-game") {
     await onPostGame(rsp);
     return;
@@ -396,140 +380,6 @@ async function serveDelayedGame(
   );
 }
 
-// Whether the game has reached a terminal (Final) state, read from the short-
-// cached live feed. Used to bypass the broadcast delay once a game ends: with no
-// new timecodes arriving, a delayed view would otherwise freeze a few seconds
-// short of the end and never reach the Final state, so Wrap Up would never show.
-async function gameIsFinalCached(pk: string): Promise<boolean> {
-  const key = `mlbcache:game:${pk}`;
-  try {
-    const cached = await redis.get(key);
-    if (cached) return JSON.parse(cached)?.gameData?.status?.abstractGameState === "Final";
-  } catch (e) {
-    console.error(`final-check cache read failed for ${pk}:`, e);
-  }
-  try {
-    const r = await fetch(`https://statsapi.mlb.com/api/v1.1/game/${pk}/feed/live`);
-    if (!r.ok) return false;
-    const text = await r.text();
-    try {
-      await redis.set(key, text, { expiration: new Date(Date.now() + GAME_CACHE_TTL_S * 1000) });
-    } catch (e) {
-      console.error(`final-check cache write failed for ${pk}:`, e);
-    }
-    return JSON.parse(text)?.gameData?.status?.abstractGameState === "Final";
-  } catch (e) {
-    console.error(`final-check fetch failed for ${pk}:`, e);
-    return false;
-  }
-}
-
-async function onPlayerRecent(idGroup: string, rsp: ServerResponse): Promise<void> {
-  const parts = idGroup.split("/");
-  const id = parts[0] || "";
-  const group = parts[1] === "pitching" ? "pitching" : "hitting";
-  if (!/^\d+$/.test(id)) {
-    writeJSON<ErrorResponse>(400, { error: "Invalid player id", status: 400 }, rsp);
-    return;
-  }
-  const limit = group === "pitching" ? 3 : 5;
-  const yr = new Date().getFullYear();
-  await proxyMlbJsonCached(
-    `mlbcache:precent:${id}:${group}`,
-    `https://statsapi.mlb.com/api/v1/people/${id}/stats?stats=gameLog&group=${group}&season=${yr}&gameType=R&limit=${limit}`,
-    600,
-    rsp,
-  );
-}
-
-async function onStandings(rsp: ServerResponse): Promise<void> {
-  const yr = new Date().getFullYear();
-  await proxyMlbJsonCached(
-    `mlbcache:standings:${yr}`,
-    `https://statsapi.mlb.com/api/v1/standings?leagueId=103,104&season=${yr}&standingsTypes=regularSeason`,
-    300,
-    rsp,
-  );
-}
-
-async function onBroadcasts(pk: string, rsp: ServerResponse): Promise<void> {
-  if (!/^\d+$/.test(pk)) {
-    writeJSON<ErrorResponse>(400, { error: "Invalid gamePk", status: 400 }, rsp);
-    return;
-  }
-  await proxyMlbJsonCached(
-    `mlbcache:broadcasts:${pk}`,
-    `https://statsapi.mlb.com/api/v1/schedule?sportId=1&gamePk=${pk}&hydrate=broadcasts(all)`,
-    60,
-    rsp,
-  );
-}
-
-// Best MP4 playback URL from a highlight item (quality-preference order); null if
-// no MP4 exists. Mirrors the proven matcher's selection.
-function bestClipUrl(item: any): string | null {
-  const playbacks: any[] = item?.playbacks || [];
-  const mp4s = playbacks.filter((p: any) => {
-    const name = String(p?.name || "").toLowerCase();
-    const purl = String(p?.url || "").toLowerCase();
-    return (
-      (name.includes("mp4avc") || purl.includes(".mp4")) &&
-      !name.includes("m3u8") &&
-      !purl.includes(".m3u8")
-    );
-  });
-  if (mp4s.length === 0) return null;
-  const prefer = ["2500K", "1800K", "1200K", "800K", "600K", "450K"];
-  for (const q of prefer) {
-    const hit = mp4s.find((p: any) => String(p?.name || "").includes(q));
-    if (hit && hit.url) return String(hit.url);
-  }
-  const first = mp4s[0];
-  return first && first.url ? String(first.url) : null;
-}
-
-// Returns { [playId GUID]: clipUrl } for scoring-play video matching — the client
-// looks up each scoring play's playId (play.playEvents[last].playId === highlight
-// guid). Cached ~60s since clips appear over the course of a game.
-async function onClips(pk: string, rsp: ServerResponse): Promise<void> {
-  if (!/^\d+$/.test(pk)) {
-    writeJSON<ErrorResponse>(400, { error: "Invalid gamePk", status: 400 }, rsp);
-    return;
-  }
-  const key = `mlbcache:clips:${pk}`;
-  try {
-    const cached = await redis.get(key);
-    if (cached) {
-      writeJSON<PartialJsonValue>(200, JSON.parse(cached) as PartialJsonValue, rsp);
-      return;
-    }
-  } catch (e) {
-    console.error(`clips cache read failed for ${pk}:`, e);
-  }
-  const map: Record<string, string> = {};
-  try {
-    const r = await fetch(`https://statsapi.mlb.com/api/v1/game/${pk}/content`);
-    if (r.ok) {
-      const data: any = await r.json();
-      const items: any[] = data?.highlights?.highlights?.items || [];
-      for (const it of items) {
-        const guid = it?.guid;
-        if (!guid || typeof guid !== "string") continue;
-        const clip = bestClipUrl(it);
-        if (clip) map[guid] = clip;
-      }
-    }
-  } catch (e) {
-    console.error(`clips fetch failed for ${pk}:`, e);
-  }
-  try {
-    await redis.set(key, JSON.stringify(map), { expiration: new Date(Date.now() + 60 * 1000) });
-  } catch (e) {
-    console.error(`clips cache write failed for ${pk}:`, e);
-  }
-  writeJSON<PartialJsonValue>(200, map as PartialJsonValue, rsp);
-}
-
 async function onGame(pk: string, rsp: ServerResponse): Promise<void> {
   // Adds the gamePk guard onGame was missing (onWinProb already had it).
   if (!/^\d+$/.test(pk)) {
@@ -537,11 +387,7 @@ async function onGame(pk: string, rsp: ServerResponse): Promise<void> {
     return;
   }
   const delay = await getBroadcastDelaySetting();
-  // Delay only applies while the game is live. Once it's Final there's nothing to
-  // spoil, and continuing to delay would pin the view a fixed gap before the end
-  // forever (no new timecodes arrive after the game ends), so the Wrap Up / final
-  // state would never render. In that case fall through to the real-time feed.
-  if (delay > 0 && !(await gameIsFinalCached(pk))) {
+  if (delay > 0) {
     await serveDelayedGame(pk, delay, rsp);
     return;
   }
@@ -592,13 +438,6 @@ async function onPostgameCheck(rsp: ServerResponse): Promise<void> {
 
   const gamePkStr = await redis.get(`post-game:${postId}`);
   if (!gamePkStr) {
-    writeJSON<PartialJsonValue>(200, { created: false } as PartialJsonValue, rsp);
-    return;
-  }
-
-  // Broadcast game threads never get an auto-postgame — even if the sub later
-  // switches to Game Thread mode. (Marker written by onMenuPostAllGames.)
-  if (await redis.get(`broadcast-game:${subId}:${gamePkStr}`)) {
     writeJSON<PartialJsonValue>(200, { created: false } as PartialJsonValue, rsp);
     return;
   }
@@ -1252,13 +1091,6 @@ async function handlePostgameOrPostponement(
   const pk = game?.gamePk;
   if (!pk) return "skipped";
 
-  // Broadcast game threads are hands-off, permanently. If this game's thread was
-  // posted in Broadcast mode, never auto-post a postgame OR postponement for it —
-  // even if the sub has since switched to Game Thread mode. (Marker written by
-  // onMenuPostAllGames.) The manual "Post postgame threads" menu also routes here,
-  // so this makes Broadcast games postgame-free by every automatic and menu path.
-  if (await redis.get(`broadcast-game:${subredditId}:${pk}`)) return "skipped";
-
   const gameDedupKey = `posted:${subredditId}:${pk}`;
   if (!(await redis.get(gameDedupKey))) return "skipped";
 
@@ -1376,13 +1208,6 @@ async function onMenuPostAllGames(): Promise<UiResponse> {
       await redis.set(`post-game:${post.id}`, String(pk), { expiration: renderExpiresAt() });
       await redis.set(`post-type:${post.id}`, "game", { expiration: renderExpiresAt() });
       await redis.set(dedupKey, post.id, { expiration: dedupExpiresAt() });
-      // Broadcast mode: mark this game so no postgame/postponement ever auto-posts
-      // for it — even if the sub later switches to Game Thread mode. Broadcast game
-      // threads are hands-off, permanently. (handlePostgameOrPostponement and
-      // onPostgameCheck both honor this marker.)
-      if (broadcastLabel) {
-        await redis.set(`broadcast-game:${subredditId}:${pk}`, "1", { expiration: dedupExpiresAt() });
-      }
       // If this game was previously postponed, release the postponement lock so
       // the cron can fire another postponement notice if it happens again.
       await redis.del(`postponed:${subredditId}:${pk}`);
