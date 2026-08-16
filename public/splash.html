@@ -146,6 +146,18 @@
               </div>
             </div>
 
+            <div class="final-slot final-slot-save" id="final-pitcher-save" style="display:none;">
+              <img class="final-team-logo" id="final-save-team-logo" alt="">
+              <div class="final-slot-info">
+                <div class="final-slot-meta">
+                  <span class="final-slot-decision save" id="final-save-decision">SV</span>
+                  <span class="final-slot-role">PITCHER</span>
+                </div>
+                <div class="final-slot-name" id="final-save-pitcher-name">—</div>
+                <div class="final-slot-stats" id="final-save-pitcher-stats">—</div>
+              </div>
+            </div>
+
             <div class="final-slot final-slot-home" id="final-pitcher-home">
               <img class="final-team-logo" id="final-home-team-logo" alt="">
               <div class="final-slot-info">
@@ -234,9 +246,11 @@
       <div class="tab-content" id="tab-plays">
         <div class="plays-toggle" id="plays-toggle" data-active="scoring">
           <span class="plays-toggle-thumb"></span>
+          <button class="plays-seg" type="button" data-plays="highlights">Highlights</button>
           <button class="plays-seg is-active" type="button" data-plays="scoring">Scoring</button>
           <button class="plays-seg" type="button" data-plays="all">All Plays</button>
         </div>
+        <div class="plays-list" id="highlights-list" hidden></div>
         <div class="plays-list" id="scoring-plays-list"></div>
         <div class="plays-list" id="all-plays-list" hidden></div>
       </div>
@@ -252,6 +266,7 @@
           <button class="stand-seg is-active" type="button" data-league="AL">AL</button>
           <button class="stand-seg" type="button" data-league="NL">NL</button>
           <button class="stand-seg" type="button" data-league="WC">Wild Card</button>
+          <button class="stand-seg" type="button" data-league="DIV">Div Opp</button>
         </div>
         <div class="stand-body" id="stand-body"></div>
       </div>
