@@ -157,7 +157,7 @@ async function onRequest(
     return;
   }
   if (pathname.startsWith("/api/scoreboard")) {
-    await onScoreboard(rsp);
+    await onScoreboard(pathname.slice("/api/scoreboard".length).replace(/^\//, ""), rsp);
     return;
   }
   if (pathname.startsWith("/api/standings")) {
@@ -636,11 +636,15 @@ async function onHighlights(pk: string, rsp: ServerResponse): Promise<void> {
   writeJSON<PartialJsonValue>(200, list as PartialJsonValue, rsp);
 }
 
-async function onScoreboard(rsp: ServerResponse): Promise<void> {
-  // Today's full MLB slate with linescores, for the Div Opp scoreboard.
-  // The MLB payload is cached per-date; the sub's teamId is read fresh per
-  // call (it's a per-sub setting and must NOT be baked into the shared cache).
-  const date = new Date().toLocaleDateString("sv-SE", { timeZone: "America/New_York" });
+async function onScoreboard(dateArg: string, rsp: ServerResponse): Promise<void> {
+  // The MLB slate with linescores for the Div Opp scoreboard — pinned to the
+  // REQUESTED date (the thread's game date) so yesterday's thread shows
+  // yesterday's slate, not a live view of today. Falls back to ET today.
+  // Payload cached per-date; the sub's teamId is read fresh per call (per-sub
+  // setting — must NOT be baked into the shared cache).
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(dateArg)
+    ? dateArg
+    : new Date().toLocaleDateString("sv-SE", { timeZone: "America/New_York" });
   const key = `mlbcache:sb:${date}`;
   let sched: any = null;
   try {

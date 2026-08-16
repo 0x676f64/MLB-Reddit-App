@@ -2390,14 +2390,18 @@ const TEAM_DIVISION: Record<number, number> = {
   112:205,113:205,158:205,134:205,138:205,          // NL Central
   109:203,115:203,119:203,135:203,137:203,          // NL West
 };
-let sbCache: { data: any; ts: number } | null = null;
+let sbCache: { date: string; data: any; ts: number } | null = null;
 async function fetchScoreboard(): Promise<any> {
+  // Pin the slate to THIS thread's game date — an old thread should keep
+  // showing its own day's division games, not drift to today's.
+  const od = lastGameData?.gameData?.datetime?.officialDate;
+  const date = typeof od === "string" && /^\d{4}-\d{2}-\d{2}$/.test(od) ? od : "";
   const now = Date.now();
-  if (sbCache && now - sbCache.ts < 60000) return sbCache.data;
-  const res = await fetch("/api/scoreboard");
+  if (sbCache && sbCache.date === date && now - sbCache.ts < 60000) return sbCache.data;
+  const res = await fetch(date ? `/api/scoreboard/${date}` : "/api/scoreboard");
   if (!res.ok) throw new Error("scoreboard fetch failed");
   const data = await res.json();
-  sbCache = { data, ts: now };
+  sbCache = { date, data, ts: now };
   return data;
 }
 function sbStatusHtml(g: any): string {
@@ -2414,7 +2418,9 @@ function sbStatusHtml(g: any): string {
     return `<span class="sb-final">F${typeof inn === "number" && inn > 9 ? "/" + inn : ""}</span>`;
   }
   let time = "";
-  try { time = new Date(g.gameDate).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/New_York" }); } catch { time = ""; }
+  // No timeZone option — this runs on the viewer's device, so the start time
+  // renders in THEIR local zone (Central user sees Central, etc.).
+  try { time = new Date(g.gameDate).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }); } catch { time = ""; }
   return `<span class="sb-time">${time}</span>`;
 }
 function sbTeamRow(side: any): string {
@@ -2426,16 +2432,26 @@ function sbTeamRow(side: any): string {
 async function renderDivOpp(): Promise<string> {
   const data = await fetchScoreboard();
   const games: any[] = data?.sched?.dates?.[0]?.games || [];
-  let myTeam: number | null = data?.teamId != null && /^\d+$/.test(String(data.teamId)) ? Number(data.teamId) : null;
-  if (myTeam == null) {
+  const cfgTeam: number | null = data?.teamId != null && /^\d+$/.test(String(data.teamId)) ? Number(data.teamId) : null;
+  const divs = new Set<number>();
+  const cfgDiv = cfgTeam != null ? TEAM_DIVISION[cfgTeam] : undefined;
+  if (cfgDiv != null) {
+    // A configured sub team owns the view: its division only.
+    divs.add(cfgDiv);
+  } else {
+    // No team configured (an all-games sub): show BOTH clubs' divisions.
+    const awayId = lastGameData?.gameData?.teams?.away?.id;
     const homeId = lastGameData?.gameData?.teams?.home?.id;
-    if (typeof homeId === "number") myTeam = homeId;
+    const da = typeof awayId === "number" ? TEAM_DIVISION[awayId] : undefined;
+    const dh = typeof homeId === "number" ? TEAM_DIVISION[homeId] : undefined;
+    if (da != null) divs.add(da);
+    if (dh != null) divs.add(dh);
   }
-  const myDiv = myTeam != null ? TEAM_DIVISION[myTeam] : undefined;
   const inDiv = (g: any): boolean => {
-    if (myDiv == null) return true; // no team configured — show the whole slate
+    if (divs.size === 0) return true; // nothing derivable — whole slate
     const a = g?.teams?.away?.team?.id, hm = g?.teams?.home?.team?.id;
-    return TEAM_DIVISION[a] === myDiv || TEAM_DIVISION[hm] === myDiv;
+    const ga = TEAM_DIVISION[a], gh = TEAM_DIVISION[hm];
+    return (ga != null && divs.has(ga)) || (gh != null && divs.has(gh));
   };
   const rows = games
     .filter((g) => g?.gamePk !== gamePk)
