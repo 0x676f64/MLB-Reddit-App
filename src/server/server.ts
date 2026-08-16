@@ -152,6 +152,14 @@ async function onRequest(
     await onStatcast(pathname.slice("/api/statcast/".length), rsp);
     return;
   }
+  if (pathname.startsWith("/api/highlights/")) {
+    await onHighlights(pathname.slice("/api/highlights/".length), rsp);
+    return;
+  }
+  if (pathname.startsWith("/api/scoreboard")) {
+    await onScoreboard(rsp);
+    return;
+  }
   if (pathname.startsWith("/api/standings")) {
     await onStandings(rsp);
     return;
@@ -578,6 +586,86 @@ async function onStatcast(pk: string, rsp: ServerResponse): Promise<void> {
     console.error(`statcast cache write failed for ${pk}:`, e);
   }
   writeJSON<PartialJsonValue>(200, map as PartialJsonValue, rsp);
+}
+
+async function onHighlights(pk: string, rsp: ServerResponse): Promise<void> {
+  if (!/^\d+$/.test(pk)) {
+    writeJSON<ErrorResponse>(400, { error: "Invalid gamePk", status: 400 }, rsp);
+    return;
+  }
+  const key = `mlbcache:hl:${pk}`;
+  try {
+    const cached = await redis.get(key);
+    if (cached) {
+      writeJSON<PartialJsonValue>(200, JSON.parse(cached) as PartialJsonValue, rsp);
+      return;
+    }
+  } catch (e) {
+    console.error(`highlights cache read failed for ${pk}:`, e);
+  }
+  // Same MLB content feed the scoring-play videos use — but as the CURATED
+  // editorial list (title + clip), in MLB's order, not play-matched.
+  const list: Array<{ t: string; u: string }> = [];
+  try {
+    const r = await fetch(`https://statsapi.mlb.com/api/v1/game/${pk}/content`);
+    if (r.ok) {
+      const data: any = await r.json();
+      const items: any[] = data?.highlights?.highlights?.items || [];
+      const junk = /(interview|press conference|availability|postgame|pregame|manager|clubhouse|warm.?up)/i;
+      for (const it of items) {
+        // Curation: only clips tied to an actual play carry a guid (the same
+        // GUID the play video buttons key on). Interviews, pressers, bullpen
+        // graphics etc. don't — requiring it keeps the list game-action only.
+        if (!it?.guid || typeof it.guid !== "string") continue;
+        const title = String(it?.headline || it?.title || "").trim();
+        const clip = bestClipUrl(it);
+        if (!title || !clip) continue;
+        if (junk.test(title)) continue;
+        list.push({ t: title, u: clip });
+        if (list.length >= 20) break;
+      }
+    }
+  } catch (e) {
+    console.error(`highlights fetch failed for ${pk}:`, e);
+  }
+  try {
+    await redis.set(key, JSON.stringify(list), { expiration: new Date(Date.now() + 60 * 1000) });
+  } catch (e) {
+    console.error(`highlights cache write failed for ${pk}:`, e);
+  }
+  writeJSON<PartialJsonValue>(200, list as PartialJsonValue, rsp);
+}
+
+async function onScoreboard(rsp: ServerResponse): Promise<void> {
+  // Today's full MLB slate with linescores, for the Div Opp scoreboard.
+  // The MLB payload is cached per-date; the sub's teamId is read fresh per
+  // call (it's a per-sub setting and must NOT be baked into the shared cache).
+  const date = new Date().toLocaleDateString("sv-SE", { timeZone: "America/New_York" });
+  const key = `mlbcache:sb:${date}`;
+  let sched: any = null;
+  try {
+    const cached = await redis.get(key);
+    if (cached) sched = JSON.parse(cached);
+  } catch (e) {
+    console.error("scoreboard cache read failed:", e);
+  }
+  if (!sched) {
+    try {
+      const r = await fetch(`https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${date}&hydrate=linescore`);
+      if (r.ok) {
+        sched = await r.json();
+        try {
+          await redis.set(key, JSON.stringify(sched), { expiration: new Date(Date.now() + 60 * 1000) });
+        } catch (e) {
+          console.error("scoreboard cache write failed:", e);
+        }
+      }
+    } catch (e) {
+      console.error("scoreboard fetch failed:", e);
+    }
+  }
+  const teamId = await getTeamIdFilter();
+  writeJSON<PartialJsonValue>(200, { teamId, sched } as PartialJsonValue, rsp);
 }
 
 async function onClips(pk: string, rsp: ServerResponse): Promise<void> {
