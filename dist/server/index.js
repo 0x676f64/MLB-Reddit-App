@@ -92258,7 +92258,7 @@ async function onRequest(req, rsp) {
     return;
   }
   if (pathname.startsWith("/api/game/")) {
-    await onGame(pathname.slice("/api/game/".length), rsp);
+    await onGame(pathname.slice("/api/game/".length), urlObj, rsp);
     return;
   }
   if (pathname.startsWith("/api/winprob/")) {
@@ -92459,7 +92459,12 @@ async function serveDelayedGame(pk, delaySeconds, rsp) {
     await proxyMlbJsonCached(`mlbcache:game:${pk}`, liveUrl, GAME_CACHE_TTL_S, rsp);
     return;
   }
-  const target = last.t - delaySeconds * 1e3;
+  let target = last.t - delaySeconds * 1e3;
+  const feedSilentMs = Date.now() - last.t;
+  const catchUpAfterMs = Math.max(delaySeconds * 1e3 + 8e3, 18e3);
+  if (feedSilentMs >= catchUpAfterMs) {
+    target = last.t;
+  }
   let selected = first.tc;
   for (const p of parsed) {
     if (p.t <= target) selected = p.tc;
@@ -92523,6 +92528,24 @@ async function onPlayerRecent(idGroup, rsp) {
     600,
     rsp
   );
+}
+async function getCommentSortSetting() {
+  try {
+    const v = await settings.get("commentSort");
+    return typeof v === "string" ? v : Array.isArray(v) && typeof v[0] === "string" ? v[0] : "";
+  } catch (e) {
+    console.error("commentSort setting read failed:", e);
+    return "";
+  }
+}
+async function applyCommentSort(post) {
+  const sort = await getCommentSortSetting();
+  if (!sort) return;
+  try {
+    await post.setSuggestedCommentSort(sort);
+  } catch (e) {
+    console.error(`setSuggestedCommentSort(${sort}) failed:`, e);
+  }
 }
 async function onStandings(rsp) {
   const yr = (/* @__PURE__ */ new Date()).getFullYear();
@@ -92714,12 +92737,20 @@ async function onClips(pk, rsp) {
   }
   writeJSON(200, map, rsp);
 }
-async function onGame(pk, rsp) {
+var ALLOWED_VIEWER_DELAYS = [0, 5, 8, 10, 12, 15, 20, 30, 45, 60];
+function viewerDelayFrom(urlObj) {
+  const raw = urlObj.searchParams.get("delay");
+  if (raw == null) return null;
+  const n = Number(raw);
+  return Number.isFinite(n) && ALLOWED_VIEWER_DELAYS.includes(n) ? n : null;
+}
+async function onGame(pk, urlObj, rsp) {
   if (!/^\d+$/.test(pk)) {
     writeJSON(400, { error: "Invalid gamePk", status: 400 }, rsp);
     return;
   }
-  const delay = await getBroadcastDelaySetting();
+  const viewerDelay = viewerDelayFrom(urlObj);
+  const delay = viewerDelay ?? await getBroadcastDelaySetting();
   if (delay > 0 && !await gameIsFinalCached(pk)) {
     await serveDelayedGame(pk, delay, rsp);
     return;
@@ -92818,6 +92849,7 @@ async function onPostgameCheck(rsp) {
     const post = await reddit.submitCustomPost({
       title: buildPostgameTitleFromFeed(feed, teamId, customTitles)
     });
+    await applyCommentSort(post);
     await redis.set(`post-game:${post.id}`, gamePkStr, { expiration: renderExpiresAt() });
     await redis.set(`post-type:${post.id}`, "postgame", { expiration: renderExpiresAt() });
     await redis.set(pgKey, post.id, { expiration: dedupExpiresAt() });
@@ -93280,6 +93312,7 @@ async function handlePostgameOrPostponement(game, subredditId, teamId, customTit
       const post = await reddit.submitCustomPost({
         title: buildPostponedThreadTitle(game, teamId)
       });
+      await applyCommentSort(post);
       await redis.set(`post-game:${post.id}`, String(pk), { expiration: renderExpiresAt() });
       await redis.set(`post-type:${post.id}`, "postponed", { expiration: renderExpiresAt() });
       await redis.set(postponedKey, post.id, { expiration: dedupExpiresAt() });
@@ -93305,6 +93338,7 @@ async function handlePostgameOrPostponement(game, subredditId, teamId, customTit
     const post = await reddit.submitCustomPost({
       title: buildPostgameThreadTitle(game, teamId, customTitles)
     });
+    await applyCommentSort(post);
     await redis.set(`post-game:${post.id}`, String(pk), { expiration: renderExpiresAt() });
     await redis.set(`post-type:${post.id}`, "postgame", { expiration: renderExpiresAt() });
     await redis.set(pgKey, post.id, { expiration: dedupExpiresAt() });
@@ -93360,6 +93394,7 @@ async function onMenuPostAllGames() {
       const post = await reddit.submitCustomPost({
         title: buildGameThreadTitle(game, teamId, broadcastLabel)
       });
+      await applyCommentSort(post);
       await redis.set(`post-game:${post.id}`, String(pk), { expiration: renderExpiresAt() });
       await redis.set(`post-type:${post.id}`, "game", { expiration: renderExpiresAt() });
       await redis.set(dedupKey, post.id, { expiration: dedupExpiresAt() });

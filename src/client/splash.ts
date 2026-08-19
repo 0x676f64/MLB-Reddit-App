@@ -614,6 +614,35 @@ const MOON_ICON =
   '<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>';
 
 const THEME_KEY = "mlb-scores-theme";
+const DELAY_KEY = "mlb-scores-delay";
+
+// Per-viewer broadcast delay. Cable is ~5-10s behind live, streaming 30-60s, so
+// one sub-wide number always fails someone. null = follow the mod's setting.
+const VIEWER_DELAYS: Array<{ v: number; label: string; sub: string }> = [
+  { v: -1, label: "Match the subreddit", sub: "Use the mod's setting" },
+  { v: 0, label: "No delay", sub: "Fastest — matches the data feed" },
+  { v: 5, label: "5 seconds", sub: "Cable / antenna" },
+  { v: 10, label: "10 seconds", sub: "Cable with a slight lag" },
+  { v: 20, label: "20 seconds", sub: "Streaming (YouTube TV, Hulu)" },
+  { v: 30, label: "30 seconds", sub: "Streaming, slower" },
+  { v: 45, label: "45 seconds", sub: "Gotham / Fubo-type feeds" },
+  { v: 60, label: "60 seconds", sub: "Slowest streams" },
+];
+function viewerDelay(): number | null {
+  try {
+    const v = localStorage.getItem(DELAY_KEY);
+    if (v == null) return null;
+    const n = Number(v);
+    return VIEWER_DELAYS.some((d) => d.v === n) && n >= 0 ? n : null;
+  } catch { return null; }
+}
+function setViewerDelay(n: number): void {
+  try {
+    if (n < 0) localStorage.removeItem(DELAY_KEY);
+    else localStorage.setItem(DELAY_KEY, String(n));
+  } catch { /* storage unavailable — session only */ }
+  if (gamePk != null) void fetchAndRender(gamePk);
+}
 
 function applyTheme(theme: string): void {
   if (theme === "light") document.documentElement.setAttribute("data-theme", "light");
@@ -815,11 +844,35 @@ function renderLiveContent(data: any): void {
     pitchEl.innerHTML = '<span style="font-family:var(--font-mono);font-size:10px;color:var(--text-muted);">Waiting for first pitch…</span>';
   }
 
-  const resultEvent = currentPlay.result?.event || "";
-  const resultDesc = currentPlay.result?.description || "";
+  // The description must come from the last COMPLETED play, not currentPlay.
+  // currentPlay resets the instant the next batter steps in, so reading it
+  // directly meant a play's description was only on screen during the short gap
+  // between resolving and the next at-bat — if a poll didn't land in that
+  // window, the description was never shown at all. allPlays is cumulative, so
+  // pulling from it also means a skipped snapshot no longer loses anything.
+  let resultEvent = currentPlay.result?.event || "";
+  let resultDesc = currentPlay.result?.description || "";
+  // ...but only until the next at-bat is actually UNDERWAY. Holding it through
+  // live pitches made a finished play look current. So: show it during the
+  // between-batter gap (the window that was being missed), and clear it the
+  // moment the new batter sees a pitch.
+  if (!resultEvent && !resultDesc && pitches.length === 0) {
+    const all: any[] = data.liveData?.plays?.allPlays || [];
+    for (let i = all.length - 1; i >= 0; i--) {
+      const p = all[i];
+      if (p?.about?.isComplete && p?.result?.description) {
+        resultEvent = p.result.event || "";
+        resultDesc = p.result.description || "";
+        break;
+      }
+    }
+  }
   const resultEl = $("live-result")!;
   if (resultEvent || resultDesc) {
+    // Labeled so a finished play never reads as the live one — it's shown during
+    // the between-batter gap on purpose, and the label is what keeps that clear.
     resultEl.innerHTML = `
+      <div class="live-last-label">Last Play</div>
       ${resultEvent ? `<div class="live-event">${resultEvent}</div>` : ""}
       ${resultDesc ? `<div class="live-desc">${resultDesc}</div>` : ""}
     `;
@@ -1771,7 +1824,8 @@ function renderEndedState(): void {
 
 async function fetchAndRender(pk: number): Promise<void> {
   try {
-    const res = await fetch(`/api/game/${pk}`);
+    const vd = viewerDelay();
+    const res = await fetch(`/api/game/${pk}` + (vd == null ? "" : `?delay=${vd}`));
     const data = await res.json();
     if (!data?.gameData || !data?.liveData) {
       console.error("Game data unavailable");
@@ -2136,6 +2190,7 @@ const FEED_TV_ICON = TV_ICON;
 const FEED_RADIO_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="14" r="2.5"/><path d="M4.9 9.9a10 10 0 0 1 14.2 0"/><path d="M7.8 12.8a6 6 0 0 1 8.4 0"/></svg>';
 const CHEV_UP_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 15l6-6 6 6"/></svg>';
 const CHEV_DOWN_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>';
+const SYNC_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>';
 const OVERLAY_CLOSE_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6L6 18"/></svg>';
 const VIDEO_ICON = '<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M8 5v14l11-7z"/></svg>';
 const WX_SUN_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v2M12 20v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M2 12h2M20 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/></svg>';
@@ -2145,7 +2200,7 @@ const WX_RAIN_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
 const WX_SNOW_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 14a4.5 4.5 0 0 0 .5-8.97A6 6 0 0 0 6.34 4.5 4 4 0 0 0 7 14z"/><path d="M8 18.5v.01M12 20v.01M16 18.5v.01"/></svg>';
 const WX_ROOF_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 18 0"/><path d="M2 12h20M6 12v6M18 12v6M6 18h12"/></svg>';
 
-interface OverlayItem { label: string; sub?: string; url?: string; img?: string; icon?: string; }
+interface OverlayItem { label: string; sub?: string; url?: string; img?: string; icon?: string; delay?: number; active?: boolean; }
 let infoOverlayEl: HTMLElement | null = null;
 
 function overlayRowsHtml(items: OverlayItem[]): string {
@@ -2153,12 +2208,23 @@ function overlayRowsHtml(items: OverlayItem[]): string {
     const visual = it.img ? `<img class="info-row-logo" src="${it.img}" alt="">` : it.icon ? `<span class="info-row-icon">${it.icon}</span>` : "";
     const inner = visual + '<span class="info-row-text"><span class="info-row-label">' + it.label + "</span>" + (it.sub ? '<span class="info-row-sub">' + it.sub + "</span>" : "") + "</span>";
     const style = `animation-delay:${50 + i * 55}ms`;
-    return it.url ? `<button class="info-row" type="button" data-url="${it.url}" style="${style}">${inner}</button>` : `<div class="info-row is-static" style="${style}">${inner}</div>`;
+    if (it.url) return `<button class="info-row" type="button" data-url="${it.url}" style="${style}">${inner}</button>`;
+    if (it.delay !== undefined) return `<button class="info-row${it.active ? " is-picked" : ""}" type="button" data-delay="${it.delay}" style="${style}">${inner}</button>`;
+    return `<div class="info-row is-static" style="${style}">${inner}</div>`;
   }).join("");
 }
 function wireOverlayRows(ov: HTMLElement): void {
   ov.querySelectorAll<HTMLElement>(".info-row[data-url]").forEach((row) => {
     row.addEventListener("click", () => { const url = row.getAttribute("data-url"); if (!url) return; try { navigateTo(url); } catch (e) { reportError("navigateTo", e); } });
+  });
+  ov.querySelectorAll<HTMLElement>(".info-row[data-delay]").forEach((row) => {
+    row.addEventListener("click", () => {
+      const d = Number(row.getAttribute("data-delay"));
+      if (!Number.isFinite(d)) return;
+      if (d === -2) { openDelayOverlay(); return; }
+      setViewerDelay(d);
+      openDelayOverlay();
+    });
   });
   ov.querySelectorAll<HTMLImageElement>(".info-row-logo").forEach((img) => { img.addEventListener("error", () => { img.style.display = "none"; }); });
 }
@@ -2259,6 +2325,16 @@ async function fetchBroadcastItems(pk: number): Promise<OverlayItem[]> {
     return items.length ? items : [{ label: "No listed broadcasts" }];
   } catch (e) { reportError("fetchBroadcastItems", e); return [{ label: "Broadcast info unavailable" }]; }
 }
+function openDelayOverlay(): void {
+  const cur = viewerDelay();
+  openInfoOverlay("Sync To Your Feed", VIEWER_DELAYS.map((d) => ({
+    label: d.label,
+    sub: d.sub,
+    delay: d.v,
+    active: d.v === -1 ? cur == null : cur === d.v,
+  })));
+}
+
 function setupTvButton(): void {
   if (document.getElementById("tv-btn")) return;
   const host = $("scorebug-content") || document.body;
@@ -2267,7 +2343,12 @@ function setupTvButton(): void {
     if (gamePk == null) return;
     openInfoOverlay("Where to Watch", [{ label: "Loading…" }]);
     const items = await fetchBroadcastItems(gamePk);
-    setOverlayRows(items);
+    const cur = viewerDelay();
+    const curLabel = cur == null ? "Matching the subreddit" : cur === 0 ? "No delay" : `${cur} seconds`;
+    setOverlayRows([
+      { label: "Sync to your feed", sub: curLabel, delay: -2, icon: SYNC_ICON },
+      ...items,
+    ]);
   });
   host.appendChild(btn);
 }

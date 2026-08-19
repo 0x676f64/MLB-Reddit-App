@@ -133,7 +133,7 @@ async function onRequest(
     return;
   }
   if (pathname.startsWith("/api/game/")) {
-    await onGame(pathname.slice("/api/game/".length), rsp);
+    await onGame(pathname.slice("/api/game/".length), urlObj, rsp);
     return;
   }
   if (pathname.startsWith("/api/winprob/")) {
@@ -414,7 +414,30 @@ async function serveDelayedGame(
     return;
   }
 
-  const target = last.t - delaySeconds * 1000;
+  let target = last.t - delaySeconds * 1000;
+
+  // ── Gap catch-up ──
+  // `last.t` freezes whenever the feed stops publishing (inning break, pitching
+  // change, replay review). Because the target is always `last.t - delay`, a
+  // frozen feed pins the view a fixed gap BEHIND the last thing that happened —
+  // so an inning-ending out sits unresolved ("In Play") for the whole commercial
+  // break, no matter how large or small the delay is.
+  //
+  // If the feed has been silent for longer than the delay itself, then the
+  // NEWEST snapshot is already older than the delay window — serving it cannot
+  // show anything the broadcast hasn't already aired, so we jump the cursor to
+  // it and the play resolves.
+  //
+  // This is deliberately gated on silence: while the feed is publishing normally
+  // the formula above is untouched, so the delayed view still walks the timeline
+  // snapshot by snapshot (an earlier attempt applied catch-up unconditionally and
+  // skipped play descriptions — that failure mode can't happen here).
+  const feedSilentMs = Date.now() - last.t;
+  const catchUpAfterMs = Math.max(delaySeconds * 1000 + 8000, 18000);
+  if (feedSilentMs >= catchUpAfterMs) {
+    target = last.t;
+  }
+
   // Latest snapshot at or before the target. If the game is younger than the
   // delay, this stays at the earliest snapshot (delayed viewer sees the start).
   let selected = first.tc;
@@ -491,6 +514,30 @@ async function onPlayerRecent(idGroup: string, rsp: ServerResponse): Promise<voi
     600,
     rsp,
   );
+}
+
+// Suggested comment sort for threads this app creates. Devvit exposes
+// Post.setSuggestedCommentSort(); mods asked for New on postgame threads.
+// Wrapped so a rejected value can never fail the post itself — the thread
+// matters more than its sort order.
+async function getCommentSortSetting(): Promise<string> {
+  try {
+    const v = await settings.get("commentSort");
+    return typeof v === "string" ? v : (Array.isArray(v) && typeof v[0] === "string" ? v[0] : "");
+  } catch (e) {
+    console.error("commentSort setting read failed:", e);
+    return "";
+  }
+}
+
+async function applyCommentSort(post: any): Promise<void> {
+  const sort = await getCommentSortSetting();
+  if (!sort) return; // "" = leave Reddit's default
+  try {
+    await post.setSuggestedCommentSort(sort);
+  } catch (e) {
+    console.error(`setSuggestedCommentSort(${sort}) failed:`, e);
+  }
 }
 
 async function onStandings(rsp: ServerResponse): Promise<void> {
@@ -711,13 +758,26 @@ async function onClips(pk: string, rsp: ServerResponse): Promise<void> {
   writeJSON<PartialJsonValue>(200, map as PartialJsonValue, rsp);
 }
 
-async function onGame(pk: string, rsp: ServerResponse): Promise<void> {
+// A single sub-level delay can't serve everyone: cable runs ~5-10s behind live
+// while Gotham/Fubo-type streams run 30-60s, so any one value spoils one group
+// or over-delays the other. Each viewer can therefore pick their own delay in
+// the app; the mod's setting stays the default for anyone who never touches it.
+const ALLOWED_VIEWER_DELAYS = [0, 5, 8, 10, 12, 15, 20, 30, 45, 60];
+function viewerDelayFrom(urlObj: URL): number | null {
+  const raw = urlObj.searchParams.get("delay");
+  if (raw == null) return null;
+  const n = Number(raw);
+  return Number.isFinite(n) && ALLOWED_VIEWER_DELAYS.includes(n) ? n : null;
+}
+
+async function onGame(pk: string, urlObj: URL, rsp: ServerResponse): Promise<void> {
   // Adds the gamePk guard onGame was missing (onWinProb already had it).
   if (!/^\d+$/.test(pk)) {
     writeJSON<ErrorResponse>(400, { error: "Invalid gamePk", status: 400 }, rsp);
     return;
   }
-  const delay = await getBroadcastDelaySetting();
+  const viewerDelay = viewerDelayFrom(urlObj);
+  const delay = viewerDelay ?? (await getBroadcastDelaySetting());
   // Delay only applies while the game is live. Once it's Final there's nothing to
   // spoil, and continuing to delay would pin the view a fixed gap before the end
   // forever (no new timecodes arrive after the game ends), so the Wrap Up / final
@@ -835,6 +895,7 @@ async function onPostgameCheck(rsp: ServerResponse): Promise<void> {
     const post = await reddit.submitCustomPost({
       title: buildPostgameTitleFromFeed(feed, teamId, customTitles),
     });
+    await applyCommentSort(post);
     await redis.set(`post-game:${post.id}`, gamePkStr, { expiration: renderExpiresAt() });
     await redis.set(`post-type:${post.id}`, "postgame", { expiration: renderExpiresAt() });
     await redis.set(pgKey, post.id, { expiration: dedupExpiresAt() });
@@ -1461,6 +1522,7 @@ async function handlePostgameOrPostponement(
       const post = await reddit.submitCustomPost({
         title: buildPostponedThreadTitle(game, teamId),
       });
+    await applyCommentSort(post);
       await redis.set(`post-game:${post.id}`, String(pk), { expiration: renderExpiresAt() });
       await redis.set(`post-type:${post.id}`, "postponed", { expiration: renderExpiresAt() });
       await redis.set(postponedKey, post.id, { expiration: dedupExpiresAt() });
@@ -1493,6 +1555,7 @@ async function handlePostgameOrPostponement(
     const post = await reddit.submitCustomPost({
       title: buildPostgameThreadTitle(game, teamId, customTitles),
     });
+    await applyCommentSort(post);
     await redis.set(`post-game:${post.id}`, String(pk), { expiration: renderExpiresAt() });
     await redis.set(`post-type:${post.id}`, "postgame", { expiration: renderExpiresAt() });
     await redis.set(pgKey, post.id, { expiration: dedupExpiresAt() });
@@ -1562,6 +1625,7 @@ async function onMenuPostAllGames(): Promise<UiResponse> {
       const post = await reddit.submitCustomPost({
         title: buildGameThreadTitle(game, teamId, broadcastLabel),
       });
+    await applyCommentSort(post);
       await redis.set(`post-game:${post.id}`, String(pk), { expiration: renderExpiresAt() });
       await redis.set(`post-type:${post.id}`, "game", { expiration: renderExpiresAt() });
       await redis.set(dedupKey, post.id, { expiration: dedupExpiresAt() });
