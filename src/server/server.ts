@@ -261,6 +261,12 @@ async function readJSON<T>(req: IncomingMessage): Promise<T | null> {
 // ─────────────────────────────────────────────────────────────────────────────
  
 const GAME_CACHE_TTL_S = 8;       // live feed — pitch-by-pitch, refreshes ~every 10s
+// A timecoded snapshot NEVER changes, so it can outlive the live-feed TTL. This
+// matters now that viewers pick their own delay: two people 40s apart request
+// the SAME timecode 40s apart, so a long TTL turns the second one into a cache
+// hit instead of a second upstream fetch. Keeps upstream load flat no matter how
+// many different delays are in use. Covers the full 0-60s picker range + margin.
+const TIMECODE_CACHE_TTL_S = 90;
 const SCHEDULE_CACHE_TTL_S = 30;  // schedule — changes slowly
 const WINPROB_CACHE_TTL_S = 12;   // win probability — per play
  
@@ -454,9 +460,15 @@ async function serveDelayedGame(
     if (prevTc && parseTimecodeToEpoch(prevTc) > parseTimecodeToEpoch(selected)) {
       selected = prevTc;
     }
-    await redis.set(guardKey, selected, {
-      expiration: new Date(Date.now() + 6 * 3600 * 1000),
-    });
+    // Only write when the cursor actually advances. This used to fire on every
+    // poll from every viewer — 500 people at 6 polls/min is ~3,000 writes/min
+    // per game, nearly all storing the value that was already there. Reads are
+    // cheap; writes are the thing that scales with audience.
+    if (prevTc !== selected) {
+      await redis.set(guardKey, selected, {
+        expiration: new Date(Date.now() + 6 * 3600 * 1000),
+      });
+    }
   } catch (e) {
     console.error(`delay guard failed for ${pk}:`, e);
   }
@@ -465,7 +477,7 @@ async function serveDelayedGame(
   await proxyMlbJsonCached(
     `mlbcache:game:${pk}:tc:${selected}`,
     `${liveUrl}?timecode=${selected}`,
-    GAME_CACHE_TTL_S,
+    TIMECODE_CACHE_TTL_S,
     rsp,
   );
 }
