@@ -110,8 +110,64 @@ function svgInk(): SvgInk {
         chartBg: "rgba(255,255,255,0.04)", dotFill: "#fff", dotRing: "rgba(255,255,255,0.6)" };
 }
 
+// Soft-red palette for inline SVG. No hard #bf0d3d anywhere — the red is
+// carried at alpha in both themes, and DARK gets the softer end (a saturated
+// crimson on navy is what the mods kept flagging as harsh).
+interface SvgRed {
+  fill: string; fillDim: string; stroke: string; strokeDim: string;
+  zone: string; zoneGrid: string; zoneFill: string;
+  // Pitch dots run stronger than the rest of the red in light mode, and the
+  // CURRENT pitch needs a ring that actually separates it from the surface —
+  // white works on navy but vanishes on white, so light mode rings in navy.
+  dot: string; dotBall: string; lastRing: string; dotOpacity: string;
+}
+function svgRed(): SvgRed {
+  const light = document.documentElement.getAttribute("data-theme") === "light";
+  return light
+    ? { fill: "#bf0d3ca6", fillDim: "#bf0d3c8c", stroke: "#bf0d3c92", strokeDim: "#bf0d3c72",
+        zone: "#bf0d3c85", zoneGrid: "#bf0d3c2e", zoneFill: "#bf0d3c0d",
+        dot: "#bf0d3ce0", dotBall: "#2a9d5cf0", lastRing: "#002D72", dotOpacity: "0.82" }
+    // Dark mode uses a LIGHTER red, not a fainter one: #bf0d3c at low alpha over
+    // navy composites toward black, so the bases/zone went muddy and unreadable.
+    : { fill: "#ff5c7fb3", fillDim: "#ff5c7f8a", stroke: "#ff5c7fa6", strokeDim: "#ff5c7f70",
+        zone: "#ff5c7f8f", zoneGrid: "#ff5c7f38", zoneFill: "#ff5c7f12",
+        dot: "#ff5c7fdb", dotBall: "#3fd18ae0", lastRing: "#ffffff", dotOpacity: "0.7" };
+}
+
+// Pitch dots are colored by RESULT, not pitch type. A fastball two feet off the
+// plate was rendering red (the four-seam color) and reading as a strike; fans
+// expect broadcast convention — red strike, green ball, gray foul, blue in play.
+// The pitch TYPE is still shown as the abbreviation badge next to the velo.
+function pitchOutcomeColor(p: any): string {
+  // Two colors only, per Joe: green = ball, red = everything else (strike,
+  // foul, in play). The pitch TYPE keeps its own color on the badge.
+  const r = svgRed();
+  return p?.details?.isBall ? r.dotBall : r.dot;
+}
+
+// Live matchup meta: handedness for both slots (RHB/LHB, RHP/LHP) plus the
+// pitcher's running pitch count as {pitches}-{strikes}.
+function slotHand(playerId: number | undefined, isBatter: boolean): string {
+  if (playerId == null) return "";
+  const bio: any = lastGameData?.gameData?.players?.["ID" + playerId];
+  if (isBatter) {
+    const side = bio?.batSide?.code;
+    return side === "S" ? "SWH" : (side === "L" || side === "R") ? side + "HB" : "";
+  }
+  const hand = bio?.pitchHand?.code;
+  return (hand === "L" || hand === "R") ? hand + "HP" : "";
+}
+function slotPitchCount(teamBox: any, playerId: number | undefined): string {
+  if (playerId == null) return "";
+  const p: any = teamBox?.players?.["ID" + playerId]?.stats?.pitching;
+  const np = p?.numberOfPitches ?? p?.pitchesThrown;
+  const st = p?.strikes;
+  return np != null && st != null ? `${np}-${st}` : "";
+}
+
 function buildStrikeZoneSVG(pitches: any[]): string {
   const ink = svgInk();
+  const red = svgRed();
   const dW = DZ_RIGHT - DZ_LEFT, dH = DZ_BOT - DZ_TOP;
   const d3 = dW / 3, d3h = dH / 3;
   const dots = pitches.map((p: any, i: number) => {
@@ -119,26 +175,25 @@ function buildStrikeZoneSVG(pitches: any[]): string {
     const pz = p.pitchData?.coordinates?.pZ;
     if (px == null || pz == null) return "";
     const cx = mapPx(px), cy = mapPz(pz);
-    const info = pitchInfo(p.details?.type?.code);
     const isLast = i === pitches.length - 1;
     return `<circle cx="${cx}" cy="${cy}" r="${isLast ? 7 : 5}"
-      fill="${info.color}" stroke="${isLast ? "#fff" : ink.faint}"
-      stroke-width="${isLast ? 2 : 1}" opacity="${isLast ? 1 : 0.65}"/>
+      fill="${pitchOutcomeColor(p)}" stroke="${isLast ? red.lastRing : ink.faint}"
+      stroke-width="${isLast ? 2 : 1}" opacity="${isLast ? 1 : red.dotOpacity}"/>
       <text x="${cx}" y="${cy + 0.5}" text-anchor="middle" dominant-baseline="middle"
       font-size="${isLast ? 7 : 6}" font-weight="700" fill="white"
       font-family="monospace" pointer-events="none">${i + 1}</text>`;
   }).join("");
   return `<svg viewBox="0 0 ${ZONE_W} ${ZONE_H}" xmlns="http://www.w3.org/2000/svg" style="overflow:visible;">
     <rect x="${DZ_LEFT}" y="${DZ_TOP}" width="${dW}" height="${dH}"
-      fill="rgba(191,13,61,0.04)" stroke="rgba(191,13,61,0.75)" stroke-width="1.5" rx="1"/>
+      fill="${red.zoneFill}" stroke="${red.zone}" stroke-width="1.5" rx="1"/>
     <line x1="${DZ_LEFT + d3}" y1="${DZ_TOP}" x2="${DZ_LEFT + d3}" y2="${DZ_BOT}"
-      stroke="rgba(191,13,61,0.22)" stroke-width="0.8" stroke-dasharray="3,2"/>
+      stroke="${red.zoneGrid}" stroke-width="0.8" stroke-dasharray="3,2"/>
     <line x1="${DZ_LEFT + d3 * 2}" y1="${DZ_TOP}" x2="${DZ_LEFT + d3 * 2}" y2="${DZ_BOT}"
-      stroke="rgba(191,13,61,0.22)" stroke-width="0.8" stroke-dasharray="3,2"/>
+      stroke="${red.zoneGrid}" stroke-width="0.8" stroke-dasharray="3,2"/>
     <line x1="${DZ_LEFT}" y1="${DZ_TOP + d3h}" x2="${DZ_RIGHT}" y2="${DZ_TOP + d3h}"
-      stroke="rgba(191,13,61,0.22)" stroke-width="0.8" stroke-dasharray="3,2"/>
+      stroke="${red.zoneGrid}" stroke-width="0.8" stroke-dasharray="3,2"/>
     <line x1="${DZ_LEFT}" y1="${DZ_TOP + d3h * 2}" x2="${DZ_RIGHT}" y2="${DZ_TOP + d3h * 2}"
-      stroke="rgba(191,13,61,0.22)" stroke-width="0.8" stroke-dasharray="3,2"/>
+      stroke="${red.zoneGrid}" stroke-width="0.8" stroke-dasharray="3,2"/>
     <polygon points="${DZ_LEFT},${DZ_BOT + 5} ${DZ_RIGHT},${DZ_BOT + 5} ${DZ_RIGHT},${DZ_BOT + 12} ${SZ_CX},${DZ_BOT + 20} ${DZ_LEFT},${DZ_BOT + 12}"
       fill="${ink.strong}" stroke="${ink.mid}" stroke-width="1"/>
     ${dots}
@@ -149,20 +204,21 @@ function buildStrikeZoneSVG(pitches: any[]): string {
 
 function buildBasesSVG(outs: number, onBase: any): string {
   const ink = svgInk();
+  const red = svgRed();
   const outFill = (n: number): string =>
-    outs >= n ? "#bf0d3d" : ink.empty;
+    outs >= n ? red.fill : ink.empty;
   const baseFill = (b: any): string =>
-    b ? "#bf0d3d" : ink.empty;
+    b ? red.fill : ink.empty;
   return `<svg width="60" height="60" viewBox="0 0 58 79" xmlns="http://www.w3.org/2000/svg">
-    <circle cx="13" cy="61" r="6" fill="${outFill(1)}" stroke="#bf0d3d" stroke-width="1.5"/>
-    <circle cx="30" cy="61" r="6" fill="${outFill(2)}" stroke="#bf0d3d" stroke-width="1.5"/>
-    <circle cx="47" cy="61" r="6" fill="${outFill(3)}" stroke="#bf0d3d" stroke-width="1.5"/>
+    <circle cx="13" cy="61" r="6" fill="${outFill(1)}" stroke="${red.stroke}" stroke-width="1.5"/>
+    <circle cx="30" cy="61" r="6" fill="${outFill(2)}" stroke="${red.stroke}" stroke-width="1.5"/>
+    <circle cx="47" cy="61" r="6" fill="${outFill(3)}" stroke="${red.stroke}" stroke-width="1.5"/>
     <rect x="17.6" y="29.7" width="14" height="14" transform="rotate(45 17.6 29.7)"
-      fill="${baseFill(onBase?.third)}" stroke="#bf0d3d" stroke-width="1.5"/>
+      fill="${baseFill(onBase?.third)}" stroke="${red.stroke}" stroke-width="1.5"/>
     <rect x="29.4" y="17.7" width="14" height="14" transform="rotate(45 29.4 17.7)"
-      fill="${baseFill(onBase?.second)}" stroke="#bf0d3d" stroke-width="1.5"/>
+      fill="${baseFill(onBase?.second)}" stroke="${red.stroke}" stroke-width="1.5"/>
     <rect x="41.6" y="29.7" width="14" height="14" transform="rotate(45 41.6 29.7)"
-      fill="${baseFill(onBase?.first)}" stroke="#bf0d3d" stroke-width="1.5"/>
+      fill="${baseFill(onBase?.first)}" stroke="${red.stroke}" stroke-width="1.5"/>
   </svg>`;
 }
 
@@ -581,8 +637,11 @@ function savedTheme(): string | null {
 }
 
 function resolveTheme(): string {
-  // Manual override wins; otherwise follow Reddit's / the OS color scheme.
-  return savedTheme() ?? systemTheme();
+  // Manual override wins. Otherwise LIGHT is the default view — the app is
+  // designed light-first now (navy chrome + light content), so we no longer
+  // inherit Reddit's dark scheme by default. systemTheme() is kept for the
+  // toggle's reference point.
+  return savedTheme() ?? "light";
 }
 
 function setupThemeToggle(): void {
@@ -703,7 +762,8 @@ function renderLiveContent(data: any): void {
   $("live-away-role")!.textContent = awaySlotIsBatter ? "BATTER" : "PITCHER";
   $("live-away-pos")!.textContent = awaySlotIsBatter
     ? getPlayerPos(teamsBox.away, awaySlotPlayer?.id)
-    : "";
+    : slotPitchCount(teamsBox.away, awaySlotPlayer?.id);
+  $("live-away-hand")!.textContent = slotHand(awaySlotPlayer?.id, awaySlotIsBatter);
   $("live-away-name")!.textContent = awaySlotPlayer?.fullName || "—";
   $("live-away-stats")!.textContent = awaySlotIsBatter
     ? getBatterSeasonStats(teamsBox.away, awaySlotPlayer?.id)
@@ -714,7 +774,8 @@ function renderLiveContent(data: any): void {
   $("live-home-role")!.textContent = homeSlotIsBatter ? "BATTER" : "PITCHER";
   $("live-home-pos")!.textContent = homeSlotIsBatter
     ? getPlayerPos(teamsBox.home, homeSlotPlayer?.id)
-    : "";
+    : slotPitchCount(teamsBox.home, homeSlotPlayer?.id);
+  $("live-home-hand")!.textContent = slotHand(homeSlotPlayer?.id, homeSlotIsBatter);
   $("live-home-name")!.textContent = homeSlotPlayer?.fullName || "—";
   $("live-home-stats")!.textContent = homeSlotIsBatter
     ? getBatterSeasonStats(teamsBox.home, homeSlotPlayer?.id)
@@ -737,10 +798,11 @@ function renderLiveContent(data: any): void {
     const isInPlay = lastPitch.details?.isInPlay;
     const isStrike = lastPitch.details?.isStrike;
     const isFoul = (lastPitch.details?.description || "").toLowerCase().includes("foul");
+    // Label still tells the full story; the COLOR is only green/red.
     let resCls = "live-pr-ball";
     let resLbl = "BALL";
-    if (isInPlay) { resCls = "live-pr-contact"; resLbl = "IN PLAY"; }
-    else if (isFoul) { resCls = "live-pr-foul"; resLbl = "FOUL"; }
+    if (isInPlay) { resCls = "live-pr-strike"; resLbl = "IN PLAY"; }
+    else if (isFoul) { resCls = "live-pr-strike"; resLbl = "FOUL"; }
     else if (isStrike) { resCls = "live-pr-strike"; resLbl = "STRIKE"; }
     pitchEl.innerHTML = `
       <span class="live-pitch-num">PITCH ${pitches.length}</span>
@@ -800,7 +862,10 @@ function buildBattingRow(player: any, displayNum: number, s: any, isSub: boolean
   const hr = g.homeRuns ?? 0;
   const bb = g.baseOnBalls ?? 0;
   const so = g.strikeOuts ?? 0;
+  const lob = g.leftOnBase ?? 0;
   const avg = fmtAvg(s?.avg);
+  const obp = fmtAvg(s?.obp);
+  const slg = fmtAvg(s?.slg);
   // Substitutes share their slot's number: blank the number cell and indent the
   // name so the sub reads as nested under the starter it replaced (like a real box
   // score), instead of getting its own number and pushing the lineup past 9.
@@ -819,7 +884,10 @@ function buildBattingRow(player: any, displayNum: number, s: any, isSub: boolean
     <td class="${hr > 0 ? "bs-hr" : ""}">${hr}</td>
     <td>${bb}</td>
     <td>${so}</td>
-    <td class="bs-avg">${avg}</td>
+    <td>${lob}</td>
+    <td class="bs-avg bs-slash">${avg}</td>
+    <td class="bs-avg bs-slash">${obp}</td>
+    <td class="bs-avg bs-slash">${slg}</td>
   </tr>`;
 }
 
@@ -833,6 +901,9 @@ function buildPitchingRow(player: any, s: any): string {
   const bb = g.baseOnBalls ?? 0;
   const so = g.strikeOuts ?? 0;
   const np = g.numberOfPitches ?? g.pitchesThrown ?? "";
+  const strikes = g.strikes;
+  const ps = np !== "" && strikes != null ? `${np}-${strikes}` : String(np);
+  const wp = g.wildPitches ?? 0;
   const era = s?.era ?? "-.--";
   const erHasRuns = er > 0;
   return `<tr class="bs-row" data-player-id="${player.person?.id ?? ""}">
@@ -845,7 +916,8 @@ function buildPitchingRow(player: any, s: any): string {
     <td class="${erHasRuns ? "bs-er" : ""}">${er}</td>
     <td>${bb}</td>
     <td>${so}</td>
-    <td>${np}</td>
+    <td>${wp}</td>
+    <td class="bs-ps">${ps}</td>
     <td class="bs-avg">${era}</td>
   </tr>`;
 }
@@ -925,10 +997,10 @@ function buildBoxPanel(teamStats: any): string {
           <th class="bs-th-num">#</th>
           <th class="bs-th-pos"></th>
           <th class="bs-th-player">Player</th>
-          <th>AB</th><th>H</th><th>R</th><th>RBI</th><th>HR</th><th>BB</th><th>K</th><th>AVG</th>
+          <th>AB</th><th>H</th><th>R</th><th>RBI</th><th>HR</th><th>BB</th><th>K</th><th>LOB</th><th class="bs-th-slash">AVG</th><th class="bs-th-slash">OBP</th><th class="bs-th-slash">SLG</th>
         </tr>
       </thead>
-      <tbody>${battingRows || `<tr><td colspan="11" class="bs-empty">Awaiting first AB</td></tr>`}</tbody>
+      <tbody>${battingRows || `<tr><td colspan="12" class="bs-empty">Awaiting first AB</td></tr>`}</tbody>
     </table>
     <div class="bs-section-hdr pitching"><span class="bs-dot"></span>Pitching</div>
     <table class="bs-table bs-table-pitching">
@@ -937,12 +1009,29 @@ function buildBoxPanel(teamStats: any): string {
           <th class="bs-th-num"></th>
           <th class="bs-th-pos"></th>
           <th class="bs-th-player">Pitcher</th>
-          <th>IP</th><th>H</th><th>R</th><th>ER</th><th>BB</th><th>K</th><th>NP</th><th>ERA</th>
+          <th>IP</th><th>H</th><th>R</th><th>ER</th><th>BB</th><th>K</th><th>WP</th><th>P-S</th><th>ERA</th>
         </tr>
       </thead>
-      <tbody>${pitchingRows || `<tr><td colspan="11" class="bs-empty">No pitching data yet</td></tr>`}</tbody>
+      <tbody>${pitchingRows || `<tr><td colspan="12" class="bs-empty">No pitching data yet</td></tr>`}</tbody>
     </table>
+    ${buildBoxNotes(teamStats)}
   `;
+}
+
+// TB / SB / E don't earn their own columns — real box scores carry them as a
+// notes line under the tables, which also keeps the grid from overflowing.
+function buildBoxNotes(teamBox: any): string {
+  const players: any[] = Object.values(teamBox?.players || {});
+  const notes: string[] = [];
+  const sb = players
+    .filter((p: any) => (p?.stats?.batting?.stolenBases ?? 0) > 0)
+    .map((p: any) => `${shortName(p.person?.fullName || "")} ${p.stats.batting.stolenBases}`);
+  if (sb.length) notes.push(`<span class="bs-note"><b>SB</b> ${sb.join(", ")}</span>`);
+  const err = players
+    .filter((p: any) => (p?.stats?.fielding?.errors ?? 0) > 0)
+    .map((p: any) => `${shortName(p.person?.fullName || "")} ${p.stats.fielding.errors}`);
+  if (err.length) notes.push(`<span class="bs-note"><b>E</b> ${err.join(", ")}</span>`);
+  return notes.length ? `<div class="bs-notes">${notes.join("")}</div>` : "";
 }
 
 function renderBoxScore(data: any): void {
@@ -1027,21 +1116,22 @@ function buildPlayScorebug(play: any): string {
     third:  !!play.matchup?.postOnThird,
   };
   const ink = svgInk();
-  const outFill  = (n: number): string => outs >= n ? "#bf0d3d" : ink.empty;
-  const baseFill = (b: boolean): string => b ? "#bf0d3d" : ink.empty;
+  const red = svgRed();
+  const outFill  = (n: number): string => outs >= n ? red.fill : ink.empty;
+  const baseFill = (b: boolean): string => b ? red.fill : ink.empty;
 
   return `<div class="play-scorebug">
     <div class="play-count-mini">${balls}-${strikes}</div>
     <svg width="48" height="48" viewBox="0 0 58 79" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="13" cy="61" r="5" fill="${outFill(1)}" stroke="#bf0d3d" stroke-width="1"/>
-      <circle cx="30" cy="61" r="5" fill="${outFill(2)}" stroke="#bf0d3d" stroke-width="1"/>
-      <circle cx="47" cy="61" r="5" fill="${outFill(3)}" stroke="#bf0d3d" stroke-width="1"/>
+      <circle cx="13" cy="61" r="5" fill="${outFill(1)}" stroke="${red.stroke}" stroke-width="1"/>
+      <circle cx="30" cy="61" r="5" fill="${outFill(2)}" stroke="${red.stroke}" stroke-width="1"/>
+      <circle cx="47" cy="61" r="5" fill="${outFill(3)}" stroke="${red.stroke}" stroke-width="1"/>
       <rect x="17.6" y="29.7" width="14" height="14" transform="rotate(45 17.6 29.7)"
-        fill="${baseFill(onBase.third)}"  stroke="#bf0d3d" stroke-width="1"/>
+        fill="${baseFill(onBase.third)}"  stroke="${red.stroke}" stroke-width="1"/>
       <rect x="29.4" y="17.7" width="14" height="14" transform="rotate(45 29.4 17.7)"
-        fill="${baseFill(onBase.second)}" stroke="#bf0d3d" stroke-width="1"/>
+        fill="${baseFill(onBase.second)}" stroke="${red.stroke}" stroke-width="1"/>
       <rect x="41.6" y="29.7" width="14" height="14" transform="rotate(45 41.6 29.7)"
-        fill="${baseFill(onBase.first)}"  stroke="#bf0d3d" stroke-width="1"/>
+        fill="${baseFill(onBase.first)}"  stroke="${red.stroke}" stroke-width="1"/>
     </svg>
   </div>`;
 }
@@ -1760,10 +1850,10 @@ function render(data: any): void {
 
   if (isFinalState(statusText)) {
     badge.textContent = "FINAL";
-    badge.style.background = "#bf0d3d";
+    badge.style.background = "";
     const n = linescore?.currentInning || 9;
     inning.textContent = n !== 9 ? `F/${n}` : "";
-    inning.style.color = "#bf0d3d";
+    inning.style.color = "";
     countBlock.style.display = "none";
     $("dynamic-tab-label")!.textContent = "WRAP";
     const finEl = $("final-content");
@@ -1780,7 +1870,7 @@ function render(data: any): void {
     try { renderPregameContent(data, awayTeam, homeTeam); } catch (e) { reportError("renderPregameContent", e); }
   } else if (statusText === "Postponed") {
     badge.textContent = "POSTPONED";
-    badge.style.background = "#bf0d3d";
+    badge.style.background = "";
     const reason = game?.status?.reason || "";
     inning.textContent = reason ? reason.toUpperCase() : "";
     inning.style.color = "var(--text-secondary)";
@@ -1791,12 +1881,12 @@ function render(data: any): void {
     try { renderPostponedContent(data); } catch (e) { reportError("renderPostponedContent", e); }
   } else if (isSuspendedState(statusText)) {
     badge.textContent = "SUSPENDED";
-    badge.style.background = "#bf0d3d";
+    badge.style.background = "";
     const half = linescore?.inningHalf === "Top" ? "▲" : "▼";
     inning.textContent = linescore?.currentInning
       ? `${half} ${linescore.currentInning}`
       : "";
-    inning.style.color = "#bf0d3d";
+    inning.style.color = "";
     countBlock.style.display = "none";
     $("dynamic-tab-label")!.textContent = "SUSPENDED";
     const susEl = $("suspended-content");
@@ -1804,10 +1894,10 @@ function render(data: any): void {
     try { renderSuspendedContent(data); } catch (e) { reportError("renderSuspendedContent", e); }
   } else if (isLiveState(statusText)) {
     badge.textContent = "LIVE";
-    badge.style.background = "#bf0d3d";
+    badge.style.background = "";
     const half = linescore?.inningHalf === "Top" ? "▲" : "▼";
     inning.textContent = `${half} ${linescore?.currentInning || ""}`;
-    inning.style.color = "#bf0d3d";
+    inning.style.color = "";
 
     const cp = data.liveData?.plays?.currentPlay;
     const count = cp?.count;
@@ -1964,6 +2054,9 @@ function setupTabs(): void {
       const targetTab = (btn as HTMLElement).dataset.tab;
       if (!targetTab) return;
       document.body.classList.toggle("on-box-tab", targetTab === "box");
+      // Every tab except the live one condenses the scorebug (animated) so the
+      // data gets the vertical room. "dynamic" is the live/game-info tab.
+      document.body.classList.toggle("compact-top", targetTab !== "dynamic");
       document.body.classList.toggle("on-standings-tab", targetTab === "standings");
       document.querySelectorAll(".tab").forEach((t) => t.classList.remove("tab-active"));
       btn.classList.add("tab-active");
@@ -2359,11 +2452,14 @@ function standTeamRow(team: any, rank: number, isFirst: boolean, gb: string, cli
     `<span class="stand-stat">${team?.wins ?? 0}</span>` +
     `<span class="stand-stat">${team?.losses ?? 0}</span>` +
     `<span class="stand-stat muted">${gb}</span>` +
+    `<span class="stand-stat muted">${team?.runsScored ?? "—"}</span>` +
+    `<span class="stand-stat muted">${team?.runsAllowed ?? "—"}</span>` +
+    `<span class="stand-stat ${(team?.runDifferential ?? 0) > 0 ? "pos" : (team?.runDifferential ?? 0) < 0 ? "neg" : ""}">${(team?.runDifferential ?? 0) > 0 ? "+" : ""}${team?.runDifferential ?? "—"}</span>` +
     `<span class="stand-pct"><span class="stand-pct-val">${standPct(team?.winningPercentage)}</span><span class="stand-bar"><span class="stand-bar-fill" style="width:${barPct}%"></span></span></span>` +
     `</div>`;
 }
 function standColHdr(): string {
-  return '<div class="stand-col-hdr"><span>#</span><span class="stand-col-team">Team</span><span>W</span><span>L</span><span>GB</span><span class="stand-col-pct">PCT</span></div>';
+  return '<div class="stand-col-hdr"><span>#</span><span class="stand-col-team">Team</span><span>W</span><span>L</span><span>GB</span><span>R</span><span>RA</span><span>DIFF</span><span class="stand-col-pct">PCT</span></div>';
 }
 function standDivisionCard(record: any): string {
   const name = STAND_DIVISION_NAMES[record?.division?.id] || "Division";

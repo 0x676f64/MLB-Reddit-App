@@ -79268,14 +79268,174 @@ var import_minimal55 = __toESM(require_minimal2(), 1);
 
 // node_modules/@devvit/protos/types/devvit/plugin/redditapi/wiki/wiki_msg.js
 var import_minimal54 = __toESM(require_minimal2(), 1);
+var WikiVersion;
+(function(WikiVersion3) {
+  WikiVersion3[WikiVersion3["WIKI_VERSION_UNSPECIFIED"] = 0] = "WIKI_VERSION_UNSPECIFIED";
+  WikiVersion3[WikiVersion3["WIKI_VERSION_V1"] = 1] = "WIKI_VERSION_V1";
+  WikiVersion3[WikiVersion3["WIKI_VERSION_V2"] = 2] = "WIKI_VERSION_V2";
+  WikiVersion3[WikiVersion3["UNRECOGNIZED"] = -1] = "UNRECOGNIZED";
+})(WikiVersion || (WikiVersion = {}));
+function wikiVersionFromJSON(object) {
+  switch (object) {
+    case 0:
+    case "WIKI_VERSION_UNSPECIFIED":
+      return WikiVersion.WIKI_VERSION_UNSPECIFIED;
+    case 1:
+    case "WIKI_VERSION_V1":
+      return WikiVersion.WIKI_VERSION_V1;
+    case 2:
+    case "WIKI_VERSION_V2":
+      return WikiVersion.WIKI_VERSION_V2;
+    case -1:
+    case "UNRECOGNIZED":
+    default:
+      return WikiVersion.UNRECOGNIZED;
+  }
+}
+function wikiVersionToJSON(object) {
+  switch (object) {
+    case WikiVersion.WIKI_VERSION_UNSPECIFIED:
+      return 0;
+    case WikiVersion.WIKI_VERSION_V1:
+      return 1;
+    case WikiVersion.WIKI_VERSION_V2:
+      return 2;
+    case WikiVersion.UNRECOGNIZED:
+    default:
+      return -1;
+  }
+}
+function createBaseIsWikiVersionEnabledInSubredditRequest() {
+  return { subreddit: "", wikiVersion: 0 };
+}
+var IsWikiVersionEnabledInSubredditRequest = {
+  $type: "devvit.plugin.redditapi.wiki.IsWikiVersionEnabledInSubredditRequest",
+  encode(message, writer = import_minimal54.default.Writer.create()) {
+    if (message.subreddit !== "") {
+      writer.uint32(10).string(message.subreddit);
+    }
+    if (message.wikiVersion !== 0) {
+      writer.uint32(16).int32(message.wikiVersion);
+    }
+    return writer;
+  },
+  decode(input, length) {
+    const reader = input instanceof import_minimal54.default.Reader ? input : import_minimal54.default.Reader.create(input);
+    let end = length === void 0 ? reader.len : reader.pos + length;
+    const message = createBaseIsWikiVersionEnabledInSubredditRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1:
+          if (tag !== 10) {
+            break;
+          }
+          message.subreddit = reader.string();
+          continue;
+        case 2:
+          if (tag !== 16) {
+            break;
+          }
+          message.wikiVersion = reader.int32();
+          continue;
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skipType(tag & 7);
+    }
+    return message;
+  },
+  fromJSON(object) {
+    return {
+      subreddit: isSet41(object.subreddit) ? globalThis.String(object.subreddit) : "",
+      wikiVersion: isSet41(object.wikiVersion) ? wikiVersionFromJSON(object.wikiVersion) : 0
+    };
+  },
+  toJSON(message) {
+    const obj = {};
+    if (message.subreddit !== "") {
+      obj.subreddit = message.subreddit;
+    }
+    if (message.wikiVersion !== 0) {
+      obj.wikiVersion = wikiVersionToJSON(message.wikiVersion);
+    }
+    return obj;
+  },
+  create(base) {
+    return IsWikiVersionEnabledInSubredditRequest.fromPartial(base ?? {});
+  },
+  fromPartial(object) {
+    const message = createBaseIsWikiVersionEnabledInSubredditRequest();
+    message.subreddit = object.subreddit ?? "";
+    message.wikiVersion = object.wikiVersion ?? 0;
+    return message;
+  }
+};
+messageTypeRegistry.set(IsWikiVersionEnabledInSubredditRequest.$type, IsWikiVersionEnabledInSubredditRequest);
+function createBaseIsWikiVersionEnabledInSubredditResponse() {
+  return { enabled: false };
+}
+var IsWikiVersionEnabledInSubredditResponse = {
+  $type: "devvit.plugin.redditapi.wiki.IsWikiVersionEnabledInSubredditResponse",
+  encode(message, writer = import_minimal54.default.Writer.create()) {
+    if (message.enabled !== false) {
+      writer.uint32(8).bool(message.enabled);
+    }
+    return writer;
+  },
+  decode(input, length) {
+    const reader = input instanceof import_minimal54.default.Reader ? input : import_minimal54.default.Reader.create(input);
+    let end = length === void 0 ? reader.len : reader.pos + length;
+    const message = createBaseIsWikiVersionEnabledInSubredditResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1:
+          if (tag !== 8) {
+            break;
+          }
+          message.enabled = reader.bool();
+          continue;
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skipType(tag & 7);
+    }
+    return message;
+  },
+  fromJSON(object) {
+    return { enabled: isSet41(object.enabled) ? globalThis.Boolean(object.enabled) : false };
+  },
+  toJSON(message) {
+    const obj = {};
+    if (message.enabled !== false) {
+      obj.enabled = message.enabled;
+    }
+    return obj;
+  },
+  create(base) {
+    return IsWikiVersionEnabledInSubredditResponse.fromPartial(base ?? {});
+  },
+  fromPartial(object) {
+    const message = createBaseIsWikiVersionEnabledInSubredditResponse();
+    message.enabled = object.enabled ?? false;
+    return message;
+  }
+};
+messageTypeRegistry.set(IsWikiVersionEnabledInSubredditResponse.$type, IsWikiVersionEnabledInSubredditResponse);
 function createBaseGetWikiPagesRequest() {
-  return { subreddit: "" };
+  return { subreddit: "", wikiVersion: 0 };
 }
 var GetWikiPagesRequest = {
   $type: "devvit.plugin.redditapi.wiki.GetWikiPagesRequest",
   encode(message, writer = import_minimal54.default.Writer.create()) {
     if (message.subreddit !== "") {
       writer.uint32(10).string(message.subreddit);
+    }
+    if (message.wikiVersion !== 0) {
+      writer.uint32(16).int32(message.wikiVersion);
     }
     return writer;
   },
@@ -79292,6 +79452,12 @@ var GetWikiPagesRequest = {
           }
           message.subreddit = reader.string();
           continue;
+        case 2:
+          if (tag !== 16) {
+            break;
+          }
+          message.wikiVersion = reader.int32();
+          continue;
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -79301,12 +79467,18 @@ var GetWikiPagesRequest = {
     return message;
   },
   fromJSON(object) {
-    return { subreddit: isSet41(object.subreddit) ? globalThis.String(object.subreddit) : "" };
+    return {
+      subreddit: isSet41(object.subreddit) ? globalThis.String(object.subreddit) : "",
+      wikiVersion: isSet41(object.wikiVersion) ? wikiVersionFromJSON(object.wikiVersion) : 0
+    };
   },
   toJSON(message) {
     const obj = {};
     if (message.subreddit !== "") {
       obj.subreddit = message.subreddit;
+    }
+    if (message.wikiVersion !== 0) {
+      obj.wikiVersion = wikiVersionToJSON(message.wikiVersion);
     }
     return obj;
   },
@@ -79316,6 +79488,7 @@ var GetWikiPagesRequest = {
   fromPartial(object) {
     const message = createBaseGetWikiPagesRequest();
     message.subreddit = object.subreddit ?? "";
+    message.wikiVersion = object.wikiVersion ?? 0;
     return message;
   }
 };
@@ -79389,7 +79562,7 @@ var GetWikiPagesResponse = {
 };
 messageTypeRegistry.set(GetWikiPagesResponse.$type, GetWikiPagesResponse);
 function createBaseGetWikiPageRequest() {
-  return { subreddit: "", page: "", revisionId: void 0 };
+  return { subreddit: "", page: "", revisionId: void 0, wikiVersion: 0 };
 }
 var GetWikiPageRequest = {
   $type: "devvit.plugin.redditapi.wiki.GetWikiPageRequest",
@@ -79402,6 +79575,9 @@ var GetWikiPageRequest = {
     }
     if (message.revisionId !== void 0) {
       StringValue.encode({ value: message.revisionId }, writer.uint32(26).fork()).ldelim();
+    }
+    if (message.wikiVersion !== 0) {
+      writer.uint32(32).int32(message.wikiVersion);
     }
     return writer;
   },
@@ -79430,6 +79606,12 @@ var GetWikiPageRequest = {
           }
           message.revisionId = StringValue.decode(reader, reader.uint32()).value;
           continue;
+        case 4:
+          if (tag !== 32) {
+            break;
+          }
+          message.wikiVersion = reader.int32();
+          continue;
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -79442,7 +79624,8 @@ var GetWikiPageRequest = {
     return {
       subreddit: isSet41(object.subreddit) ? globalThis.String(object.subreddit) : "",
       page: isSet41(object.page) ? globalThis.String(object.page) : "",
-      revisionId: isSet41(object.revisionId) ? String(object.revisionId) : void 0
+      revisionId: isSet41(object.revisionId) ? String(object.revisionId) : void 0,
+      wikiVersion: isSet41(object.wikiVersion) ? wikiVersionFromJSON(object.wikiVersion) : 0
     };
   },
   toJSON(message) {
@@ -79456,6 +79639,9 @@ var GetWikiPageRequest = {
     if (message.revisionId !== void 0) {
       obj.revisionId = message.revisionId;
     }
+    if (message.wikiVersion !== 0) {
+      obj.wikiVersion = wikiVersionToJSON(message.wikiVersion);
+    }
     return obj;
   },
   create(base) {
@@ -79466,6 +79652,7 @@ var GetWikiPageRequest = {
     message.subreddit = object.subreddit ?? "";
     message.page = object.page ?? "";
     message.revisionId = object.revisionId ?? void 0;
+    message.wikiVersion = object.wikiVersion ?? 0;
     return message;
   }
 };
@@ -79685,7 +79872,7 @@ var GetWikiPageResponse = {
 };
 messageTypeRegistry.set(GetWikiPageResponse.$type, GetWikiPageResponse);
 function createBaseEditWikiPageRequest() {
-  return { subreddit: "", page: "", content: "", reason: "" };
+  return { subreddit: "", page: "", content: "", reason: "", wikiVersion: 0 };
 }
 var EditWikiPageRequest = {
   $type: "devvit.plugin.redditapi.wiki.EditWikiPageRequest",
@@ -79701,6 +79888,9 @@ var EditWikiPageRequest = {
     }
     if (message.reason !== "") {
       writer.uint32(34).string(message.reason);
+    }
+    if (message.wikiVersion !== 0) {
+      writer.uint32(40).int32(message.wikiVersion);
     }
     return writer;
   },
@@ -79735,6 +79925,12 @@ var EditWikiPageRequest = {
           }
           message.reason = reader.string();
           continue;
+        case 5:
+          if (tag !== 40) {
+            break;
+          }
+          message.wikiVersion = reader.int32();
+          continue;
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -79748,7 +79944,8 @@ var EditWikiPageRequest = {
       subreddit: isSet41(object.subreddit) ? globalThis.String(object.subreddit) : "",
       page: isSet41(object.page) ? globalThis.String(object.page) : "",
       content: isSet41(object.content) ? globalThis.String(object.content) : "",
-      reason: isSet41(object.reason) ? globalThis.String(object.reason) : ""
+      reason: isSet41(object.reason) ? globalThis.String(object.reason) : "",
+      wikiVersion: isSet41(object.wikiVersion) ? wikiVersionFromJSON(object.wikiVersion) : 0
     };
   },
   toJSON(message) {
@@ -79765,6 +79962,9 @@ var EditWikiPageRequest = {
     if (message.reason !== "") {
       obj.reason = message.reason;
     }
+    if (message.wikiVersion !== 0) {
+      obj.wikiVersion = wikiVersionToJSON(message.wikiVersion);
+    }
     return obj;
   },
   create(base) {
@@ -79776,12 +79976,13 @@ var EditWikiPageRequest = {
     message.page = object.page ?? "";
     message.content = object.content ?? "";
     message.reason = object.reason ?? "";
+    message.wikiVersion = object.wikiVersion ?? 0;
     return message;
   }
 };
 messageTypeRegistry.set(EditWikiPageRequest.$type, EditWikiPageRequest);
 function createBaseHideWikiPageRevisionRequest() {
-  return { subreddit: "", page: "", revision: "" };
+  return { subreddit: "", page: "", revision: "", wikiVersion: 0 };
 }
 var HideWikiPageRevisionRequest = {
   $type: "devvit.plugin.redditapi.wiki.HideWikiPageRevisionRequest",
@@ -79794,6 +79995,9 @@ var HideWikiPageRevisionRequest = {
     }
     if (message.revision !== "") {
       writer.uint32(26).string(message.revision);
+    }
+    if (message.wikiVersion !== 0) {
+      writer.uint32(32).int32(message.wikiVersion);
     }
     return writer;
   },
@@ -79822,6 +80026,12 @@ var HideWikiPageRevisionRequest = {
           }
           message.revision = reader.string();
           continue;
+        case 4:
+          if (tag !== 32) {
+            break;
+          }
+          message.wikiVersion = reader.int32();
+          continue;
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -79834,7 +80044,8 @@ var HideWikiPageRevisionRequest = {
     return {
       subreddit: isSet41(object.subreddit) ? globalThis.String(object.subreddit) : "",
       page: isSet41(object.page) ? globalThis.String(object.page) : "",
-      revision: isSet41(object.revision) ? globalThis.String(object.revision) : ""
+      revision: isSet41(object.revision) ? globalThis.String(object.revision) : "",
+      wikiVersion: isSet41(object.wikiVersion) ? wikiVersionFromJSON(object.wikiVersion) : 0
     };
   },
   toJSON(message) {
@@ -79848,6 +80059,9 @@ var HideWikiPageRevisionRequest = {
     if (message.revision !== "") {
       obj.revision = message.revision;
     }
+    if (message.wikiVersion !== 0) {
+      obj.wikiVersion = wikiVersionToJSON(message.wikiVersion);
+    }
     return obj;
   },
   create(base) {
@@ -79858,6 +80072,7 @@ var HideWikiPageRevisionRequest = {
     message.subreddit = object.subreddit ?? "";
     message.page = object.page ?? "";
     message.revision = object.revision ?? "";
+    message.wikiVersion = object.wikiVersion ?? 0;
     return message;
   }
 };
@@ -79923,7 +80138,8 @@ function createBaseGetWikiPageRevisionsRequest() {
     limit: void 0,
     count: void 0,
     show: void 0,
-    srDetail: void 0
+    srDetail: void 0,
+    wikiVersion: 0
   };
 }
 var GetWikiPageRevisionsRequest = {
@@ -79952,6 +80168,9 @@ var GetWikiPageRevisionsRequest = {
     }
     if (message.srDetail !== void 0) {
       BoolValue.encode({ value: message.srDetail }, writer.uint32(66).fork()).ldelim();
+    }
+    if (message.wikiVersion !== 0) {
+      writer.uint32(72).int32(message.wikiVersion);
     }
     return writer;
   },
@@ -80010,6 +80229,12 @@ var GetWikiPageRevisionsRequest = {
           }
           message.srDetail = BoolValue.decode(reader, reader.uint32()).value;
           continue;
+        case 9:
+          if (tag !== 72) {
+            break;
+          }
+          message.wikiVersion = reader.int32();
+          continue;
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -80027,7 +80252,8 @@ var GetWikiPageRevisionsRequest = {
       limit: isSet41(object.limit) ? Number(object.limit) : void 0,
       count: isSet41(object.count) ? Number(object.count) : void 0,
       show: isSet41(object.show) ? Boolean(object.show) : void 0,
-      srDetail: isSet41(object.srDetail) ? Boolean(object.srDetail) : void 0
+      srDetail: isSet41(object.srDetail) ? Boolean(object.srDetail) : void 0,
+      wikiVersion: isSet41(object.wikiVersion) ? wikiVersionFromJSON(object.wikiVersion) : 0
     };
   },
   toJSON(message) {
@@ -80056,6 +80282,9 @@ var GetWikiPageRevisionsRequest = {
     if (message.srDetail !== void 0) {
       obj.srDetail = message.srDetail;
     }
+    if (message.wikiVersion !== 0) {
+      obj.wikiVersion = wikiVersionToJSON(message.wikiVersion);
+    }
     return obj;
   },
   create(base) {
@@ -80071,6 +80300,7 @@ var GetWikiPageRevisionsRequest = {
     message.count = object.count ?? void 0;
     message.show = object.show ?? void 0;
     message.srDetail = object.srDetail ?? void 0;
+    message.wikiVersion = object.wikiVersion ?? 0;
     return message;
   }
 };
@@ -80510,7 +80740,7 @@ var GetWikiRevisionsRequest = {
 };
 messageTypeRegistry.set(GetWikiRevisionsRequest.$type, GetWikiRevisionsRequest);
 function createBaseRevertWikiPageRequest() {
-  return { subreddit: "", page: "", revision: "" };
+  return { subreddit: "", page: "", revision: "", wikiVersion: 0 };
 }
 var RevertWikiPageRequest = {
   $type: "devvit.plugin.redditapi.wiki.RevertWikiPageRequest",
@@ -80523,6 +80753,9 @@ var RevertWikiPageRequest = {
     }
     if (message.revision !== "") {
       writer.uint32(26).string(message.revision);
+    }
+    if (message.wikiVersion !== 0) {
+      writer.uint32(32).int32(message.wikiVersion);
     }
     return writer;
   },
@@ -80551,6 +80784,12 @@ var RevertWikiPageRequest = {
           }
           message.revision = reader.string();
           continue;
+        case 4:
+          if (tag !== 32) {
+            break;
+          }
+          message.wikiVersion = reader.int32();
+          continue;
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -80563,7 +80802,8 @@ var RevertWikiPageRequest = {
     return {
       subreddit: isSet41(object.subreddit) ? globalThis.String(object.subreddit) : "",
       page: isSet41(object.page) ? globalThis.String(object.page) : "",
-      revision: isSet41(object.revision) ? globalThis.String(object.revision) : ""
+      revision: isSet41(object.revision) ? globalThis.String(object.revision) : "",
+      wikiVersion: isSet41(object.wikiVersion) ? wikiVersionFromJSON(object.wikiVersion) : 0
     };
   },
   toJSON(message) {
@@ -80577,6 +80817,9 @@ var RevertWikiPageRequest = {
     if (message.revision !== "") {
       obj.revision = message.revision;
     }
+    if (message.wikiVersion !== 0) {
+      obj.wikiVersion = wikiVersionToJSON(message.wikiVersion);
+    }
     return obj;
   },
   create(base) {
@@ -80587,12 +80830,13 @@ var RevertWikiPageRequest = {
     message.subreddit = object.subreddit ?? "";
     message.page = object.page ?? "";
     message.revision = object.revision ?? "";
+    message.wikiVersion = object.wikiVersion ?? 0;
     return message;
   }
 };
 messageTypeRegistry.set(RevertWikiPageRequest.$type, RevertWikiPageRequest);
 function createBaseGetWikiPageSettingsRequest() {
-  return { subreddit: "", page: "" };
+  return { subreddit: "", page: "", wikiVersion: 0 };
 }
 var GetWikiPageSettingsRequest = {
   $type: "devvit.plugin.redditapi.wiki.GetWikiPageSettingsRequest",
@@ -80602,6 +80846,9 @@ var GetWikiPageSettingsRequest = {
     }
     if (message.page !== "") {
       writer.uint32(18).string(message.page);
+    }
+    if (message.wikiVersion !== 0) {
+      writer.uint32(24).int32(message.wikiVersion);
     }
     return writer;
   },
@@ -80624,6 +80871,12 @@ var GetWikiPageSettingsRequest = {
           }
           message.page = reader.string();
           continue;
+        case 3:
+          if (tag !== 24) {
+            break;
+          }
+          message.wikiVersion = reader.int32();
+          continue;
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -80635,7 +80888,8 @@ var GetWikiPageSettingsRequest = {
   fromJSON(object) {
     return {
       subreddit: isSet41(object.subreddit) ? globalThis.String(object.subreddit) : "",
-      page: isSet41(object.page) ? globalThis.String(object.page) : ""
+      page: isSet41(object.page) ? globalThis.String(object.page) : "",
+      wikiVersion: isSet41(object.wikiVersion) ? wikiVersionFromJSON(object.wikiVersion) : 0
     };
   },
   toJSON(message) {
@@ -80646,6 +80900,9 @@ var GetWikiPageSettingsRequest = {
     if (message.page !== "") {
       obj.page = message.page;
     }
+    if (message.wikiVersion !== 0) {
+      obj.wikiVersion = wikiVersionToJSON(message.wikiVersion);
+    }
     return obj;
   },
   create(base) {
@@ -80655,6 +80912,7 @@ var GetWikiPageSettingsRequest = {
     const message = createBaseGetWikiPageSettingsRequest();
     message.subreddit = object.subreddit ?? "";
     message.page = object.page ?? "";
+    message.wikiVersion = object.wikiVersion ?? 0;
     return message;
   }
 };
@@ -80810,7 +81068,7 @@ var WikiPageSettings_Data = {
 };
 messageTypeRegistry.set(WikiPageSettings_Data.$type, WikiPageSettings_Data);
 function createBaseUpdateWikiPageSettingsRequest() {
-  return { subreddit: "", page: "", permlevel: 0, listed: "" };
+  return { subreddit: "", page: "", permlevel: 0, listed: "", wikiVersion: 0 };
 }
 var UpdateWikiPageSettingsRequest = {
   $type: "devvit.plugin.redditapi.wiki.UpdateWikiPageSettingsRequest",
@@ -80826,6 +81084,9 @@ var UpdateWikiPageSettingsRequest = {
     }
     if (message.listed !== "") {
       writer.uint32(34).string(message.listed);
+    }
+    if (message.wikiVersion !== 0) {
+      writer.uint32(40).int32(message.wikiVersion);
     }
     return writer;
   },
@@ -80860,6 +81121,12 @@ var UpdateWikiPageSettingsRequest = {
           }
           message.listed = reader.string();
           continue;
+        case 5:
+          if (tag !== 40) {
+            break;
+          }
+          message.wikiVersion = reader.int32();
+          continue;
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -80873,7 +81140,8 @@ var UpdateWikiPageSettingsRequest = {
       subreddit: isSet41(object.subreddit) ? globalThis.String(object.subreddit) : "",
       page: isSet41(object.page) ? globalThis.String(object.page) : "",
       permlevel: isSet41(object.permlevel) ? globalThis.Number(object.permlevel) : 0,
-      listed: isSet41(object.listed) ? globalThis.String(object.listed) : ""
+      listed: isSet41(object.listed) ? globalThis.String(object.listed) : "",
+      wikiVersion: isSet41(object.wikiVersion) ? wikiVersionFromJSON(object.wikiVersion) : 0
     };
   },
   toJSON(message) {
@@ -80890,6 +81158,9 @@ var UpdateWikiPageSettingsRequest = {
     if (message.listed !== "") {
       obj.listed = message.listed;
     }
+    if (message.wikiVersion !== 0) {
+      obj.wikiVersion = wikiVersionToJSON(message.wikiVersion);
+    }
     return obj;
   },
   create(base) {
@@ -80901,12 +81172,13 @@ var UpdateWikiPageSettingsRequest = {
     message.page = object.page ?? "";
     message.permlevel = object.permlevel ?? 0;
     message.listed = object.listed ?? "";
+    message.wikiVersion = object.wikiVersion ?? 0;
     return message;
   }
 };
 messageTypeRegistry.set(UpdateWikiPageSettingsRequest.$type, UpdateWikiPageSettingsRequest);
 function createBaseAllowEditorRequest() {
-  return { subreddit: "", page: "", act: "", username: "" };
+  return { subreddit: "", page: "", act: "", username: "", wikiVersion: 0 };
 }
 var AllowEditorRequest = {
   $type: "devvit.plugin.redditapi.wiki.AllowEditorRequest",
@@ -80922,6 +81194,9 @@ var AllowEditorRequest = {
     }
     if (message.username !== "") {
       writer.uint32(34).string(message.username);
+    }
+    if (message.wikiVersion !== 0) {
+      writer.uint32(40).int32(message.wikiVersion);
     }
     return writer;
   },
@@ -80956,6 +81231,12 @@ var AllowEditorRequest = {
           }
           message.username = reader.string();
           continue;
+        case 5:
+          if (tag !== 40) {
+            break;
+          }
+          message.wikiVersion = reader.int32();
+          continue;
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -80969,7 +81250,8 @@ var AllowEditorRequest = {
       subreddit: isSet41(object.subreddit) ? globalThis.String(object.subreddit) : "",
       page: isSet41(object.page) ? globalThis.String(object.page) : "",
       act: isSet41(object.act) ? globalThis.String(object.act) : "",
-      username: isSet41(object.username) ? globalThis.String(object.username) : ""
+      username: isSet41(object.username) ? globalThis.String(object.username) : "",
+      wikiVersion: isSet41(object.wikiVersion) ? wikiVersionFromJSON(object.wikiVersion) : 0
     };
   },
   toJSON(message) {
@@ -80986,6 +81268,9 @@ var AllowEditorRequest = {
     if (message.username !== "") {
       obj.username = message.username;
     }
+    if (message.wikiVersion !== 0) {
+      obj.wikiVersion = wikiVersionToJSON(message.wikiVersion);
+    }
     return obj;
   },
   create(base) {
@@ -80997,6 +81282,7 @@ var AllowEditorRequest = {
     message.page = object.page ?? "";
     message.act = object.act ?? "";
     message.username = object.username ?? "";
+    message.wikiVersion = object.wikiVersion ?? 0;
     return message;
   }
 };
@@ -81020,6 +81306,15 @@ var WikiDefinition = {
   name: "Wiki",
   fullName: "devvit.plugin.redditapi.wiki.Wiki",
   methods: {
+    /** Check whether a wiki version is enabled for a subreddit. */
+    isWikiVersionEnabledInSubreddit: {
+      name: "IsWikiVersionEnabledInSubreddit",
+      requestType: IsWikiVersionEnabledInSubredditRequest,
+      requestStream: false,
+      responseType: IsWikiVersionEnabledInSubredditResponse,
+      responseStream: false,
+      options: {}
+    },
     /**
      * Get a list of wiki pages for a subreddit
      *
@@ -81031,45 +81326,7 @@ var WikiDefinition = {
       requestStream: false,
       responseType: GetWikiPagesResponse,
       responseStream: false,
-      options: {
-        _unknownFields: {
-          480010: [
-            new Uint8Array([5, 10, 3, 71, 69, 84]),
-            new Uint8Array([
-              27,
-              18,
-              25,
-              47,
-              114,
-              47,
-              123,
-              115,
-              117,
-              98,
-              114,
-              101,
-              100,
-              100,
-              105,
-              116,
-              125,
-              47,
-              119,
-              105,
-              107,
-              105,
-              47,
-              112,
-              97,
-              103,
-              101,
-              115
-            ]),
-            new Uint8Array([11, 58, 9, 115, 117, 98, 114, 101, 100, 100, 105, 116]),
-            new Uint8Array([2, 88, 1])
-          ]
-        }
-      }
+      options: {}
     },
     /**
      * Get a wiki page
@@ -81082,63 +81339,7 @@ var WikiDefinition = {
       requestStream: false,
       responseType: GetWikiPageResponse,
       responseStream: false,
-      options: {
-        _unknownFields: {
-          480010: [
-            new Uint8Array([5, 10, 3, 71, 69, 84]),
-            new Uint8Array([
-              44,
-              18,
-              42,
-              47,
-              114,
-              47,
-              123,
-              115,
-              117,
-              98,
-              114,
-              101,
-              100,
-              100,
-              105,
-              116,
-              125,
-              47,
-              119,
-              105,
-              107,
-              105,
-              47,
-              123,
-              112,
-              97,
-              103,
-              101,
-              125,
-              63,
-              118,
-              61,
-              123,
-              114,
-              101,
-              118,
-              105,
-              115,
-              105,
-              111,
-              110,
-              95,
-              105,
-              100,
-              125
-            ]),
-            new Uint8Array([2, 64, 1]),
-            new Uint8Array([11, 58, 9, 115, 117, 98, 114, 101, 100, 100, 105, 116]),
-            new Uint8Array([2, 88, 1])
-          ]
-        }
-      }
+      options: {}
     },
     /**
      * Edit wiki page
@@ -81151,49 +81352,7 @@ var WikiDefinition = {
       requestStream: false,
       responseType: Empty,
       responseStream: false,
-      options: {
-        _unknownFields: {
-          480010: [
-            new Uint8Array([6, 10, 4, 80, 79, 83, 84]),
-            new Uint8Array([
-              30,
-              18,
-              28,
-              47,
-              114,
-              47,
-              123,
-              115,
-              117,
-              98,
-              114,
-              101,
-              100,
-              100,
-              105,
-              116,
-              125,
-              47,
-              97,
-              112,
-              105,
-              47,
-              119,
-              105,
-              107,
-              105,
-              47,
-              101,
-              100,
-              105,
-              116
-            ]),
-            new Uint8Array([2, 24, 4]),
-            new Uint8Array([11, 58, 9, 115, 117, 98, 114, 101, 100, 100, 105, 116]),
-            new Uint8Array([2, 88, 1])
-          ]
-        }
-      }
+      options: {}
     },
     /**
      * Hide a wiki page revision
@@ -81206,48 +81365,7 @@ var WikiDefinition = {
       requestStream: false,
       responseType: HideWikiPageRevisionResponse,
       responseStream: false,
-      options: {
-        _unknownFields: {
-          480010: [
-            new Uint8Array([6, 10, 4, 80, 79, 83, 84]),
-            new Uint8Array([
-              30,
-              18,
-              28,
-              47,
-              114,
-              47,
-              123,
-              115,
-              117,
-              98,
-              114,
-              101,
-              100,
-              100,
-              105,
-              116,
-              125,
-              47,
-              97,
-              112,
-              105,
-              47,
-              119,
-              105,
-              107,
-              105,
-              47,
-              104,
-              105,
-              100,
-              101
-            ]),
-            new Uint8Array([2, 24, 4]),
-            new Uint8Array([11, 58, 9, 115, 117, 98, 114, 101, 100, 100, 105, 116])
-          ]
-        }
-      }
+      options: {}
     },
     /**
      * Get a list of revisions of a wiki page
@@ -81260,150 +81378,7 @@ var WikiDefinition = {
       requestStream: false,
       responseType: WikiPageRevisionListing,
       responseStream: false,
-      options: {
-        _unknownFields: {
-          480010: [
-            new Uint8Array([5, 10, 3, 71, 69, 84]),
-            new Uint8Array([
-              131,
-              1,
-              18,
-              128,
-              1,
-              47,
-              114,
-              47,
-              123,
-              115,
-              117,
-              98,
-              114,
-              101,
-              100,
-              100,
-              105,
-              116,
-              125,
-              47,
-              119,
-              105,
-              107,
-              105,
-              47,
-              114,
-              101,
-              118,
-              105,
-              115,
-              105,
-              111,
-              110,
-              115,
-              47,
-              123,
-              112,
-              97,
-              103,
-              101,
-              125,
-              63,
-              97,
-              102,
-              116,
-              101,
-              114,
-              61,
-              123,
-              97,
-              102,
-              116,
-              101,
-              114,
-              125,
-              38,
-              98,
-              101,
-              102,
-              111,
-              114,
-              101,
-              61,
-              123,
-              98,
-              101,
-              102,
-              111,
-              114,
-              101,
-              125,
-              38,
-              99,
-              111,
-              117,
-              110,
-              116,
-              61,
-              123,
-              99,
-              111,
-              117,
-              110,
-              116,
-              125,
-              38,
-              108,
-              105,
-              109,
-              105,
-              116,
-              61,
-              123,
-              108,
-              105,
-              109,
-              105,
-              116,
-              125,
-              38,
-              115,
-              104,
-              111,
-              119,
-              61,
-              123,
-              115,
-              104,
-              111,
-              119,
-              125,
-              38,
-              115,
-              114,
-              95,
-              100,
-              101,
-              116,
-              97,
-              105,
-              108,
-              61,
-              123,
-              115,
-              114,
-              95,
-              100,
-              101,
-              116,
-              97,
-              105,
-              108,
-              125
-            ]),
-            new Uint8Array([11, 58, 9, 115, 117, 98, 114, 101, 100, 100, 105, 116]),
-            new Uint8Array([2, 88, 1])
-          ]
-        }
-      }
+      options: {}
     },
     /**
      * Retrieve a list of recently changed wiki pages in this subreddit
@@ -81563,50 +81538,7 @@ var WikiDefinition = {
       requestStream: false,
       responseType: Empty,
       responseStream: false,
-      options: {
-        _unknownFields: {
-          480010: [
-            new Uint8Array([6, 10, 4, 80, 79, 83, 84]),
-            new Uint8Array([
-              32,
-              18,
-              30,
-              47,
-              114,
-              47,
-              123,
-              115,
-              117,
-              98,
-              114,
-              101,
-              100,
-              100,
-              105,
-              116,
-              125,
-              47,
-              97,
-              112,
-              105,
-              47,
-              119,
-              105,
-              107,
-              105,
-              47,
-              114,
-              101,
-              118,
-              101,
-              114,
-              116
-            ]),
-            new Uint8Array([2, 24, 4]),
-            new Uint8Array([11, 58, 9, 115, 117, 98, 114, 101, 100, 100, 105, 116])
-          ]
-        }
-      }
+      options: {}
     },
     /**
      * Retrieve the current permission settings for page
@@ -81619,54 +81551,7 @@ var WikiDefinition = {
       requestStream: false,
       responseType: WikiPageSettings,
       responseStream: false,
-      options: {
-        _unknownFields: {
-          480010: [
-            new Uint8Array([5, 10, 3, 71, 69, 84]),
-            new Uint8Array([
-              37,
-              18,
-              35,
-              47,
-              114,
-              47,
-              123,
-              115,
-              117,
-              98,
-              114,
-              101,
-              100,
-              100,
-              105,
-              116,
-              125,
-              47,
-              119,
-              105,
-              107,
-              105,
-              47,
-              115,
-              101,
-              116,
-              116,
-              105,
-              110,
-              103,
-              115,
-              47,
-              123,
-              112,
-              97,
-              103,
-              101,
-              125
-            ]),
-            new Uint8Array([11, 58, 9, 115, 117, 98, 114, 101, 100, 100, 105, 116])
-          ]
-        }
-      }
+      options: {}
     },
     /**
      * Update the permissions and visibility of wiki page
@@ -81679,55 +81564,7 @@ var WikiDefinition = {
       requestStream: false,
       responseType: WikiPageSettings,
       responseStream: false,
-      options: {
-        _unknownFields: {
-          480010: [
-            new Uint8Array([6, 10, 4, 80, 79, 83, 84]),
-            new Uint8Array([
-              37,
-              18,
-              35,
-              47,
-              114,
-              47,
-              123,
-              115,
-              117,
-              98,
-              114,
-              101,
-              100,
-              100,
-              105,
-              116,
-              125,
-              47,
-              119,
-              105,
-              107,
-              105,
-              47,
-              115,
-              101,
-              116,
-              116,
-              105,
-              110,
-              103,
-              115,
-              47,
-              123,
-              112,
-              97,
-              103,
-              101,
-              125
-            ]),
-            new Uint8Array([2, 24, 3]),
-            new Uint8Array([11, 58, 9, 115, 117, 98, 114, 101, 100, 100, 105, 116])
-          ]
-        }
-      }
+      options: {}
     },
     /**
      * Allow/deny username to edit this wiki page
@@ -81741,61 +81578,7 @@ var WikiDefinition = {
       requestStream: false,
       responseType: Empty,
       responseStream: false,
-      options: {
-        _unknownFields: {
-          480010: [
-            new Uint8Array([6, 10, 4, 80, 79, 83, 84]),
-            new Uint8Array([
-              43,
-              18,
-              41,
-              47,
-              114,
-              47,
-              123,
-              115,
-              117,
-              98,
-              114,
-              101,
-              100,
-              100,
-              105,
-              116,
-              125,
-              47,
-              97,
-              112,
-              105,
-              47,
-              119,
-              105,
-              107,
-              105,
-              47,
-              97,
-              108,
-              108,
-              111,
-              119,
-              101,
-              100,
-              105,
-              116,
-              111,
-              114,
-              47,
-              123,
-              97,
-              99,
-              116,
-              125
-            ]),
-            new Uint8Array([2, 24, 4]),
-            new Uint8Array([11, 58, 9, 115, 117, 98, 114, 101, 100, 100, 105, 116])
-          ]
-        }
-      }
+      options: {}
     }
   }
 };
@@ -83146,6 +82929,7 @@ var _Post_distinguishedBy;
 var _Post_flair;
 var _Post_authorFlair;
 var _Post_secureMedia;
+var _Post_modReports;
 var _Post_modReportReasons;
 var _Post_userReportReasons;
 var _Post_gallery;
@@ -83200,6 +82984,7 @@ var Post = class _Post {
     _Post_flair.set(this, void 0);
     _Post_authorFlair.set(this, void 0);
     _Post_secureMedia.set(this, void 0);
+    _Post_modReports.set(this, void 0);
     _Post_modReportReasons.set(this, void 0);
     _Post_userReportReasons.set(this, void 0);
     _Post_gallery.set(this, void 0);
@@ -83255,6 +83040,7 @@ var Post = class _Post {
     __classPrivateFieldSet7(this, _Post_ignoringReports, data.ignoreReports ?? false, "f");
     __classPrivateFieldSet7(this, _Post_distinguishedBy, data.distinguished, "f");
     __classPrivateFieldSet7(this, _Post_secureMedia, data.secureMedia, "f");
+    __classPrivateFieldSet7(this, _Post_modReports, (data.modReports ?? []).map(([reason, author]) => ({ reason, author })), "f");
     __classPrivateFieldSet7(this, _Post_modReportReasons, (data.modReports ?? []).map(([reason]) => reason), "f");
     __classPrivateFieldSet7(this, _Post_userReportReasons, (data.userReports ?? []).map(([reason]) => reason), "f");
     __classPrivateFieldSet7(this, _Post_flair, convertProtosFlairToCommonFlair({
@@ -83431,6 +83217,10 @@ var Post = class _Post {
   get userReportReasons() {
     return __classPrivateFieldGet13(this, _Post_userReportReasons, "f");
   }
+  get modReports() {
+    return __classPrivateFieldGet13(this, _Post_modReports, "f");
+  }
+  /** @deprecated Use {@link modReports} to retain each report's author. */
   get modReportReasons() {
     return __classPrivateFieldGet13(this, _Post_modReportReasons, "f");
   }
@@ -83487,6 +83277,7 @@ var Post = class _Post {
       flair: this.flair,
       authorFlair: this.authorFlair,
       secureMedia: this.secureMedia,
+      modReports: __classPrivateFieldGet13(this, _Post_modReports, "f"),
       modReportReasons: __classPrivateFieldGet13(this, _Post_modReportReasons, "f"),
       userReportReasons: __classPrivateFieldGet13(this, _Post_userReportReasons, "f"),
       crosspostParentId: __classPrivateFieldGet13(this, _Post_crosspostParentId, "f")
@@ -84345,7 +84136,7 @@ var Post = class _Post {
     });
   }
 };
-_Post_id = /* @__PURE__ */ new WeakMap(), _Post_authorId = /* @__PURE__ */ new WeakMap(), _Post_authorName = /* @__PURE__ */ new WeakMap(), _Post_createdAt = /* @__PURE__ */ new WeakMap(), _Post_subredditId = /* @__PURE__ */ new WeakMap(), _Post_subredditName = /* @__PURE__ */ new WeakMap(), _Post_permalink = /* @__PURE__ */ new WeakMap(), _Post_title = /* @__PURE__ */ new WeakMap(), _Post_body = /* @__PURE__ */ new WeakMap(), _Post_bodyHtml = /* @__PURE__ */ new WeakMap(), _Post_url = /* @__PURE__ */ new WeakMap(), _Post_score = /* @__PURE__ */ new WeakMap(), _Post_numberOfComments = /* @__PURE__ */ new WeakMap(), _Post_numberOfReports = /* @__PURE__ */ new WeakMap(), _Post_thumbnail = /* @__PURE__ */ new WeakMap(), _Post_approved = /* @__PURE__ */ new WeakMap(), _Post_approvedAtUtc = /* @__PURE__ */ new WeakMap(), _Post_bannedAtUtc = /* @__PURE__ */ new WeakMap(), _Post_spam = /* @__PURE__ */ new WeakMap(), _Post_stickied = /* @__PURE__ */ new WeakMap(), _Post_removed = /* @__PURE__ */ new WeakMap(), _Post_removedBy = /* @__PURE__ */ new WeakMap(), _Post_removedByCategory = /* @__PURE__ */ new WeakMap(), _Post_archived = /* @__PURE__ */ new WeakMap(), _Post_edited = /* @__PURE__ */ new WeakMap(), _Post_locked = /* @__PURE__ */ new WeakMap(), _Post_nsfw = /* @__PURE__ */ new WeakMap(), _Post_quarantined = /* @__PURE__ */ new WeakMap(), _Post_spoiler = /* @__PURE__ */ new WeakMap(), _Post_hidden = /* @__PURE__ */ new WeakMap(), _Post_ignoringReports = /* @__PURE__ */ new WeakMap(), _Post_distinguishedBy = /* @__PURE__ */ new WeakMap(), _Post_flair = /* @__PURE__ */ new WeakMap(), _Post_authorFlair = /* @__PURE__ */ new WeakMap(), _Post_secureMedia = /* @__PURE__ */ new WeakMap(), _Post_modReportReasons = /* @__PURE__ */ new WeakMap(), _Post_userReportReasons = /* @__PURE__ */ new WeakMap(), _Post_gallery = /* @__PURE__ */ new WeakMap(), _Post_pollData = /* @__PURE__ */ new WeakMap(), _Post_crosspostParentId = /* @__PURE__ */ new WeakMap();
+_Post_id = /* @__PURE__ */ new WeakMap(), _Post_authorId = /* @__PURE__ */ new WeakMap(), _Post_authorName = /* @__PURE__ */ new WeakMap(), _Post_createdAt = /* @__PURE__ */ new WeakMap(), _Post_subredditId = /* @__PURE__ */ new WeakMap(), _Post_subredditName = /* @__PURE__ */ new WeakMap(), _Post_permalink = /* @__PURE__ */ new WeakMap(), _Post_title = /* @__PURE__ */ new WeakMap(), _Post_body = /* @__PURE__ */ new WeakMap(), _Post_bodyHtml = /* @__PURE__ */ new WeakMap(), _Post_url = /* @__PURE__ */ new WeakMap(), _Post_score = /* @__PURE__ */ new WeakMap(), _Post_numberOfComments = /* @__PURE__ */ new WeakMap(), _Post_numberOfReports = /* @__PURE__ */ new WeakMap(), _Post_thumbnail = /* @__PURE__ */ new WeakMap(), _Post_approved = /* @__PURE__ */ new WeakMap(), _Post_approvedAtUtc = /* @__PURE__ */ new WeakMap(), _Post_bannedAtUtc = /* @__PURE__ */ new WeakMap(), _Post_spam = /* @__PURE__ */ new WeakMap(), _Post_stickied = /* @__PURE__ */ new WeakMap(), _Post_removed = /* @__PURE__ */ new WeakMap(), _Post_removedBy = /* @__PURE__ */ new WeakMap(), _Post_removedByCategory = /* @__PURE__ */ new WeakMap(), _Post_archived = /* @__PURE__ */ new WeakMap(), _Post_edited = /* @__PURE__ */ new WeakMap(), _Post_locked = /* @__PURE__ */ new WeakMap(), _Post_nsfw = /* @__PURE__ */ new WeakMap(), _Post_quarantined = /* @__PURE__ */ new WeakMap(), _Post_spoiler = /* @__PURE__ */ new WeakMap(), _Post_hidden = /* @__PURE__ */ new WeakMap(), _Post_ignoringReports = /* @__PURE__ */ new WeakMap(), _Post_distinguishedBy = /* @__PURE__ */ new WeakMap(), _Post_flair = /* @__PURE__ */ new WeakMap(), _Post_authorFlair = /* @__PURE__ */ new WeakMap(), _Post_secureMedia = /* @__PURE__ */ new WeakMap(), _Post_modReports = /* @__PURE__ */ new WeakMap(), _Post_modReportReasons = /* @__PURE__ */ new WeakMap(), _Post_userReportReasons = /* @__PURE__ */ new WeakMap(), _Post_gallery = /* @__PURE__ */ new WeakMap(), _Post_pollData = /* @__PURE__ */ new WeakMap(), _Post_crosspostParentId = /* @__PURE__ */ new WeakMap();
 function listingProtosToPosts(listingProto) {
   if (!listingProto.data?.children) {
     throw new Error("Listing response is missing children");
@@ -85126,6 +84917,7 @@ var _Comment_numReports;
 var _Comment_collapsedBecauseCrowdControl;
 var _Comment_score;
 var _Comment_permalink;
+var _Comment_modReports;
 var _Comment_modReportReasons;
 var _Comment_userReportReasons;
 var _Comment_url;
@@ -85162,6 +84954,7 @@ var Comment2 = class {
     _Comment_collapsedBecauseCrowdControl.set(this, void 0);
     _Comment_score.set(this, void 0);
     _Comment_permalink.set(this, void 0);
+    _Comment_modReports.set(this, void 0);
     _Comment_modReportReasons.set(this, void 0);
     _Comment_userReportReasons.set(this, void 0);
     _Comment_url.set(this, void 0);
@@ -85209,6 +85002,7 @@ var Comment2 = class {
       flairRichtext: data.authorFlairRichtext,
       flairTextColor: data.authorFlairTextColor
     }), "f");
+    __classPrivateFieldSet9(this, _Comment_modReports, (data.modReports ?? []).map(([reason, author]) => ({ reason, author })), "f");
     __classPrivateFieldSet9(this, _Comment_modReportReasons, (data.modReports ?? []).map(([reason]) => reason), "f");
     __classPrivateFieldSet9(this, _Comment_userReportReasons, (data.userReports ?? []).map(([reason]) => reason), "f");
     const createdAt = /* @__PURE__ */ new Date(0);
@@ -85291,6 +85085,10 @@ var Comment2 = class {
   get userReportReasons() {
     return __classPrivateFieldGet15(this, _Comment_userReportReasons, "f");
   }
+  get modReports() {
+    return __classPrivateFieldGet15(this, _Comment_modReports, "f");
+  }
+  /** @deprecated Use {@link modReports} to retain each report's author. */
   get modReportReasons() {
     return __classPrivateFieldGet15(this, _Comment_modReportReasons, "f");
   }
@@ -85325,6 +85123,7 @@ var Comment2 = class {
       collapsedBecauseCrowdControl: this.collapsedBecauseCrowdControl,
       score: this.score,
       permalink: this.permalink,
+      modReports: this.modReports,
       modReportReasons: this.modReportReasons,
       userReportReasons: this.userReportReasons,
       url: this.url,
@@ -85662,7 +85461,7 @@ var Comment2 = class {
     }, __classPrivateFieldGet15(this, _a5, "a", _Comment_metadata_get));
   }
 };
-_a5 = Comment2, _Comment_id = /* @__PURE__ */ new WeakMap(), _Comment_authorId = /* @__PURE__ */ new WeakMap(), _Comment_authorName = /* @__PURE__ */ new WeakMap(), _Comment_body = /* @__PURE__ */ new WeakMap(), _Comment_createdAt = /* @__PURE__ */ new WeakMap(), _Comment_parentId = /* @__PURE__ */ new WeakMap(), _Comment_postId = /* @__PURE__ */ new WeakMap(), _Comment_subredditId = /* @__PURE__ */ new WeakMap(), _Comment_subredditName = /* @__PURE__ */ new WeakMap(), _Comment_replies = /* @__PURE__ */ new WeakMap(), _Comment_approved = /* @__PURE__ */ new WeakMap(), _Comment_approvedAtUtc = /* @__PURE__ */ new WeakMap(), _Comment_bannedAtUtc = /* @__PURE__ */ new WeakMap(), _Comment_edited = /* @__PURE__ */ new WeakMap(), _Comment_locked = /* @__PURE__ */ new WeakMap(), _Comment_removed = /* @__PURE__ */ new WeakMap(), _Comment_stickied = /* @__PURE__ */ new WeakMap(), _Comment_spam = /* @__PURE__ */ new WeakMap(), _Comment_distinguishedBy = /* @__PURE__ */ new WeakMap(), _Comment_numReports = /* @__PURE__ */ new WeakMap(), _Comment_collapsedBecauseCrowdControl = /* @__PURE__ */ new WeakMap(), _Comment_score = /* @__PURE__ */ new WeakMap(), _Comment_permalink = /* @__PURE__ */ new WeakMap(), _Comment_modReportReasons = /* @__PURE__ */ new WeakMap(), _Comment_userReportReasons = /* @__PURE__ */ new WeakMap(), _Comment_url = /* @__PURE__ */ new WeakMap(), _Comment_ignoringReports = /* @__PURE__ */ new WeakMap(), _Comment_authorFlair = /* @__PURE__ */ new WeakMap(), _Comment_getCommentsListing = function _Comment_getCommentsListing2(options, depthOffset = 0) {
+_a5 = Comment2, _Comment_id = /* @__PURE__ */ new WeakMap(), _Comment_authorId = /* @__PURE__ */ new WeakMap(), _Comment_authorName = /* @__PURE__ */ new WeakMap(), _Comment_body = /* @__PURE__ */ new WeakMap(), _Comment_createdAt = /* @__PURE__ */ new WeakMap(), _Comment_parentId = /* @__PURE__ */ new WeakMap(), _Comment_postId = /* @__PURE__ */ new WeakMap(), _Comment_subredditId = /* @__PURE__ */ new WeakMap(), _Comment_subredditName = /* @__PURE__ */ new WeakMap(), _Comment_replies = /* @__PURE__ */ new WeakMap(), _Comment_approved = /* @__PURE__ */ new WeakMap(), _Comment_approvedAtUtc = /* @__PURE__ */ new WeakMap(), _Comment_bannedAtUtc = /* @__PURE__ */ new WeakMap(), _Comment_edited = /* @__PURE__ */ new WeakMap(), _Comment_locked = /* @__PURE__ */ new WeakMap(), _Comment_removed = /* @__PURE__ */ new WeakMap(), _Comment_stickied = /* @__PURE__ */ new WeakMap(), _Comment_spam = /* @__PURE__ */ new WeakMap(), _Comment_distinguishedBy = /* @__PURE__ */ new WeakMap(), _Comment_numReports = /* @__PURE__ */ new WeakMap(), _Comment_collapsedBecauseCrowdControl = /* @__PURE__ */ new WeakMap(), _Comment_score = /* @__PURE__ */ new WeakMap(), _Comment_permalink = /* @__PURE__ */ new WeakMap(), _Comment_modReports = /* @__PURE__ */ new WeakMap(), _Comment_modReportReasons = /* @__PURE__ */ new WeakMap(), _Comment_userReportReasons = /* @__PURE__ */ new WeakMap(), _Comment_url = /* @__PURE__ */ new WeakMap(), _Comment_ignoringReports = /* @__PURE__ */ new WeakMap(), _Comment_authorFlair = /* @__PURE__ */ new WeakMap(), _Comment_getCommentsListing = function _Comment_getCommentsListing2(options, depthOffset = 0) {
   return new Listing2({
     limit: options.limit,
     pageSize: options.pageSize,
@@ -88560,6 +88359,15 @@ var SubredditRulesWidget = class extends Widget {
 };
 _SubredditRulesWidget_rules = /* @__PURE__ */ new WeakMap();
 
+// node_modules/@devvit/protos/json/devvit/plugin/redditapi/wiki/wiki_msg.js
+var WikiVersion2;
+(function(WikiVersion3) {
+  WikiVersion3[WikiVersion3["WIKI_VERSION_UNSPECIFIED"] = 0] = "WIKI_VERSION_UNSPECIFIED";
+  WikiVersion3[WikiVersion3["WIKI_VERSION_V1"] = 1] = "WIKI_VERSION_V1";
+  WikiVersion3[WikiVersion3["WIKI_VERSION_V2"] = 2] = "WIKI_VERSION_V2";
+  WikiVersion3[WikiVersion3["UNRECOGNIZED"] = -1] = "UNRECOGNIZED";
+})(WikiVersion2 || (WikiVersion2 = {}));
+
 // node_modules/@devvit/reddit/models/WikiPage.js
 var __classPrivateFieldSet14 = function(receiver, state, value, kind, f) {
   if (kind === "m") throw new TypeError("Private method is not writable");
@@ -88575,21 +88383,25 @@ var __classPrivateFieldGet21 = function(receiver, state, kind, f) {
 var _a8;
 var _WikiPage_name;
 var _WikiPage_subredditName;
+var _WikiPage_wikiVersion;
 var _WikiPage_content;
 var _WikiPage_contentHtml;
 var _WikiPage_revisionId;
 var _WikiPage_revisionDate;
 var _WikiPage_revisionReason;
+var _WikiPage_revisionAuthorId;
 var _WikiPage_revisionAuthor;
 var _WikiPage_metadata_get;
 var _WikiPageRevision_id;
 var _WikiPageRevision_page;
 var _WikiPageRevision_date;
+var _WikiPageRevision_authorId;
 var _WikiPageRevision_author;
 var _WikiPageRevision_reason;
 var _WikiPageRevision_hidden;
 var _WikiPageSettings_listed;
 var _WikiPageSettings_permLevel;
+var _WikiPageSettings_editorIds;
 var _WikiPageSettings_editors;
 var WikiPagePermissionLevel;
 (function(WikiPagePermissionLevel2) {
@@ -88602,24 +88414,28 @@ var WikiPage2 = class {
   /**
    * @internal
    */
-  constructor(name, subredditName, data) {
+  constructor(name, subredditName, data, wikiVersion = "v1") {
     _WikiPage_name.set(this, void 0);
     _WikiPage_subredditName.set(this, void 0);
+    _WikiPage_wikiVersion.set(this, void 0);
     _WikiPage_content.set(this, void 0);
     _WikiPage_contentHtml.set(this, void 0);
     _WikiPage_revisionId.set(this, void 0);
     _WikiPage_revisionDate.set(this, void 0);
     _WikiPage_revisionReason.set(this, void 0);
+    _WikiPage_revisionAuthorId.set(this, void 0);
     _WikiPage_revisionAuthor.set(this, void 0);
     makeGettersEnumerable(this);
     __classPrivateFieldSet14(this, _WikiPage_name, name, "f");
     __classPrivateFieldSet14(this, _WikiPage_subredditName, subredditName, "f");
+    __classPrivateFieldSet14(this, _WikiPage_wikiVersion, wikiVersion, "f");
     __classPrivateFieldSet14(this, _WikiPage_content, data.contentMd, "f");
     __classPrivateFieldSet14(this, _WikiPage_contentHtml, data.contentHtml, "f");
     __classPrivateFieldSet14(this, _WikiPage_revisionId, data.revisionId, "f");
     __classPrivateFieldSet14(this, _WikiPage_revisionDate, new Date(data.revisionDate * 1e3), "f");
     __classPrivateFieldSet14(this, _WikiPage_revisionReason, data.reason ?? "", "f");
-    __classPrivateFieldSet14(this, _WikiPage_revisionAuthor, data.revisionBy?.data ? new User2(data.revisionBy.data) : void 0, "f");
+    __classPrivateFieldSet14(this, _WikiPage_revisionAuthorId, wikiUserId(data.revisionBy?.data?.id), "f");
+    __classPrivateFieldSet14(this, _WikiPage_revisionAuthor, wikiVersion === "v1" && data.revisionBy?.data ? new User2(data.revisionBy.data) : void 0, "f");
   }
   /** The name of the page. */
   get name() {
@@ -88628,6 +88444,10 @@ var WikiPage2 = class {
   /** The name of the subreddit the page is in. */
   get subredditName() {
     return __classPrivateFieldGet21(this, _WikiPage_subredditName, "f");
+  }
+  /** The wiki version this page belongs to. */
+  get wikiVersion() {
+    return __classPrivateFieldGet21(this, _WikiPage_wikiVersion, "f");
   }
   /** The Markdown content of the page. */
   get content() {
@@ -88649,7 +88469,15 @@ var WikiPage2 = class {
   get revisionReason() {
     return __classPrivateFieldGet21(this, _WikiPage_revisionReason, "f");
   }
-  /** The author of this revision. */
+  /** The ID of the author of this revision. */
+  get revisionAuthorId() {
+    return __classPrivateFieldGet21(this, _WikiPage_revisionAuthorId, "f");
+  }
+  /**
+   * The author of this revision.
+   *
+   * @deprecated Use revisionAuthorId instead.
+   */
   get revisionAuthor() {
     return __classPrivateFieldGet21(this, _WikiPage_revisionAuthor, "f");
   }
@@ -88662,6 +88490,7 @@ var WikiPage2 = class {
       revisionId: __classPrivateFieldGet21(this, _WikiPage_revisionId, "f"),
       revisionDate: __classPrivateFieldGet21(this, _WikiPage_revisionDate, "f"),
       revisionReason: __classPrivateFieldGet21(this, _WikiPage_revisionReason, "f"),
+      revisionAuthorId: __classPrivateFieldGet21(this, _WikiPage_revisionAuthorId, "f"),
       revisionAuthor: __classPrivateFieldGet21(this, _WikiPage_revisionAuthor, "f")?.toJSON()
     };
   }
@@ -88671,7 +88500,8 @@ var WikiPage2 = class {
       subredditName: __classPrivateFieldGet21(this, _WikiPage_subredditName, "f"),
       page: __classPrivateFieldGet21(this, _WikiPage_name, "f"),
       content,
-      reason
+      reason,
+      wikiVersion: __classPrivateFieldGet21(this, _WikiPage_wikiVersion, "f")
     });
   }
   /** Get the revisions for this page. */
@@ -88679,16 +88509,21 @@ var WikiPage2 = class {
     return _a8.getPageRevisions({
       subredditName: __classPrivateFieldGet21(this, _WikiPage_subredditName, "f"),
       page: __classPrivateFieldGet21(this, _WikiPage_name, "f"),
+      wikiVersion: __classPrivateFieldGet21(this, _WikiPage_wikiVersion, "f"),
       ...options
     });
   }
   /** Revert this page to a previous revision. */
   async revertTo(revisionId) {
-    return _a8.revertPage(__classPrivateFieldGet21(this, _WikiPage_subredditName, "f"), __classPrivateFieldGet21(this, _WikiPage_name, "f"), revisionId);
+    return _a8.revertPage(__classPrivateFieldGet21(this, _WikiPage_subredditName, "f"), __classPrivateFieldGet21(this, _WikiPage_name, "f"), revisionId, {
+      wikiVersion: __classPrivateFieldGet21(this, _WikiPage_wikiVersion, "f")
+    });
   }
   /** Get the settings for this page. */
   async getSettings() {
-    return _a8.getPageSettings(__classPrivateFieldGet21(this, _WikiPage_subredditName, "f"), __classPrivateFieldGet21(this, _WikiPage_name, "f"));
+    return _a8.getPageSettings(__classPrivateFieldGet21(this, _WikiPage_subredditName, "f"), __classPrivateFieldGet21(this, _WikiPage_name, "f"), {
+      wikiVersion: __classPrivateFieldGet21(this, _WikiPage_wikiVersion, "f")
+    });
   }
   /** Update the settings for this page. */
   async updateSettings(options) {
@@ -88696,32 +88531,50 @@ var WikiPage2 = class {
       subredditName: __classPrivateFieldGet21(this, _WikiPage_subredditName, "f"),
       page: __classPrivateFieldGet21(this, _WikiPage_name, "f"),
       listed: options.listed,
-      permLevel: options.permLevel
+      permLevel: options.permLevel,
+      wikiVersion: __classPrivateFieldGet21(this, _WikiPage_wikiVersion, "f")
     });
   }
   /** Add an editor to this page. */
   async addEditor(username) {
-    return _a8.addEditor(__classPrivateFieldGet21(this, _WikiPage_subredditName, "f"), __classPrivateFieldGet21(this, _WikiPage_name, "f"), username);
+    return _a8.addEditor(__classPrivateFieldGet21(this, _WikiPage_subredditName, "f"), __classPrivateFieldGet21(this, _WikiPage_name, "f"), username, {
+      wikiVersion: __classPrivateFieldGet21(this, _WikiPage_wikiVersion, "f")
+    });
   }
   /** Remove an editor from this page. */
   async removeEditor(username) {
-    return _a8.removeEditor(__classPrivateFieldGet21(this, _WikiPage_subredditName, "f"), __classPrivateFieldGet21(this, _WikiPage_name, "f"), username);
+    return _a8.removeEditor(__classPrivateFieldGet21(this, _WikiPage_subredditName, "f"), __classPrivateFieldGet21(this, _WikiPage_name, "f"), username, {
+      wikiVersion: __classPrivateFieldGet21(this, _WikiPage_wikiVersion, "f")
+    });
   }
   /** @internal */
-  static async getPage(subredditName, page, revisionId) {
+  static async isVersionEnabled(subredditName, wikiVersion) {
+    const response = await getRedditApiPlugins().Wiki.IsWikiVersionEnabledInSubreddit({
+      subreddit: subredditName,
+      wikiVersion: wikiVersionToProto(wikiVersion)
+    }, __classPrivateFieldGet21(this, _a8, "a", _WikiPage_metadata_get));
+    return response.enabled;
+  }
+  /** @internal */
+  static async getPage(subredditName, page, options = {}) {
+    const wikiVersion = options.wikiVersion ?? "v1";
     const client = getRedditApiPlugins().Wiki;
     const response = await client.GetWikiPage({
       subreddit: subredditName,
       page,
-      revisionId
+      revisionId: options.revisionId,
+      wikiVersion: wikiVersionToProto(wikiVersion)
     }, __classPrivateFieldGet21(this, _a8, "a", _WikiPage_metadata_get));
     assertNonNull(response.data, "Failed to get wiki page");
-    return new _a8(page, subredditName, response.data);
+    return new _a8(page, subredditName, response.data, wikiVersion);
   }
   /** @internal */
-  static async getPages(subredditName) {
+  static async getPages(subredditName, options = {}) {
     const client = getRedditApiPlugins().Wiki;
-    const response = await client.GetWikiPages({ subreddit: subredditName }, __classPrivateFieldGet21(this, _a8, "a", _WikiPage_metadata_get));
+    const response = await client.GetWikiPages({
+      subreddit: subredditName,
+      wikiVersion: wikiVersionToProto(options.wikiVersion ?? "v1")
+    }, __classPrivateFieldGet21(this, _a8, "a", _WikiPage_metadata_get));
     return response.data || [];
   }
   /** @internal */
@@ -88730,17 +88583,20 @@ var WikiPage2 = class {
   }
   /** @internal */
   static async updatePage(options) {
+    const wikiVersion = options.wikiVersion ?? "v1";
     const client = getRedditApiPlugins().Wiki;
     await client.EditWikiPage({
       subreddit: options.subredditName,
       page: options.page,
       content: options.content,
-      reason: options.reason ?? ""
+      reason: options.reason ?? "",
+      wikiVersion: wikiVersionToProto(wikiVersion)
     }, __classPrivateFieldGet21(this, _a8, "a", _WikiPage_metadata_get));
-    return _a8.getPage(options.subredditName, options.page, void 0);
+    return _a8.getPage(options.subredditName, options.page, { wikiVersion });
   }
   /** @internal */
   static getPageRevisions(options) {
+    const wikiVersion = options.wikiVersion ?? "v1";
     const client = getRedditApiPlugins().Wiki;
     const after = ensureWikiRevisionCursor(options.after);
     const before = ensureWikiRevisionCursor(options.before);
@@ -88756,72 +88612,81 @@ var WikiPage2 = class {
           page: options.page ?? "",
           limit: fetchOptions.limit,
           after: fetchOptions.after,
-          before: fetchOptions.before
+          before: fetchOptions.before,
+          wikiVersion: wikiVersionToProto(wikiVersion)
         }, __classPrivateFieldGet21(this, _a8, "a", _WikiPage_metadata_get));
-        return wikiPageRevisionListingProtoToWikiPageRevision(response);
+        return wikiPageRevisionListingProtoToWikiPageRevision(response, wikiVersion);
       }
     });
   }
   /** @internal */
-  static async revertPage(subredditName, page, revisionId) {
+  static async revertPage(subredditName, page, revisionId, options = {}) {
     const client = getRedditApiPlugins().Wiki;
     await client.RevertWikiPage({
       subreddit: subredditName,
       page,
-      revision: revisionId
+      revision: revisionId,
+      wikiVersion: wikiVersionToProto(options.wikiVersion ?? "v1")
     }, __classPrivateFieldGet21(this, _a8, "a", _WikiPage_metadata_get));
   }
   /** @internal */
-  static async getPageSettings(subredditName, page) {
+  static async getPageSettings(subredditName, page, options = {}) {
+    const wikiVersion = options.wikiVersion ?? "v1";
     const client = getRedditApiPlugins().Wiki;
     const response = await client.GetWikiPageSettings({
       subreddit: subredditName,
-      page
+      page,
+      wikiVersion: wikiVersionToProto(wikiVersion)
     }, __classPrivateFieldGet21(this, _a8, "a", _WikiPage_metadata_get));
     assertNonNull(response.data, "Failed to get wiki page settings");
-    return new WikiPageSettings2(response.data);
+    return new WikiPageSettings2(response.data, wikiVersion);
   }
   /** @internal */
   static async updatePageSettings(options) {
+    const wikiVersion = options.wikiVersion ?? "v1";
     const client = getRedditApiPlugins().Wiki;
     const response = await client.UpdateWikiPageSettings({
       subreddit: options.subredditName,
       page: options.page,
       listed: options.listed ? "on" : "",
-      permlevel: options.permLevel
+      permlevel: options.permLevel,
+      wikiVersion: wikiVersionToProto(wikiVersion)
     }, __classPrivateFieldGet21(this, _a8, "a", _WikiPage_metadata_get));
     assertNonNull(response.data, "Failed to update wiki page settings");
-    return new WikiPageSettings2(response.data);
+    return new WikiPageSettings2(response.data, wikiVersion);
   }
   /** @internal */
-  static async addEditor(subredditName, page, username) {
+  static async addEditor(subredditName, page, username, options = {}) {
     const client = getRedditApiPlugins().Wiki;
     await client.AllowEditor({
       act: "add",
       subreddit: subredditName,
       page,
-      username
+      username,
+      wikiVersion: wikiVersionToProto(options.wikiVersion ?? "v1")
     }, __classPrivateFieldGet21(this, _a8, "a", _WikiPage_metadata_get));
   }
   /** @internal */
-  static async removeEditor(subredditName, page, username) {
+  static async removeEditor(subredditName, page, username, options = {}) {
     const client = getRedditApiPlugins().Wiki;
     await client.AllowEditor({
       act: "del",
       subreddit: subredditName,
       page,
-      username
+      username,
+      wikiVersion: wikiVersionToProto(options.wikiVersion ?? "v1")
     }, __classPrivateFieldGet21(this, _a8, "a", _WikiPage_metadata_get));
   }
 };
-_a8 = WikiPage2, _WikiPage_name = /* @__PURE__ */ new WeakMap(), _WikiPage_subredditName = /* @__PURE__ */ new WeakMap(), _WikiPage_content = /* @__PURE__ */ new WeakMap(), _WikiPage_contentHtml = /* @__PURE__ */ new WeakMap(), _WikiPage_revisionId = /* @__PURE__ */ new WeakMap(), _WikiPage_revisionDate = /* @__PURE__ */ new WeakMap(), _WikiPage_revisionReason = /* @__PURE__ */ new WeakMap(), _WikiPage_revisionAuthor = /* @__PURE__ */ new WeakMap(), _WikiPage_metadata_get = function _WikiPage_metadata_get2() {
+_a8 = WikiPage2, _WikiPage_name = /* @__PURE__ */ new WeakMap(), _WikiPage_subredditName = /* @__PURE__ */ new WeakMap(), _WikiPage_wikiVersion = /* @__PURE__ */ new WeakMap(), _WikiPage_content = /* @__PURE__ */ new WeakMap(), _WikiPage_contentHtml = /* @__PURE__ */ new WeakMap(), _WikiPage_revisionId = /* @__PURE__ */ new WeakMap(), _WikiPage_revisionDate = /* @__PURE__ */ new WeakMap(), _WikiPage_revisionReason = /* @__PURE__ */ new WeakMap(), _WikiPage_revisionAuthorId = /* @__PURE__ */ new WeakMap(), _WikiPage_revisionAuthor = /* @__PURE__ */ new WeakMap(), _WikiPage_metadata_get = function _WikiPage_metadata_get2() {
   return context.metadata;
 };
 var WikiPageRevision2 = class {
-  constructor(data) {
+  constructor(data, wikiVersion = "v1") {
     _WikiPageRevision_id.set(this, void 0);
     _WikiPageRevision_page.set(this, void 0);
     _WikiPageRevision_date.set(this, void 0);
+    _WikiPageRevision_authorId.set(this, void 0);
     _WikiPageRevision_author.set(this, void 0);
     _WikiPageRevision_reason.set(this, void 0);
     _WikiPageRevision_hidden.set(this, void 0);
@@ -88829,7 +88694,10 @@ var WikiPageRevision2 = class {
     __classPrivateFieldSet14(this, _WikiPageRevision_page, data.page, "f");
     __classPrivateFieldSet14(this, _WikiPageRevision_date, new Date(data.timestamp), "f");
     assertNonNull(data.author?.data, "Wiki page revision author details are missing");
-    __classPrivateFieldSet14(this, _WikiPageRevision_author, new User2(data.author.data), "f");
+    __classPrivateFieldSet14(this, _WikiPageRevision_authorId, wikiUserId(data.author?.data.id), "f");
+    if (wikiVersion === "v1") {
+      __classPrivateFieldSet14(this, _WikiPageRevision_author, new User2(data.author.data), "f");
+    }
     __classPrivateFieldSet14(this, _WikiPageRevision_reason, data.reason ?? "", "f");
     __classPrivateFieldSet14(this, _WikiPageRevision_hidden, data.revisionHidden ?? false, "f");
   }
@@ -88842,6 +88710,15 @@ var WikiPageRevision2 = class {
   get date() {
     return __classPrivateFieldGet21(this, _WikiPageRevision_date, "f");
   }
+  /** The ID of the author of this revision. */
+  get authorId() {
+    return __classPrivateFieldGet21(this, _WikiPageRevision_authorId, "f");
+  }
+  /**
+   * The author of this revision.
+   *
+   * @deprecated Use authorId instead.
+   */
   get author() {
     return __classPrivateFieldGet21(this, _WikiPageRevision_author, "f");
   }
@@ -88856,24 +88733,27 @@ var WikiPageRevision2 = class {
       id: __classPrivateFieldGet21(this, _WikiPageRevision_id, "f"),
       page: __classPrivateFieldGet21(this, _WikiPageRevision_page, "f"),
       date: __classPrivateFieldGet21(this, _WikiPageRevision_date, "f"),
-      author: __classPrivateFieldGet21(this, _WikiPageRevision_author, "f").toJSON(),
+      authorId: __classPrivateFieldGet21(this, _WikiPageRevision_authorId, "f"),
+      author: __classPrivateFieldGet21(this, _WikiPageRevision_author, "f")?.toJSON(),
       reason: __classPrivateFieldGet21(this, _WikiPageRevision_reason, "f"),
       hidden: __classPrivateFieldGet21(this, _WikiPageRevision_hidden, "f")
     };
   }
 };
-_WikiPageRevision_id = /* @__PURE__ */ new WeakMap(), _WikiPageRevision_page = /* @__PURE__ */ new WeakMap(), _WikiPageRevision_date = /* @__PURE__ */ new WeakMap(), _WikiPageRevision_author = /* @__PURE__ */ new WeakMap(), _WikiPageRevision_reason = /* @__PURE__ */ new WeakMap(), _WikiPageRevision_hidden = /* @__PURE__ */ new WeakMap();
+_WikiPageRevision_id = /* @__PURE__ */ new WeakMap(), _WikiPageRevision_page = /* @__PURE__ */ new WeakMap(), _WikiPageRevision_date = /* @__PURE__ */ new WeakMap(), _WikiPageRevision_authorId = /* @__PURE__ */ new WeakMap(), _WikiPageRevision_author = /* @__PURE__ */ new WeakMap(), _WikiPageRevision_reason = /* @__PURE__ */ new WeakMap(), _WikiPageRevision_hidden = /* @__PURE__ */ new WeakMap();
 var WikiPageSettings2 = class {
-  constructor(data) {
+  constructor(data, wikiVersion = "v1") {
     _WikiPageSettings_listed.set(this, void 0);
     _WikiPageSettings_permLevel.set(this, void 0);
+    _WikiPageSettings_editorIds.set(this, void 0);
     _WikiPageSettings_editors.set(this, void 0);
     __classPrivateFieldSet14(this, _WikiPageSettings_listed, data.listed, "f");
     __classPrivateFieldSet14(this, _WikiPageSettings_permLevel, data.permLevel, "f");
-    __classPrivateFieldSet14(this, _WikiPageSettings_editors, data.editors.map((editor) => {
+    __classPrivateFieldSet14(this, _WikiPageSettings_editorIds, data.editors.map((editor) => wikiUserId(editor.data?.id)).filter((editorId) => editorId !== void 0), "f");
+    __classPrivateFieldSet14(this, _WikiPageSettings_editors, wikiVersion === "v1" ? data.editors.map((editor) => {
       assertNonNull(editor.data, "Wiki page editor details are missing");
       return new User2(editor.data);
-    }), "f");
+    }) : [], "f");
   }
   get listed() {
     return __classPrivateFieldGet21(this, _WikiPageSettings_listed, "f");
@@ -88881,6 +88761,11 @@ var WikiPageSettings2 = class {
   get permLevel() {
     return __classPrivateFieldGet21(this, _WikiPageSettings_permLevel, "f");
   }
+  /** The IDs of users who may edit this page. */
+  get editorIds() {
+    return __classPrivateFieldGet21(this, _WikiPageSettings_editorIds, "f");
+  }
+  /** @deprecated Use editorIds instead. */
   get editors() {
     return __classPrivateFieldGet21(this, _WikiPageSettings_editors, "f");
   }
@@ -88888,21 +88773,31 @@ var WikiPageSettings2 = class {
     return {
       listed: __classPrivateFieldGet21(this, _WikiPageSettings_listed, "f"),
       permLevel: __classPrivateFieldGet21(this, _WikiPageSettings_permLevel, "f"),
+      editorIds: __classPrivateFieldGet21(this, _WikiPageSettings_editorIds, "f"),
       editors: __classPrivateFieldGet21(this, _WikiPageSettings_editors, "f").map((editor) => editor.toJSON())
     };
   }
 };
-_WikiPageSettings_listed = /* @__PURE__ */ new WeakMap(), _WikiPageSettings_permLevel = /* @__PURE__ */ new WeakMap(), _WikiPageSettings_editors = /* @__PURE__ */ new WeakMap();
-function wikiPageRevisionListingProtoToWikiPageRevision(listingProto) {
+_WikiPageSettings_listed = /* @__PURE__ */ new WeakMap(), _WikiPageSettings_permLevel = /* @__PURE__ */ new WeakMap(), _WikiPageSettings_editorIds = /* @__PURE__ */ new WeakMap(), _WikiPageSettings_editors = /* @__PURE__ */ new WeakMap();
+function wikiPageRevisionListingProtoToWikiPageRevision(listingProto, wikiVersion) {
   assertNonNull(listingProto.data?.children, "Wiki page revision listing is missing children");
   const children = listingProto.data.children.map((child) => {
-    return new WikiPageRevision2(child);
+    return new WikiPageRevision2(child, wikiVersion);
   });
   return {
     children,
     before: listingProto.data.before,
     after: listingProto.data.after
   };
+}
+function wikiVersionToProto(wikiVersion) {
+  return wikiVersion === "v2" ? WikiVersion2.WIKI_VERSION_V2 : WikiVersion2.WIKI_VERSION_V1;
+}
+function wikiUserId(userId) {
+  if (!userId) {
+    return void 0;
+  }
+  return T2(isT2(userId) ? userId : `t2_${userId}`);
 }
 function ensureWikiRevisionCursor(token) {
   if (!token)
@@ -89197,7 +89092,7 @@ var RedditClient = class {
    *    text: "hello there",
    *    imageUrls: ["https://styles.redditmedia.com/t5_5wa5ww/styles/communityIcon_wyopomb2xb0a1.png", "https://styles.redditmedia.com/t5_49fkib/styles/bannerBackgroundImage_5a4axis7cku61.png"]
       },
-   *  subredditName: await reddit.getCurrentSubredditName(),
+   *  subredditName: context.subredditName,
    *  textFallback: {
    *    text: 'This is a Devvit post!',
    *  },
@@ -90198,25 +90093,28 @@ var RedditClient = class {
     return Widget.reorder(subredditName, orderByIds);
   }
   /**
-   * Get a wiki page from a subreddit.
+   * Check whether Wiki V2 is enabled for a subreddit.
    *
-   * @param subredditName - The name of the subreddit to get the wiki page from.
-   * @param page - The name of the wiki page to get.
-   * @param revisionId - The revision ID of the wiki page version to get. Setting this value will return the wiki page
-   * version at that revision, and leaving it empty will return the latest version.
-   * @returns The requested WikiPage object.
+   * @param subredditName - The name of the subreddit to check.
+   * @returns Whether Wiki V2 is enabled for the subreddit.
    */
-  async getWikiPage(subredditName, page, revisionId) {
-    return WikiPage2.getPage(subredditName, page, revisionId);
+  async isWikiV2Enabled(subredditName) {
+    return WikiPage2.isVersionEnabled(subredditName, "v2");
+  }
+  async getWikiPage(subredditName, page, revisionIdOrOptions) {
+    const options = typeof revisionIdOrOptions === "string" ? { revisionId: revisionIdOrOptions } : revisionIdOrOptions;
+    return WikiPage2.getPage(subredditName, page, options);
   }
   /**
    * Get the wiki pages for a subreddit.
    *
    * @param subredditName - The name of the subreddit to get the wiki pages from.
+   * @param options - Options for the request.
+   * @param options.wikiVersion - Which wiki version to target. Defaults to `'v1'`.
    * @returns A list of the wiki page names for the subreddit.
    */
-  async getWikiPages(subredditName) {
-    return WikiPage2.getPages(subredditName);
+  async getWikiPages(subredditName, options) {
+    return WikiPage2.getPages(subredditName, options);
   }
   /**
    * Create a new wiki page for a subreddit.
@@ -90226,6 +90124,7 @@ var RedditClient = class {
    * @param options.page - The name of the wiki page to create.
    * @param options.content - The Markdown content of the wiki page.
    * @param options.reason - The reason for creating the wiki page.
+   * @param options.wikiVersion - Which wiki version to target. Defaults to `'v1'`.
    * @returns - The created WikiPage object.
    */
   async createWikiPage(options) {
@@ -90239,6 +90138,7 @@ var RedditClient = class {
    * @param options.page - The name of the wiki page to update.
    * @param options.content - The Markdown content of the wiki page.
    * @param options.reason - The reason for updating the wiki page.
+   * @param options.wikiVersion - Which wiki version to target. Defaults to `'v1'`.
    * @returns The updated WikiPage object.
    */
   async updateWikiPage(options) {
@@ -90252,6 +90152,7 @@ var RedditClient = class {
    * @param options.page - The name of the wiki page to get the revisions for.
    * @param options.limit - The maximum number of revisions to return.
    * @param options.after - The ID of the revision to start after.
+   * @param options.wikiVersion - Which wiki version to target. Defaults to `'v1'`.
    * @returns A Listing of WikiPageRevision objects.
    */
   getWikiPageRevisions(options) {
@@ -90263,19 +90164,23 @@ var RedditClient = class {
    * @param subredditName - The name of the subreddit the wiki is in.
    * @param page - The name of the wiki page to revert.
    * @param revisionId - The ID of the revision to revert to.
+   * @param options - Options for the request.
+   * @param options.wikiVersion - Which wiki version to target. Defaults to `'v1'`.
    */
-  async revertWikiPage(subredditName, page, revisionId) {
-    return WikiPage2.revertPage(subredditName, page, revisionId);
+  async revertWikiPage(subredditName, page, revisionId, options) {
+    return WikiPage2.revertPage(subredditName, page, revisionId, options);
   }
   /**
    * Get the settings for a wiki page.
    *
    * @param subredditName - The name of the subreddit the wiki is in.
    * @param page - The name of the wiki page to get the settings for.
+   * @param options - Options for the request.
+   * @param options.wikiVersion - Which wiki version to target. Defaults to `'v1'`.
    * @returns A WikiPageSettings object.
    */
-  async getWikiPageSettings(subredditName, page) {
-    return WikiPage2.getPageSettings(subredditName, page);
+  async getWikiPageSettings(subredditName, page, options) {
+    return WikiPage2.getPageSettings(subredditName, page, options);
   }
   /**
    * Update the settings for a wiki page.
@@ -90285,6 +90190,7 @@ var RedditClient = class {
    * @param options.page - The name of the wiki page to update the settings for.
    * @param options.listed - Whether the wiki page should be listed in the wiki index.
    * @param options.permLevel - The permission level required to edit the wiki page.
+   * @param options.wikiVersion - Which wiki version to target. Defaults to `'v1'`.
    * @returns A WikiPageSettings object.
    */
   async updateWikiPageSettings(options) {
@@ -90296,9 +90202,11 @@ var RedditClient = class {
    * @param subredditName - The name of the subreddit the wiki is in.
    * @param page - The name of the wiki page to add the editor to.
    * @param username - The username of the user to add as an editor.
+   * @param options - Options for the request.
+   * @param options.wikiVersion - Which wiki version to target. Defaults to `'v1'`.
    */
-  async addEditorToWikiPage(subredditName, page, username) {
-    return WikiPage2.addEditor(subredditName, page, username);
+  async addEditorToWikiPage(subredditName, page, username, options) {
+    return WikiPage2.addEditor(subredditName, page, username, options);
   }
   /**
    * Remove an editor from a wiki page.
@@ -90306,9 +90214,11 @@ var RedditClient = class {
    * @param subredditName - The name of the subreddit the wiki is in.
    * @param page - The name of the wiki page to remove the editor from.
    * @param username - The username of the user to remove as an editor.
+   * @param options - Options for the request.
+   * @param options.wikiVersion - Which wiki version to target. Defaults to `'v1'`.
    */
-  async removeEditorFromWikiPage(subredditName, page, username) {
-    return WikiPage2.removeEditor(subredditName, page, username);
+  async removeEditorFromWikiPage(subredditName, page, username, options) {
+    return WikiPage2.removeEditor(subredditName, page, username, options);
   }
   /**
    * Get private messages sent to the currently authenticated user.
@@ -92301,6 +92211,25 @@ var TEAM_NAMES = {
   "147": "New York Yankees",
   "158": "Milwaukee Brewers"
 };
+async function claimPostgame(subId, pk) {
+  const claimKey = `pgclaim:${subId}:${pk}`;
+  try {
+    const n = await redis.incrBy(claimKey, 1);
+    if (n !== 1) return false;
+    await redis.expire(claimKey, 600);
+    return true;
+  } catch (e) {
+    console.error("claimPostgame error:", e);
+    return true;
+  }
+}
+async function releasePostgameClaim(subId, pk) {
+  try {
+    await redis.del(`pgclaim:${subId}:${pk}`);
+  } catch (e) {
+    console.error("releasePostgameClaim error:", e);
+  }
+}
 function dedupExpiresAt() {
   return new Date(Date.now() + 1e3 * 60 * 60 * 24 * 3);
 }
@@ -92334,6 +92263,34 @@ async function onRequest(req, rsp) {
   }
   if (pathname.startsWith("/api/winprob/")) {
     await onWinProb(pathname.slice("/api/winprob/".length), rsp);
+    return;
+  }
+  if (pathname.startsWith("/api/broadcasts/")) {
+    await onBroadcasts(pathname.slice("/api/broadcasts/".length), rsp);
+    return;
+  }
+  if (pathname.startsWith("/api/clips/")) {
+    await onClips(pathname.slice("/api/clips/".length), rsp);
+    return;
+  }
+  if (pathname.startsWith("/api/statcast/")) {
+    await onStatcast(pathname.slice("/api/statcast/".length), rsp);
+    return;
+  }
+  if (pathname.startsWith("/api/highlights/")) {
+    await onHighlights(pathname.slice("/api/highlights/".length), rsp);
+    return;
+  }
+  if (pathname.startsWith("/api/scoreboard")) {
+    await onScoreboard(pathname.slice("/api/scoreboard".length).replace(/^\//, ""), rsp);
+    return;
+  }
+  if (pathname.startsWith("/api/standings")) {
+    await onStandings(rsp);
+    return;
+  }
+  if (pathname.startsWith("/api/player-recent/")) {
+    await onPlayerRecent(pathname.slice("/api/player-recent/".length), rsp);
     return;
   }
   if (pathname === "/api/post-game") {
@@ -92457,9 +92414,314 @@ async function onSchedule(urlObj, rsp) {
     rsp
   );
 }
+function parseTimecodeToEpoch(tc) {
+  if (!/^\d{8}_\d{6}$/.test(tc)) return NaN;
+  const y = Number(tc.slice(0, 4));
+  const mo = Number(tc.slice(4, 6));
+  const d = Number(tc.slice(6, 8));
+  const h = Number(tc.slice(9, 11));
+  const mi = Number(tc.slice(11, 13));
+  const s = Number(tc.slice(13, 15));
+  return Date.UTC(y, mo - 1, d, h, mi, s);
+}
+async function fetchGameTimestamps(pk) {
+  const key = `mlbcache:tstamps:${pk}`;
+  try {
+    const cached = await redis.get(key);
+    if (cached) return JSON.parse(cached);
+  } catch (e) {
+    console.error(`timestamps cache read failed for ${pk}:`, e);
+  }
+  try {
+    const r = await fetch(`https://statsapi.mlb.com/api/v1.1/game/${pk}/feed/live/timestamps`);
+    if (!r.ok) return [];
+    const data = await r.json();
+    const list = Array.isArray(data) ? data.map(String) : Array.isArray(data?.timestamps) ? data.timestamps.map(String) : [];
+    try {
+      await redis.set(key, JSON.stringify(list), {
+        expiration: new Date(Date.now() + GAME_CACHE_TTL_S * 1e3)
+      });
+    } catch (e) {
+      console.error(`timestamps cache write failed for ${pk}:`, e);
+    }
+    return list;
+  } catch (e) {
+    console.error(`timestamps fetch failed for ${pk}:`, e);
+    return [];
+  }
+}
+async function serveDelayedGame(pk, delaySeconds, rsp) {
+  const liveUrl = `https://statsapi.mlb.com/api/v1.1/game/${pk}/feed/live`;
+  const parsed = (await fetchGameTimestamps(pk)).map((tc) => ({ tc, t: parseTimecodeToEpoch(tc) })).filter((x) => !Number.isNaN(x.t)).sort((a, b) => a.t - b.t);
+  const first = parsed[0];
+  const last = parsed[parsed.length - 1];
+  if (!first || !last) {
+    await proxyMlbJsonCached(`mlbcache:game:${pk}`, liveUrl, GAME_CACHE_TTL_S, rsp);
+    return;
+  }
+  const target = last.t - delaySeconds * 1e3;
+  let selected = first.tc;
+  for (const p of parsed) {
+    if (p.t <= target) selected = p.tc;
+    else break;
+  }
+  const guardKey = `mlbcache:lasttc:${pk}:${delaySeconds}`;
+  try {
+    const prevTc = await redis.get(guardKey);
+    if (prevTc && parseTimecodeToEpoch(prevTc) > parseTimecodeToEpoch(selected)) {
+      selected = prevTc;
+    }
+    await redis.set(guardKey, selected, {
+      expiration: new Date(Date.now() + 6 * 3600 * 1e3)
+    });
+  } catch (e) {
+    console.error(`delay guard failed for ${pk}:`, e);
+  }
+  await proxyMlbJsonCached(
+    `mlbcache:game:${pk}:tc:${selected}`,
+    `${liveUrl}?timecode=${selected}`,
+    GAME_CACHE_TTL_S,
+    rsp
+  );
+}
+async function gameIsFinalCached(pk) {
+  const key = `mlbcache:game:${pk}`;
+  try {
+    const cached = await redis.get(key);
+    if (cached) return JSON.parse(cached)?.gameData?.status?.abstractGameState === "Final";
+  } catch (e) {
+    console.error(`final-check cache read failed for ${pk}:`, e);
+  }
+  try {
+    const r = await fetch(`https://statsapi.mlb.com/api/v1.1/game/${pk}/feed/live`);
+    if (!r.ok) return false;
+    const text = await r.text();
+    try {
+      await redis.set(key, text, { expiration: new Date(Date.now() + GAME_CACHE_TTL_S * 1e3) });
+    } catch (e) {
+      console.error(`final-check cache write failed for ${pk}:`, e);
+    }
+    return JSON.parse(text)?.gameData?.status?.abstractGameState === "Final";
+  } catch (e) {
+    console.error(`final-check fetch failed for ${pk}:`, e);
+    return false;
+  }
+}
+async function onPlayerRecent(idGroup, rsp) {
+  const parts = idGroup.split("/");
+  const id = parts[0] || "";
+  const group = parts[1] === "pitching" ? "pitching" : "hitting";
+  if (!/^\d+$/.test(id)) {
+    writeJSON(400, { error: "Invalid player id", status: 400 }, rsp);
+    return;
+  }
+  const limit = group === "pitching" ? 3 : 5;
+  const yr = (/* @__PURE__ */ new Date()).getFullYear();
+  await proxyMlbJsonCached(
+    `mlbcache:precent:${id}:${group}`,
+    `https://statsapi.mlb.com/api/v1/people/${id}/stats?stats=gameLog&group=${group}&season=${yr}&gameType=R&limit=${limit}`,
+    600,
+    rsp
+  );
+}
+async function onStandings(rsp) {
+  const yr = (/* @__PURE__ */ new Date()).getFullYear();
+  await proxyMlbJsonCached(
+    `mlbcache:standings:${yr}`,
+    `https://statsapi.mlb.com/api/v1/standings?leagueId=103,104&season=${yr}&standingsTypes=regularSeason`,
+    300,
+    rsp
+  );
+}
+async function onBroadcasts(pk, rsp) {
+  if (!/^\d+$/.test(pk)) {
+    writeJSON(400, { error: "Invalid gamePk", status: 400 }, rsp);
+    return;
+  }
+  await proxyMlbJsonCached(
+    `mlbcache:broadcasts:${pk}`,
+    `https://statsapi.mlb.com/api/v1/schedule?sportId=1&gamePk=${pk}&hydrate=broadcasts(all)`,
+    60,
+    rsp
+  );
+}
+function bestClipUrl(item) {
+  const playbacks = item?.playbacks || [];
+  const mp4s = playbacks.filter((p) => {
+    const name = String(p?.name || "").toLowerCase();
+    const purl = String(p?.url || "").toLowerCase();
+    return (name.includes("mp4avc") || purl.includes(".mp4")) && !name.includes("m3u8") && !purl.includes(".m3u8");
+  });
+  if (mp4s.length === 0) return null;
+  const prefer = ["2500K", "1800K", "1200K", "800K", "600K", "450K"];
+  for (const q of prefer) {
+    const hit = mp4s.find((p) => String(p?.name || "").includes(q));
+    if (hit && hit.url) return String(hit.url);
+  }
+  const first = mp4s[0];
+  return first && first.url ? String(first.url) : null;
+}
+async function onStatcast(pk, rsp) {
+  if (!/^\d+$/.test(pk)) {
+    writeJSON(400, { error: "Invalid gamePk", status: 400 }, rsp);
+    return;
+  }
+  const key = `mlbcache:statcast:${pk}`;
+  try {
+    const cached = await redis.get(key);
+    if (cached) {
+      writeJSON(200, JSON.parse(cached), rsp);
+      return;
+    }
+  } catch (e) {
+    console.error(`statcast cache read failed for ${pk}:`, e);
+  }
+  const map = {};
+  try {
+    const r = await fetch(`https://baseballsavant.mlb.com/gf?game_pk=${pk}`, {
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; mlb-scoreboard/1.0)" }
+    });
+    if (r.ok) {
+      const data = await r.json();
+      const bip = data?.exit_velocity || [];
+      for (const e of bip) {
+        const id = e?.play_id;
+        if (!id || typeof id !== "string") continue;
+        map[id] = {
+          xba: String(e?.xba ?? ""),
+          ev: String(e?.hit_speed ?? ""),
+          la: String(e?.hit_angle ?? ""),
+          dist: String(e?.hit_distance ?? ""),
+          barrel: Number(e?.is_barrel) || 0
+        };
+      }
+    }
+  } catch (e) {
+    console.error(`statcast fetch failed for ${pk}:`, e);
+  }
+  try {
+    await redis.set(key, JSON.stringify(map), { expiration: new Date(Date.now() + 60 * 1e3) });
+  } catch (e) {
+    console.error(`statcast cache write failed for ${pk}:`, e);
+  }
+  writeJSON(200, map, rsp);
+}
+async function onHighlights(pk, rsp) {
+  if (!/^\d+$/.test(pk)) {
+    writeJSON(400, { error: "Invalid gamePk", status: 400 }, rsp);
+    return;
+  }
+  const key = `mlbcache:hl:${pk}`;
+  try {
+    const cached = await redis.get(key);
+    if (cached) {
+      writeJSON(200, JSON.parse(cached), rsp);
+      return;
+    }
+  } catch (e) {
+    console.error(`highlights cache read failed for ${pk}:`, e);
+  }
+  const list = [];
+  try {
+    const r = await fetch(`https://statsapi.mlb.com/api/v1/game/${pk}/content`);
+    if (r.ok) {
+      const data = await r.json();
+      const items = data?.highlights?.highlights?.items || [];
+      const junk = /(interview|press conference|availability|postgame|pregame|manager|clubhouse|warm.?up)/i;
+      for (const it of items) {
+        if (!it?.guid || typeof it.guid !== "string") continue;
+        const title = String(it?.headline || it?.title || "").trim();
+        const clip = bestClipUrl(it);
+        if (!title || !clip) continue;
+        if (junk.test(title)) continue;
+        list.push({ t: title, u: clip });
+        if (list.length >= 20) break;
+      }
+    }
+  } catch (e) {
+    console.error(`highlights fetch failed for ${pk}:`, e);
+  }
+  try {
+    await redis.set(key, JSON.stringify(list), { expiration: new Date(Date.now() + 60 * 1e3) });
+  } catch (e) {
+    console.error(`highlights cache write failed for ${pk}:`, e);
+  }
+  writeJSON(200, list, rsp);
+}
+async function onScoreboard(dateArg, rsp) {
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(dateArg) ? dateArg : (/* @__PURE__ */ new Date()).toLocaleDateString("sv-SE", { timeZone: "America/New_York" });
+  const key = `mlbcache:sb:${date}`;
+  let sched = null;
+  try {
+    const cached = await redis.get(key);
+    if (cached) sched = JSON.parse(cached);
+  } catch (e) {
+    console.error("scoreboard cache read failed:", e);
+  }
+  if (!sched) {
+    try {
+      const r = await fetch(`https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${date}&hydrate=linescore`);
+      if (r.ok) {
+        sched = await r.json();
+        try {
+          await redis.set(key, JSON.stringify(sched), { expiration: new Date(Date.now() + 60 * 1e3) });
+        } catch (e) {
+          console.error("scoreboard cache write failed:", e);
+        }
+      }
+    } catch (e) {
+      console.error("scoreboard fetch failed:", e);
+    }
+  }
+  const teamId = await getTeamIdFilter();
+  writeJSON(200, { teamId, sched }, rsp);
+}
+async function onClips(pk, rsp) {
+  if (!/^\d+$/.test(pk)) {
+    writeJSON(400, { error: "Invalid gamePk", status: 400 }, rsp);
+    return;
+  }
+  const key = `mlbcache:clips:${pk}`;
+  try {
+    const cached = await redis.get(key);
+    if (cached) {
+      writeJSON(200, JSON.parse(cached), rsp);
+      return;
+    }
+  } catch (e) {
+    console.error(`clips cache read failed for ${pk}:`, e);
+  }
+  const map = {};
+  try {
+    const r = await fetch(`https://statsapi.mlb.com/api/v1/game/${pk}/content`);
+    if (r.ok) {
+      const data = await r.json();
+      const items = data?.highlights?.highlights?.items || [];
+      for (const it of items) {
+        const guid = it?.guid;
+        if (!guid || typeof guid !== "string") continue;
+        const clip = bestClipUrl(it);
+        if (clip) map[guid] = clip;
+      }
+    }
+  } catch (e) {
+    console.error(`clips fetch failed for ${pk}:`, e);
+  }
+  try {
+    await redis.set(key, JSON.stringify(map), { expiration: new Date(Date.now() + 60 * 1e3) });
+  } catch (e) {
+    console.error(`clips cache write failed for ${pk}:`, e);
+  }
+  writeJSON(200, map, rsp);
+}
 async function onGame(pk, rsp) {
   if (!/^\d+$/.test(pk)) {
     writeJSON(400, { error: "Invalid gamePk", status: 400 }, rsp);
+    return;
+  }
+  const delay = await getBroadcastDelaySetting();
+  if (delay > 0 && !await gameIsFinalCached(pk)) {
+    await serveDelayedGame(pk, delay, rsp);
     return;
   }
   await proxyMlbJsonCached(
@@ -92508,7 +92770,11 @@ async function onPostgameCheck(rsp) {
     writeJSON(200, { created: false }, rsp);
     return;
   }
-  const enabled = await getAutoPostgameSetting();
+  if (await redis.get(`broadcast-game:${subId}:${gamePkStr}`)) {
+    writeJSON(200, { created: false }, rsp);
+    return;
+  }
+  const enabled = await autoPostgameEnabled();
   if (!enabled) {
     writeJSON(200, { created: false }, rsp);
     return;
@@ -92544,6 +92810,10 @@ async function onPostgameCheck(rsp) {
   }
   const teamId = await getTeamIdFilter();
   const customTitles = await getCustomPostgameTitles();
+  if (!await claimPostgame(subId, gamePkStr)) {
+    writeJSON(200, { created: false }, rsp);
+    return;
+  }
   try {
     const post = await reddit.submitCustomPost({
       title: buildPostgameTitleFromFeed(feed, teamId, customTitles)
@@ -92555,6 +92825,7 @@ async function onPostgameCheck(rsp) {
     writeJSON(200, { created: true }, rsp);
   } catch (e) {
     console.error("postgame-check submit failed:", e);
+    await releasePostgameClaim(subId, gamePkStr);
     writeJSON(200, { created: false }, rsp);
   }
 }
@@ -92590,6 +92861,45 @@ async function getAutoPostgameSetting() {
     console.error("getAutoPostgameSetting error:", e);
     return true;
   }
+}
+async function getThreadTypeSetting() {
+  try {
+    const raw = await settings.get("threadType");
+    if (Array.isArray(raw)) return (raw[0] ?? "game").toString();
+    if (typeof raw === "string") return raw;
+    return "game";
+  } catch (e) {
+    console.error("getThreadTypeSetting error:", e);
+    return "game";
+  }
+}
+async function isBroadcastMode() {
+  return await getThreadTypeSetting() === "broadcast";
+}
+async function getBroadcastLabel() {
+  try {
+    const raw = await settings.get("broadcastLabel");
+    const val = Array.isArray(raw) ? raw[0] ?? "" : typeof raw === "string" ? raw : "";
+    return val.toString().trim() || "Broadcast Thread";
+  } catch (e) {
+    console.error("getBroadcastLabel error:", e);
+    return "Broadcast Thread";
+  }
+}
+async function getBroadcastDelaySetting() {
+  try {
+    const raw = await settings.get("broadcastDelay");
+    const val = Array.isArray(raw) ? raw[0] ?? "0" : raw ?? "0";
+    const n = parseInt(String(val), 10);
+    return Number.isFinite(n) && n > 0 ? n : 0;
+  } catch (e) {
+    console.error("getBroadcastDelaySetting error:", e);
+    return 0;
+  }
+}
+async function autoPostgameEnabled() {
+  if (await isBroadcastMode()) return false;
+  return getAutoPostgameSetting();
 }
 async function getCustomPostgameTitles() {
   const normalize = (raw) => {
@@ -92754,12 +93064,12 @@ function doubleHeaderSuffix(game) {
   }
   return "";
 }
-function buildGameThreadTitle(game, teamId) {
+function buildGameThreadTitle(game, teamId, broadcastLabel) {
   const away = game?.teams?.away?.team?.name || "Away";
   const home = game?.teams?.home?.team?.name || "Home";
   const homeId = String(game?.teams?.home?.team?.id ?? "");
   const time = formatGameTimeET(game?.gameDate || (/* @__PURE__ */ new Date()).toISOString());
-  const prefix = getGamePrefix(game, false);
+  const prefix = broadcastLabel && broadcastLabel.trim() ? broadcastLabel.trim() : getGamePrefix(game, false);
   const dhSuffix = doubleHeaderSuffix(game);
   if (teamId && teamId === homeId) {
     return `${prefix}: ${home} vs ${away}${dhSuffix} - ${time}`;
@@ -92958,6 +93268,7 @@ async function maybePostOffDayThread(subredditId, subredditName, teamId) {
 async function handlePostgameOrPostponement(game, subredditId, teamId, customTitles) {
   const pk = game?.gamePk;
   if (!pk) return "skipped";
+  if (await redis.get(`broadcast-game:${subredditId}:${pk}`)) return "skipped";
   const gameDedupKey = `posted:${subredditId}:${pk}`;
   if (!await redis.get(gameDedupKey)) return "skipped";
   const codedState = game?.status?.codedGameState;
@@ -92989,6 +93300,7 @@ async function handlePostgameOrPostponement(game, subredditId, teamId, customTit
   }
   const pgKey = `postgame:${subredditId}:${pk}`;
   if (await redis.get(pgKey)) return "skipped";
+  if (!await claimPostgame(subredditId, String(pk))) return "skipped";
   try {
     const post = await reddit.submitCustomPost({
       title: buildPostgameThreadTitle(game, teamId, customTitles)
@@ -93000,6 +93312,7 @@ async function handlePostgameOrPostponement(game, subredditId, teamId, customTit
     return "postgame";
   } catch (e) {
     console.error(`postgame post failed for gamePk ${pk}:`, e);
+    await releasePostgameClaim(subredditId, String(pk));
     return "failed";
   }
 }
@@ -93010,9 +93323,10 @@ async function onMenuPostAllGames() {
     return { showToast: { text: "No subreddit context.", appearance: "neutral" } };
   }
   const teamId = await getTeamIdFilter();
+  const broadcastLabel = await isBroadcastMode() ? await getBroadcastLabel() : null;
   const games = await fetchGamesForDate(todayDateStr(), teamId);
   if (!games.length) {
-    if (teamId) {
+    if (teamId && !broadcastLabel) {
       const posted = await maybePostOffDayThread(subredditId, subredditName, teamId);
       if (posted) {
         return {
@@ -93044,11 +93358,14 @@ async function onMenuPostAllGames() {
     }
     try {
       const post = await reddit.submitCustomPost({
-        title: buildGameThreadTitle(game, teamId)
+        title: buildGameThreadTitle(game, teamId, broadcastLabel)
       });
       await redis.set(`post-game:${post.id}`, String(pk), { expiration: renderExpiresAt() });
       await redis.set(`post-type:${post.id}`, "game", { expiration: renderExpiresAt() });
       await redis.set(dedupKey, post.id, { expiration: dedupExpiresAt() });
+      if (broadcastLabel) {
+        await redis.set(`broadcast-game:${subredditId}:${pk}`, "1", { expiration: dedupExpiresAt() });
+      }
       await redis.del(`postponed:${subredditId}:${pk}`);
       created++;
     } catch (e) {
@@ -93107,6 +93424,8 @@ async function onMenuPostPostgame() {
 async function onCronPostgameSweep() {
   const subredditId = context.subredditId;
   if (!subredditId) return;
+  console.log("postgame-sweep: tick");
+  if (await isBroadcastMode()) return;
   const enabled = await getAutoPostgameSetting();
   const teamId = await getTeamIdFilter();
   const customTitles = await getCustomPostgameTitles();
@@ -93219,6 +93538,17 @@ Plus, on off days for team-specific subs:
 
 If you prefer single-thread style, disable **Auto-post postgame threads** in the settings \u2014 postponement notices will still fire, since they're informational.
 
+## Thread type: Game Thread or Broadcast
+
+The **Thread type** setting controls how the app fits into your subreddit:
+
+- **Game Thread** (default) \u2014 the standard mode described above. The app posts a Game Thread for each game and, when enabled, an automatic Postgame Thread. Choose this if you want the app to be your subreddit's game threads.
+- **Broadcast Thread** \u2014 an advanced/analytics **companion** that runs *alongside* your existing game threads rather than replacing them. In this mode:
+  - Threads post with your **Broadcast label** (e.g. "Broadcast Thread", "Advanced View", "Live Scoreboard") in place of "Game Thread".
+  - The app **never auto-posts anything** \u2014 no automatic Postgame Threads and no postponement notices. It only posts the threads you create from the menu.
+
+  This is ideal for subreddits that want to keep their existing GameDay thread exactly as it is and simply *add* a live, interactive scoreboard as a second screen for the stats crowd. Set your wording in the **Broadcast label** setting.
+
 ## Custom postgame titles (optional)
 
 If your subreddit has a signature postgame phrase \u2014 "Theeee Yankees Win!", "Lets Go Mets!", "It's right there in front of us!" \u2014 you can set these as custom titles in the app settings:
@@ -93256,9 +93586,10 @@ This keeps the subreddit active on off days. Off-day threads aren't created for 
    - **Your team** \u2014 for team subreddits like r/Reds, r/Yankees, or r/Dodgers.
    - **All Teams (post every game)** \u2014 for league-wide subreddits.
 3. Confirm **Auto-post postgame threads** is set to your preference (on by default).
-4. (Optional) Set custom **Postgame Win Title** and **Postgame Loss Title** if your sub has signature phrases.
-5. Click **Save**.
-6. When you're ready to post today's threads, open the moderator menu on your subreddit and select **"Post today's MLB game threads."** Postgame threads, postponement notices, and off-day discussions will follow automatically based on context.
+4. Under **Thread type**, choose **Game Thread** (standard) or **Broadcast Thread** (advanced companion \u2014 see the "Thread type" section above). Most subs leave this on Game Thread.
+5. (Optional) Set custom **Postgame Win Title** and **Postgame Loss Title** if your sub has signature phrases.
+6. Click **Save**.
+7. When you're ready to post today's threads, open the moderator menu on your subreddit and select **"Post today's MLB game threads."** Postgame threads, postponement notices, and off-day discussions will follow automatically based on context.
 
 ## Recovering removed threads
 
