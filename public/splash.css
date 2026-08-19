@@ -2770,3 +2770,19 @@ body:not(.is-inline) .bs-table-wrap { overflow-x: auto; }
 /* Light mode keeps Joe's tuned crimson for the count; dark uses the lighter red
    above (crimson at alpha over navy goes muddy). */
 [data-theme="light"] .live-count { color: #bf0d3c91; }
+
+/* Delay picker: the currently-selected option reads as chosen */
+.info-row.is-picked { border-color: var(--accent-soft); background: var(--accent-veil); }
+.info-row.is-picked .info-row-label { color: var(--accent-text); }
+
+/* "Last Play" label — marks the result block as a completed play, since it
+   persists through the between-batter gap. */
+.live-last-label {
+  font-family: var(--font-sans);
+  font-size: 7.5px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin-bottom: 2px;
+}

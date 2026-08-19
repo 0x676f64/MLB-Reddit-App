@@ -883,6 +883,35 @@ function setupExpand() {
 var SUN_ICON = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>';
 var MOON_ICON = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>';
 var THEME_KEY = "mlb-scores-theme";
+var DELAY_KEY = "mlb-scores-delay";
+var VIEWER_DELAYS = [
+  { v: -1, label: "Match the subreddit", sub: "Use the mod's setting" },
+  { v: 0, label: "No delay", sub: "Fastest \u2014 matches the data feed" },
+  { v: 5, label: "5 seconds", sub: "Cable / antenna" },
+  { v: 10, label: "10 seconds", sub: "Cable with a slight lag" },
+  { v: 20, label: "20 seconds", sub: "Streaming (YouTube TV, Hulu)" },
+  { v: 30, label: "30 seconds", sub: "Streaming, slower" },
+  { v: 45, label: "45 seconds", sub: "Gotham / Fubo-type feeds" },
+  { v: 60, label: "60 seconds", sub: "Slowest streams" }
+];
+function viewerDelay() {
+  try {
+    const v = localStorage.getItem(DELAY_KEY);
+    if (v == null) return null;
+    const n = Number(v);
+    return VIEWER_DELAYS.some((d) => d.v === n) && n >= 0 ? n : null;
+  } catch {
+    return null;
+  }
+}
+function setViewerDelay(n) {
+  try {
+    if (n < 0) localStorage.removeItem(DELAY_KEY);
+    else localStorage.setItem(DELAY_KEY, String(n));
+  } catch {
+  }
+  if (gamePk != null) void fetchAndRender(gamePk);
+}
 function applyTheme(theme) {
   if (theme === "light") document.documentElement.setAttribute("data-theme", "light");
   else document.documentElement.removeAttribute("data-theme");
@@ -1045,11 +1074,23 @@ function renderLiveContent(data) {
   } else {
     pitchEl.innerHTML = '<span style="font-family:var(--font-mono);font-size:10px;color:var(--text-muted);">Waiting for first pitch\u2026</span>';
   }
-  const resultEvent = currentPlay.result?.event || "";
-  const resultDesc = currentPlay.result?.description || "";
+  let resultEvent = currentPlay.result?.event || "";
+  let resultDesc = currentPlay.result?.description || "";
+  if (!resultEvent && !resultDesc && pitches.length === 0) {
+    const all = data.liveData?.plays?.allPlays || [];
+    for (let i = all.length - 1; i >= 0; i--) {
+      const p = all[i];
+      if (p?.about?.isComplete && p?.result?.description) {
+        resultEvent = p.result.event || "";
+        resultDesc = p.result.description || "";
+        break;
+      }
+    }
+  }
   const resultEl = $("live-result");
   if (resultEvent || resultDesc) {
     resultEl.innerHTML = `
+      <div class="live-last-label">Last Play</div>
       ${resultEvent ? `<div class="live-event">${resultEvent}</div>` : ""}
       ${resultDesc ? `<div class="live-desc">${resultDesc}</div>` : ""}
     `;
@@ -1879,7 +1920,8 @@ function renderEndedState() {
 }
 async function fetchAndRender(pk) {
   try {
-    const res = await fetch(`/api/game/${pk}`);
+    const vd = viewerDelay();
+    const res = await fetch(`/api/game/${pk}` + (vd == null ? "" : `?delay=${vd}`));
     const data = await res.json();
     if (!data?.gameData || !data?.liveData) {
       console.error("Game data unavailable");
@@ -2225,6 +2267,7 @@ var FEED_TV_ICON = TV_ICON;
 var FEED_RADIO_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="14" r="2.5"/><path d="M4.9 9.9a10 10 0 0 1 14.2 0"/><path d="M7.8 12.8a6 6 0 0 1 8.4 0"/></svg>';
 var CHEV_UP_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 15l6-6 6 6"/></svg>';
 var CHEV_DOWN_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>';
+var SYNC_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>';
 var OVERLAY_CLOSE_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6L6 18"/></svg>';
 var VIDEO_ICON = '<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M8 5v14l11-7z"/></svg>';
 var WX_SUN_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v2M12 20v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M2 12h2M20 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/></svg>';
@@ -2239,7 +2282,9 @@ function overlayRowsHtml(items) {
     const visual = it.img ? `<img class="info-row-logo" src="${it.img}" alt="">` : it.icon ? `<span class="info-row-icon">${it.icon}</span>` : "";
     const inner = visual + '<span class="info-row-text"><span class="info-row-label">' + it.label + "</span>" + (it.sub ? '<span class="info-row-sub">' + it.sub + "</span>" : "") + "</span>";
     const style = `animation-delay:${50 + i * 55}ms`;
-    return it.url ? `<button class="info-row" type="button" data-url="${it.url}" style="${style}">${inner}</button>` : `<div class="info-row is-static" style="${style}">${inner}</div>`;
+    if (it.url) return `<button class="info-row" type="button" data-url="${it.url}" style="${style}">${inner}</button>`;
+    if (it.delay !== void 0) return `<button class="info-row${it.active ? " is-picked" : ""}" type="button" data-delay="${it.delay}" style="${style}">${inner}</button>`;
+    return `<div class="info-row is-static" style="${style}">${inner}</div>`;
   }).join("");
 }
 function wireOverlayRows(ov) {
@@ -2252,6 +2297,18 @@ function wireOverlayRows(ov) {
       } catch (e) {
         reportError("navigateTo", e);
       }
+    });
+  });
+  ov.querySelectorAll(".info-row[data-delay]").forEach((row) => {
+    row.addEventListener("click", () => {
+      const d = Number(row.getAttribute("data-delay"));
+      if (!Number.isFinite(d)) return;
+      if (d === -2) {
+        openDelayOverlay();
+        return;
+      }
+      setViewerDelay(d);
+      openDelayOverlay();
     });
   });
   ov.querySelectorAll(".info-row-logo").forEach((img) => {
@@ -2383,6 +2440,15 @@ async function fetchBroadcastItems(pk) {
     return [{ label: "Broadcast info unavailable" }];
   }
 }
+function openDelayOverlay() {
+  const cur = viewerDelay();
+  openInfoOverlay("Sync To Your Feed", VIEWER_DELAYS.map((d) => ({
+    label: d.label,
+    sub: d.sub,
+    delay: d.v,
+    active: d.v === -1 ? cur == null : cur === d.v
+  })));
+}
 function setupTvButton() {
   if (document.getElementById("tv-btn")) return;
   const host = $("scorebug-content") || document.body;
@@ -2391,7 +2457,12 @@ function setupTvButton() {
     if (gamePk == null) return;
     openInfoOverlay("Where to Watch", [{ label: "Loading\u2026" }]);
     const items = await fetchBroadcastItems(gamePk);
-    setOverlayRows(items);
+    const cur = viewerDelay();
+    const curLabel = cur == null ? "Matching the subreddit" : cur === 0 ? "No delay" : `${cur} seconds`;
+    setOverlayRows([
+      { label: "Sync to your feed", sub: curLabel, delay: -2, icon: SYNC_ICON },
+      ...items
+    ]);
   });
   host.appendChild(btn);
 }
