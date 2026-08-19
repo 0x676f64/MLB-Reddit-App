@@ -9,8 +9,16 @@
   --bg-elev-1: rgba(255, 255, 255, 0.04);
   --bg-elev-2: rgba(255, 255, 255, 0.08);
   --accent: #bf0d3d;
-  --accent-dim: rgba(191, 13, 61, 0.55);
+  --accent-dim: #bf0d3c78;
   --accent-glow: rgba(191, 13, 61, 0.18);
+  /* Structural red — frames, rules, dividers. Same hue, low alpha, so it reads
+     as a tint instead of a hard crimson edge. */
+  --accent-soft: #bf0d3c52;
+  --accent-veil: #bf0d3c1f;
+  /* TEXT red. Alpha does NOT work for type: #bf0d3d at 40% over navy composites
+     to a near-black maroon — that IS the contrast complaint. Text needs a red
+     with more luminance than the surface, so dark mode gets a lighter tone. */
+  --accent-text: #ff7d9c;
 
   --text-primary: #ffffff;
   --text-secondary: rgba(255, 255, 255, 0.7);
@@ -94,7 +102,7 @@ body.scorebug {
   width: 56px;
   height: 56px;
   border: 4px solid rgba(255, 255, 255, 0.08);
-  border-top-color: var(--accent);
+  border-top-color: var(--accent-text);
   border-radius: 50%;
   animation: loadingSpin 0.9s linear infinite;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
@@ -119,10 +127,8 @@ body.scorebug {
   position: relative;
   z-index: 0;
   min-height: 100%;
-  /* Red frame lives here, not on the body, so it wraps the full scrollable
-     content instead of being clipped to the viewport-height scroll container.
-     The body's rounded overflow clips these corners to match the card. */
-  border: 6px solid var(--accent);
+  /* Frame removed — the navy meta strip now carries the top edge. */
+  border: none;
   border-radius: var(--radius-xl);
   display: flex;
   flex-direction: column;
@@ -202,7 +208,9 @@ body.scorebug {
 
 /* ── Scorebug top (meta strip + score row) ─────────────────────── */
 .scorebug-top {
-  padding: var(--space-base) var(--space-lg) 0;
+  /* No top padding — the meta strip carries it, so the navy reaches the very
+     top edge in light mode instead of leaving a white band above it. */
+  padding: 0 var(--space-lg) 0;
 }
 
 .meta-strip {
@@ -210,6 +218,7 @@ body.scorebug {
   flex-direction: column;
   align-items: center;
   gap: 1px;
+  padding-top: var(--space-base);
   padding-bottom: var(--space-xs);
   border-bottom: 1px solid var(--border-subtle);
 }
@@ -241,7 +250,7 @@ body.scorebug {
   font-size: 9px;
   font-weight: 600;
   letter-spacing: 0.12em;
-  color: var(--accent);
+  color: var(--accent-text);
   background: rgba(191, 13, 61, 0.12);
   border: 1px solid rgba(191, 13, 61, 0.3);
   padding: 2px 8px;
@@ -316,8 +325,8 @@ body.scorebug {
 }
 
 .status-badge {
-  background: var(--accent);
-  color: var(--text-primary);
+  background: var(--accent-veil);
+  color: var(--accent-text);
   font-family: var(--font-sans);
   font-size: 9px;
   font-weight: 600;
@@ -331,7 +340,7 @@ body.scorebug {
 .status-inning {
   font-family: var(--font-mono);
   font-size: 13px;
-  color: var(--accent);
+  color: var(--accent-text);
   font-weight: 600;
   letter-spacing: 0.04em;
 }
@@ -461,7 +470,7 @@ body.on-box-tab .linescore { display: none; }
   font-family: var(--font-sans);
   font-weight: 600;
   font-size: 10px;
-  color: var(--accent);
+  color: var(--accent-text);
   letter-spacing: 0.1em;
   text-transform: uppercase;
 }
@@ -518,7 +527,7 @@ body.on-box-tab .linescore { display: none; }
 /* Pregame uses a slightly thinner frame — apply it to the same wrapper that
    carries the border, not the body, so it doesn't create a second frame. */
 body.is-pregame #scorebug-content {
-  border-width: 5px;
+  border-width: 0;
 }
 
 body.is-pregame .status-score,
@@ -580,7 +589,9 @@ body.is-pregame .status-block {
 }
 
 .live-slot-home .live-slot-meta {
+  /* Same reading order as the away slot: role → hand → position / pitch count. */
   justify-content: flex-end;
+  flex-direction: row;
 }
 
 .live-slot-pos {
@@ -606,8 +617,10 @@ body.is-pregame .status-block {
   color: var(--text-muted);
 }
 
+/* Role label reads the same on both sides — the batter used to be accent red
+   and the pitcher muted, which looked like a status difference it isn't. */
 .live-slot.is-batter .live-slot-role {
-  color: var(--accent);
+  color: var(--text-muted);
 }
 
 .live-slot-name {
@@ -646,7 +659,7 @@ body.is-pregame .status-block {
   font-family: var(--font-sans);
   font-size: 11px;
   font-weight: 600;
-  color: var(--accent);
+  color: #ff5c7fc9;   /* dark: lighter red so it reads on navy */
   letter-spacing: 0.05em;
 }
 
@@ -821,7 +834,7 @@ body.is-pregame .status-block {
 }
 
 .final-slot-decision.win  { color: #2d6a4f; }
-.final-slot-decision.loss { color: var(--accent); }
+.final-slot-decision.loss { color: var(--accent-text); }
 
 .final-slot-role {
   font-family: var(--font-sans);
@@ -1071,7 +1084,7 @@ body.is-pregame .status-block {
 
 .bs-th-num    { width: 14px; }
 .bs-th-pos    { width: 26px; }
-.bs-th-player { text-align: left; padding-left: var(--space-xs); width: 32%; }
+.bs-th-player { text-align: left; padding-left: 2px; width: 21%; }
 
 .bs-pos-cell {
   text-align: center;
@@ -1083,11 +1096,13 @@ body.is-pregame .status-block {
 .bs-row:last-child { border-bottom: none; }
 
 .bs-row td {
-  padding: 7px 1px;
+  padding: 7px 0;
   text-align: center;
   font-family: var(--font-mono);
-  font-size: 10px;
-  font-weight: 500;
+  /* Scales with the viewport so 12 columns still fit a 6" phone, and stops
+     growing on tablets/desktop. */
+  font-size: clamp(8px, 2.4vw, 10px);
+  font-weight: 400;
   color: var(--text-primary);
   vertical-align: middle;
   white-space: nowrap;
@@ -1145,13 +1160,15 @@ body.is-pregame .status-block {
 .bs-pos.p { background: var(--accent-dim); }
 
 .bs-hit { font-weight: 700; color: var(--text-primary); }
-.bs-hr  { font-weight: 700; color: var(--accent); }
+.bs-hr  { font-weight: 700; color: var(--accent-text); }
 .bs-er  { color: var(--accent-dim); }
 
 .bs-avg {
-  font-size: 10px !important;
+  /* Matches every other stat cell — same weight, and same viewport-scaled size
+     (it was pinned at 10px, which also kept it from shrinking on narrow screens). */
+  font-size: clamp(8px, 2.4vw, 10px) !important;
   color: var(--text-secondary) !important;
-  font-weight: 500 !important;
+  font-weight: 400 !important;
 }
 
 .bs-empty {
@@ -1198,7 +1215,7 @@ body.is-pregame .status-block {
   background: linear-gradient(
     180deg,
     rgba(255, 255, 255, 0.28) 0%,
-    rgba(191, 13, 61, 0.7) 50%,
+    #bf0d3c9e 50%,
     var(--accent) 100%
   );
   box-shadow: none;
@@ -1266,7 +1283,7 @@ body.is-pregame .status-block {
 
 .tab:hover,
 .tab.tab-active {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 /* Tactile press feedback (iOS-style): the button dips slightly on tap. */
@@ -1323,7 +1340,7 @@ body.is-pregame .status-block {
   font-family: var(--font-mono);
   font-size: 10px;
   font-weight: 600;
-  color: var(--accent);
+  color: var(--accent-text);
   letter-spacing: 0.05em;
 }
 
@@ -1342,7 +1359,7 @@ body.is-pregame .status-block {
   font-family: var(--font-sans);
   font-size: 11px;
   font-weight: 600;
-  color: var(--accent);
+  color: var(--accent-text);
   letter-spacing: 0.05em;
   flex-shrink: 0;
   min-width: 50px;
@@ -1570,7 +1587,7 @@ body.is-pregame .status-block {
   font-family: var(--font-display);
   font-size: 11px;
   font-weight: 600;
-  color: var(--accent);
+  color: var(--accent-text);
   text-transform: uppercase;
   letter-spacing: 0.02em;
   margin-bottom: 2px;
@@ -1595,7 +1612,7 @@ body.is-pregame .status-block {
   font-family: var(--font-mono);
   font-size: 9px;
   font-weight: 600;
-  color: var(--accent);
+  color: var(--accent-text);
   margin-bottom: 2px;
 }
 
@@ -1707,7 +1724,7 @@ body.is-pregame .status-block {
   font-size: 44px;
   font-weight: 600;
   letter-spacing: 0.04em;
-  color: #bf0d3d;
+  color: var(--accent-text);
   text-transform: uppercase;
   line-height: 0.95;
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
@@ -1741,7 +1758,7 @@ body.is-pregame .status-block {
 .postponed-divider {
   width: 100px;
   height: 2px;
-  background: linear-gradient(90deg, transparent, #bf0d3d, transparent);
+  background: linear-gradient(90deg, transparent, #bf0d3c9e, transparent);
   margin: 6px 0;
 }
 
@@ -1786,7 +1803,7 @@ body.is-pregame .status-block {
   font-family: "Rubik", sans-serif;
   font-size: 10px;
   font-weight: 600;
-  color: #bf0d3d;
+  color: var(--accent-text);
   background: rgba(191, 13, 61, 0.12);
   border: 1px solid rgba(191, 13, 61, 0.3);
   border-radius: 4px;
@@ -1854,7 +1871,7 @@ body.is-postponed .linescore {
   font-size: 44px;
   font-weight: 600;
   letter-spacing: 0.04em;
-  color: #bf0d3d;
+  color: var(--accent-text);
   text-transform: uppercase;
   line-height: 0.95;
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
@@ -1902,7 +1919,7 @@ body.is-postponed .linescore {
 .suspended-divider {
   width: 100px;
   height: 2px;
-  background: linear-gradient(90deg, transparent, #bf0d3d, transparent);
+  background: linear-gradient(90deg, transparent, #bf0d3c9e, transparent);
   margin: 6px 0;
 }
 
@@ -1941,7 +1958,7 @@ body.is-postponed .linescore {
   font-family: "Rubik", sans-serif;
   font-size: 10px;
   font-weight: 600;
-  color: #bf0d3d;
+  color: var(--accent-text);
   background: rgba(191, 13, 61, 0.12);
   border: 1px solid rgba(191, 13, 61, 0.3);
   border-radius: 4px;
@@ -1956,7 +1973,7 @@ body.is-postponed .linescore {
   font-family: "Rubik", sans-serif;
   font-size: 10px;
   font-weight: 600;
-  color: #bf0d3d;
+  color: var(--accent-text);
   background: rgba(191, 13, 61, 0.12);
   border: 1px solid rgba(191, 13, 61, 0.3);
   border-radius: 4px;
@@ -2030,8 +2047,11 @@ body.is-postponed .linescore {
   --bg-elev-2: rgba(10, 24, 40, 0.08);
 
   --accent: #bf0d3d;
-  --accent-dim: rgba(191, 13, 61, 0.55);
+  --accent-dim: #bf0d3c96;
   --accent-glow: rgba(191, 13, 61, 0.18);
+  --accent-soft: #bf0d3c70;
+  --accent-veil: #bf0d3c1a;
+  --accent-text: #bf0d3d;   /* brand crimson already reads on white */
 
   --text-primary: #0a1828;
   --text-secondary: rgba(10, 24, 40, 0.72);
@@ -2050,7 +2070,7 @@ body.is-postponed .linescore {
 
 [data-theme="light"] .loading-spinner {
   border-color: rgba(10, 24, 40, 0.10);
-  border-top-color: var(--accent);
+  border-top-color: var(--accent-text);
 }
 
 /* Linescore faint cells (hardcoded whites in the base theme) */
@@ -2068,9 +2088,8 @@ body.is-postponed .linescore {
 }
 [data-theme="light"] .wp-zone:hover { fill: rgba(10, 24, 40, 0.06); }
 
-/* Status badges (FINAL / LIVE / POSTPONED / SUSPENDED) sit on the red accent or
-   the muted chip — keep their text white in light mode for contrast */
-[data-theme="light"] .status-badge { color: #fff; }
+/* Status badge colors now come from the accent-treatment block further down
+   (tinted fill + soft border + readable red type) in both themes. */
 
 /* ───────────────────────────────────────────────────────────────────────────
    LOGO SIZE — per-theme scale knob
@@ -2253,7 +2272,7 @@ body.is-inline #inline-pager.pager-active { display: flex; }
   left: 2px;
   width: calc(33.333% - 2px);
   height: calc(100% - 4px);
-  background: var(--accent-red, #bf0d3d);
+  background: var(--accent-fill);
   border-radius: 999px;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
   transition: transform 0.34s cubic-bezier(0.34, 1.45, 0.5, 1);
@@ -2294,7 +2313,7 @@ body.is-inline #inline-pager.pager-active { display: flex; }
 #theme-btn svg, #expand-btn svg, .topbar-mini-btn svg { width: 15px; height: 15px; }
 .topbar-mini-btn { transition: transform 0.15s ease, background 0.15s ease; -webkit-tap-highlight-color: transparent; }
 .topbar-mini-btn:active { transform: scale(0.9); }
-.topbar-mini-btn:focus-visible { outline: 2px solid var(--accent-dim, #bf0d3d); outline-offset: 2px; }
+.topbar-mini-btn:focus-visible { outline: 2px solid var(--accent-dim); outline-offset: 2px; }
 
 .info-overlay { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center; padding: 22px; background: rgba(2, 9, 26, 0.5); backdrop-filter: blur(10px) saturate(1.05); -webkit-backdrop-filter: blur(10px) saturate(1.05); opacity: 0; transition: opacity 0.2s ease; }
 .info-overlay.is-open { opacity: 1; }
@@ -2318,7 +2337,7 @@ body.is-inline #inline-pager.pager-active { display: flex; }
 .info-row-icon svg { width: 18px; height: 18px; }
 @keyframes infoRowIn { to { opacity: 1; transform: translateY(0); } }
 
-.play-video-btn { display: inline-flex; align-self: flex-start; align-items: center; gap: 5px; margin-top: 8px; padding: 5px 11px; background: var(--accent-red, #bf0d3d); color: #fff; border: none; border-radius: 999px; font-family: var(--font-sans); font-size: 10px; font-weight: 600; letter-spacing: 0.04em; cursor: pointer; -webkit-tap-highlight-color: transparent; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.18); transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s ease, filter 0.2s ease; }
+.play-video-btn { display: inline-flex; align-self: flex-start; align-items: center; gap: 5px; margin-top: 8px; padding: 5px 11px; background: var(--accent-fill); color: #fff; border: none; border-radius: 999px; font-family: var(--font-sans); font-size: 10px; font-weight: 600; letter-spacing: 0.04em; cursor: pointer; -webkit-tap-highlight-color: transparent; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.18); transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s ease, filter 0.2s ease; }
 .play-video-btn:hover { transform: translateY(-1px) scale(1.07); box-shadow: 0 3px 8px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.22); filter: brightness(1.06); }
 .play-video-btn:active { transform: translateY(0) scale(0.93); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), inset 0 2px 4px rgba(0, 0, 0, 0.25); transition-duration: 0.07s; }
 .play-video-btn svg { width: 11px; height: 11px; }
@@ -2357,19 +2376,19 @@ body.is-live.is-inline .weather-strip { max-height: 0; opacity: 0; padding-top: 
 .stand-card-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
 .stand-card-name { font-family: var(--font-display); font-size: 11px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-primary); }
 .stand-wc-badge { margin-left: auto; font-family: var(--font-sans); font-size: 8px; font-weight: 700; color: #fff; background: var(--accent); padding: 2px 7px; border-radius: 999px; letter-spacing: 0.04em; }
-.stand-col-hdr { display: grid; grid-template-columns: 22px 1fr 26px 26px 30px 58px; padding: 5px 11px; border-bottom: 1px solid var(--border-subtle); }
+.stand-col-hdr { display: grid; grid-template-columns: clamp(14px,3.2vw,22px) minmax(46px,1fr) clamp(20px,4.4vw,32px) clamp(20px,4.4vw,32px) clamp(25px,5vw,38px) clamp(23px,4.8vw,36px) clamp(23px,4.8vw,36px) clamp(29px,5.6vw,44px) clamp(34px,7.6vw,60px); column-gap: clamp(4px,1.5vw,13px); transition: grid-template-columns 0.3s ease, column-gap 0.3s ease, padding 0.3s ease; padding: 5px 11px; border-bottom: 1px solid var(--border-subtle); }
 .stand-col-hdr span { font-family: var(--font-mono); font-size: 8px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-muted); text-align: center; }
 .stand-col-hdr .stand-col-team { text-align: left; }
 .stand-col-hdr .stand-col-pct { text-align: right; }
-.stand-row { display: grid; grid-template-columns: 22px 1fr 26px 26px 30px 58px; align-items: center; padding: 6px 11px; border-bottom: 1px solid var(--border-subtle); }
+.stand-row { display: grid; grid-template-columns: clamp(14px,3.2vw,22px) minmax(46px,1fr) clamp(20px,4.4vw,32px) clamp(20px,4.4vw,32px) clamp(25px,5vw,38px) clamp(23px,4.8vw,36px) clamp(23px,4.8vw,36px) clamp(29px,5.6vw,44px) clamp(34px,7.6vw,60px); column-gap: clamp(4px,1.5vw,13px); transition: grid-template-columns 0.3s ease, column-gap 0.3s ease, padding 0.3s ease; align-items: center; padding: 6px 11px; border-bottom: 1px solid var(--border-subtle); }
 .stand-row:last-child { border-bottom: none; }
 .stand-row.playoff-line { border-top: 1.5px solid var(--accent-dim); }
 .stand-pos { font-family: var(--font-mono); font-size: 10px; font-weight: 500; color: var(--text-muted); text-align: center; }
-.stand-pos.first { color: var(--accent); font-weight: 700; }
+.stand-pos.first { color: var(--accent-text); font-weight: 700; }
 .stand-team { display: flex; align-items: center; gap: 7px; min-width: 0; }
 .stand-logo { width: 20px; height: 20px; object-fit: contain; flex-shrink: 0; }
 .stand-abbr { font-family: var(--font-display); font-size: 11px; font-weight: 600; letter-spacing: 0.04em; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.stand-row.leader .stand-abbr { color: var(--accent); }
+.stand-row.leader .stand-abbr { color: var(--accent-text); }
 .stand-stat { font-family: var(--font-mono); font-size: 11px; font-weight: 500; color: var(--text-primary); text-align: center; }
 .stand-stat.muted { color: var(--text-muted); }
 .stand-pct { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
@@ -2428,7 +2447,7 @@ body.on-standings-tab .weather-strip { max-height: 0; opacity: 0; padding-top: 0
 .pl-hot { background: rgba(191,13,61,0.16); color: #ff6b8a; border-color: rgba(191,13,61,0.42); }
 .pl-steady { background: rgba(148,163,184,0.16); color: #94a3b8; border-color: rgba(148,163,184,0.34); }
 .pl-cold { background: rgba(96,165,250,0.16); color: #60a5fa; border-color: rgba(96,165,250,0.42); }
-[data-theme="light"] .pl-hot { color: #bf0d3d; }
+[data-theme="light"] .pl-hot { color: #bf0d3cd6; }
 [data-theme="light"] .pl-steady { color: #475569; }
 [data-theme="light"] .pl-cold { color: #1d4ed8; }
 
@@ -2460,8 +2479,8 @@ body.on-standings-tab .weather-strip { max-height: 0; opacity: 0; padding-top: 0
 
 /* ═══ Dark-mode red: flatter, slightly lighter fills so it doesn't bloom on navy.
    Light mode restores the brand crimson. --accent-flat is the one dial. ═══ */
-:root { --accent-flat: #ce4266; }
-[data-theme="light"] { --accent-flat: #bf0d3d; }
+:root { --accent-flat: #ce4266; --accent-fill: #ce4266; }
+[data-theme="light"] { --accent-flat: #bf0d3d; --accent-fill: #d6536f; }
 .plays-toggle-thumb { background: var(--accent-flat); }
 .play-video-btn { background: var(--accent-flat); }
 .hl-play { background: var(--accent-flat); }
@@ -2554,3 +2573,200 @@ body.on-standings-tab .weather-strip { max-height: 0; opacity: 0; padding-top: 0
    on overflow:hidden). Expanded mode scrolls naturally. ═══ */
 body.is-inline .pl-scroll,
 body.is-inline .info-panel-body { overflow-y: hidden; }
+
+/* ═══ Light mode: navy meta strip + tab bar ═══
+   Light mode is now the default view, so the chrome carries the brand navy —
+   it keeps the app from reading as a flat white page and gives both themes the
+   same structure (dark chrome, light content). */
+[data-theme="light"] .meta-strip {
+  background: #041e42;
+  border-bottom-color: rgba(255, 255, 255, 0.14);
+  /* Full-bleed to the frame: width:100vw + a viewport-centred offset spans the
+     navy edge to edge regardless of what padding the ancestors carry (the
+     earlier negative-margin guess left white gutters on the sides). */
+  width: 100vw;
+  position: relative;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 13px var(--space-md) 9px;
+}
+[data-theme="light"] .meta-strip,
+[data-theme="light"] .meta-strip * { color: rgba(255, 255, 255, 0.86); }
+[data-theme="light"] .tab-bar { background: #041e42; }
+[data-theme="light"] .tab { color: rgba(255, 255, 255, 0.55); }
+[data-theme="light"] .tab:hover,
+[data-theme="light"] .tab.tab-active { color: #ff7d9c; }
+
+/* Live matchup: handedness + the pitcher's pitch-strike count */
+.live-slot-extra { font-family: var(--font-mono); font-size: 8px; font-weight: 600; letter-spacing: 0.06em; color: var(--text-muted); white-space: nowrap; }
+.live-slot-extra:empty { display: none; }
+
+/* ═══ Top buttons: frosted white ═══
+   They inherit dark inline styles, which vanish against the navy header now
+   that light mode ships navy chrome. Frosted white reads on navy in BOTH
+   themes. !important because the styles are set inline in JS. */
+#theme-btn, #expand-btn, #tv-btn, #graph-btn {
+  background: rgba(255, 255, 255, 0.16) !important;
+  color: #ffffff !important;
+  border: 1px solid rgba(255, 255, 255, 0.28) !important;
+  backdrop-filter: blur(6px) saturate(1.1);
+  -webkit-backdrop-filter: blur(6px) saturate(1.1);
+}
+#theme-btn:hover, #expand-btn:hover, #tv-btn:hover, #graph-btn:hover {
+  background: rgba(255, 255, 255, 0.26) !important;
+}
+
+/* ═══ Box score: leaderboard treatment ═══ */
+.bs-table { font-family: var(--font-sans); }
+.bs-table thead th {
+  background: var(--bs-head-bg);
+  color: rgba(255, 255, 255, 0.72);
+  font-family: var(--font-sans);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+.bs-table thead th.bs-th-player { color: #ffffff; }
+.bs-table thead th.bs-th-slash { color: #ffffff; background: var(--bs-head-slash); }
+
+/* zebra + interactive rows */
+.bs-row:nth-child(even) { background: var(--bs-zebra, rgba(255, 255, 255, 0.022)); }
+.bs-row[data-player-id]:hover,
+.bs-row[data-player-id]:active { background: var(--bs-hover, rgba(255, 255, 255, 0.07)); }
+
+/* the triple slash carries the weight — it's the most-requested data */
+.bs-slash { color: var(--text-primary) !important; letter-spacing: -0.03em; }
+.bs-ps { font-variant-numeric: tabular-nums; color: var(--text-secondary); }
+
+/* TB / SB / E notes under the tables */
+.bs-notes { display: flex; flex-wrap: wrap; gap: 4px 14px; padding: 8px 10px 10px; font-family: var(--font-sans); font-size: 9px; color: var(--text-muted); }
+.bs-note b { font-weight: 700; color: var(--text-secondary); letter-spacing: 0.08em; margin-right: 3px; }
+
+/* Light mode = the leaderboard look: navy header, white rows, grey banding */
+[data-theme="light"] {
+  --bs-zebra: #f4f7fa;
+  --bs-hover: #e6eef7;
+}
+
+[data-theme="light"] .bs-slash { color: #041e42 !important; }
+[data-theme="light"] .bs-row { border-bottom: 1px solid #eef2f6; }
+
+/* Horizontal room without breaking the inline no-scroll rule: expanded may
+   scroll the table sideways; inline shrinks type instead of overflowing. */
+.bs-table-wrap { overflow-x: auto; }
+body.is-inline .bs-table { font-size: 9px; }
+body.is-inline .bs-row td, body.is-inline .bs-table thead th { padding-left: 0; padding-right: 0; }
+
+/* ═══ Condensed top section on data tabs ═══
+   The scorebug is the star on the live tab, but on Box / Plays / Standings /
+   Win% it's just eating the room the data needs. Those tabs shrink it —
+   animated, so it reads as the header folding up rather than a layout jump.
+   Pregame keeps its full-size logos on the live tab only. */
+.team-logo {
+  transition: width 0.32s var(--ease-out, ease), height 0.32s var(--ease-out, ease);
+}
+.score-row { transition: padding 0.32s ease, gap 0.32s ease; }
+.status-block { transition: gap 0.32s ease; }
+.team-record { transition: font-size 0.32s ease; }
+
+body.compact-top .team-logo,
+body.is-pregame.compact-top .team-logo {
+  width: 47px;
+  height: 47px;
+}
+body.compact-top .score-row,
+body.is-pregame.compact-top .score-row {
+  padding: 3px 0;
+  gap: 6px;
+}
+body.compact-top .status-block,
+body.is-pregame.compact-top .status-block { gap: 10px; }
+body.compact-top .team-record { font-size: 10px; }
+
+/* Weather folds away with it — it's live-tab context, not data-tab context. */
+body.compact-top .weather-strip {
+  max-height: 0;
+  opacity: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+/* Standings: run differential reads at a glance */
+.stand-stat.pos { color: #2a9d5c; }
+.stand-stat.neg { color: var(--accent-text); }
+[data-theme="light"] .stand-stat.pos { color: #1b7a45; }
+/* Tighter cells now that the row carries R / RA / DIFF */
+.stand-row, .stand-col-hdr { padding-left: clamp(8px, 2.4vw, 18px); padding-right: clamp(8px, 2.4vw, 18px); }
+
+
+/* Box-score header tokens — light mode wears the navy leaderboard header,
+   dark mode gets a near-black navy so it doesn't look like a pasted-in bar. */
+:root { --bs-head-bg: #061426; --bs-head-slash: #0d2138; }
+[data-theme="light"] { --bs-head-bg: #041e42; --bs-head-slash: #0a2c56; }
+.bs-table thead th { font-size: clamp(7px, 2vw, 9px); }
+.bs-pname { font-size: clamp(9px, 2.5vw, 11px); }
+
+/* Narrow screens: drop every remaining bit of weight before anything clips. */
+@media (max-width: 380px) {
+  .bs-hit, .bs-hr, .bs-er { font-weight: 500 !important; }
+  .bs-row td, .bs-table thead th { letter-spacing: -0.02em; }
+}
+/* Expanded may scroll the table sideways; inline never overflows (it shrinks). */
+body:not(.is-inline) .bs-table-wrap { overflow-x: auto; }
+
+/* Standings numbers line up column to column */
+.stand-stat { font-variant-numeric: tabular-nums; }
+
+/* Standings type + bar scale with the row so a desktop reads roomy and a phone
+   stays tight, animating between the two instead of snapping. */
+.stand-stat, .stand-pct-val { font-size: clamp(9.5px, 2.3vw, 12px); transition: font-size 0.3s ease; }
+.stand-abbr { font-size: clamp(10px, 2.5vw, 13px); transition: font-size 0.3s ease; }
+.stand-logo { width: clamp(17px, 4vw, 24px); height: clamp(17px, 4vw, 24px); transition: width 0.3s ease, height 0.3s ease; }
+.stand-bar { width: clamp(28px, 6.5vw, 54px); transition: width 0.3s ease; }
+.stand-col-hdr span { font-size: clamp(7.5px, 1.9vw, 9.5px); transition: font-size 0.3s ease; }
+
+/* ═══ Accent treatment: status badge + live scorebug ═══
+   The badge was a solid crimson block; it now uses the same tinted-red language
+   as the rest of the app (veil fill, soft border, readable red type), so it
+   reads as an accent rather than a hard slab. The live scorebug picks up the
+   same frame so the count/bases block is visibly the live focal point. */
+.status-badge {
+  background: var(--accent-veil);
+  border: 1px solid var(--accent-soft);
+  color: var(--accent-text);
+}
+[data-theme="light"] .status-badge {
+  color: var(--accent-text);
+  background: rgba(191, 13, 61, 0.10);
+}
+
+/* Scorebug carries the accent through the COUNT type only — no fill, no border,
+   no padding. It hugs the matchup row above and the zone below; boxing it in
+   was eating the vertical space the data needs. */
+
+/* ═══ Plays: lighter reds in light mode ═══
+   Dark mode reads fine; light mode had too many saturated crimson blocks
+   stacked in one tab. One fill token drives them all. */
+.plays-toggle-thumb,
+.play-video-btn,
+.hl-play,
+.play-event-badge { background: var(--accent-fill) !important; }
+[data-theme="light"] .play-inning { color: #d0466a; }
+[data-theme="light"] .play-video-btn { box-shadow: 0 1px 3px rgba(191, 13, 61, 0.22); }
+
+/* Status badge colors come from CSS now (the TS was assigning #bf0d3d inline,
+   which beat every rule here). Non-final states keep the tinted treatment. */
+.status-badge { background: var(--accent-veil); color: var(--accent-text); }
+[data-theme="light"] .status-badge { background: rgba(191, 13, 61, 0.10); color: var(--accent-text); }
+
+/* Inning line: base color is the accent (FINAL / live states that used to set
+   #bf0d3d inline). States that want it neutral still set --text-secondary
+   inline, which wins over this. */
+.status-inning { color: var(--accent-text); }
+
+/* Light mode keeps Joe's tuned crimson for the count; dark uses the lighter red
+   above (crimson at alpha over navy goes muddy). */
+[data-theme="light"] .live-count { color: #bf0d3c91; }

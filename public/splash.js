@@ -516,8 +516,58 @@ function svgInk() {
     dotRing: "rgba(255,255,255,0.6)"
   };
 }
+function svgRed() {
+  const light = document.documentElement.getAttribute("data-theme") === "light";
+  return light ? {
+    fill: "#bf0d3ca6",
+    fillDim: "#bf0d3c8c",
+    stroke: "#bf0d3c92",
+    strokeDim: "#bf0d3c72",
+    zone: "#bf0d3c85",
+    zoneGrid: "#bf0d3c2e",
+    zoneFill: "#bf0d3c0d",
+    dot: "#bf0d3ce0",
+    dotBall: "#2a9d5cf0",
+    lastRing: "#002D72",
+    dotOpacity: "0.82"
+  } : {
+    fill: "#ff5c7fb3",
+    fillDim: "#ff5c7f8a",
+    stroke: "#ff5c7fa6",
+    strokeDim: "#ff5c7f70",
+    zone: "#ff5c7f8f",
+    zoneGrid: "#ff5c7f38",
+    zoneFill: "#ff5c7f12",
+    dot: "#ff5c7fdb",
+    dotBall: "#3fd18ae0",
+    lastRing: "#ffffff",
+    dotOpacity: "0.7"
+  };
+}
+function pitchOutcomeColor(p) {
+  const r = svgRed();
+  return p?.details?.isBall ? r.dotBall : r.dot;
+}
+function slotHand(playerId, isBatter) {
+  if (playerId == null) return "";
+  const bio = lastGameData?.gameData?.players?.["ID" + playerId];
+  if (isBatter) {
+    const side = bio?.batSide?.code;
+    return side === "S" ? "SWH" : side === "L" || side === "R" ? side + "HB" : "";
+  }
+  const hand = bio?.pitchHand?.code;
+  return hand === "L" || hand === "R" ? hand + "HP" : "";
+}
+function slotPitchCount(teamBox, playerId) {
+  if (playerId == null) return "";
+  const p = teamBox?.players?.["ID" + playerId]?.stats?.pitching;
+  const np = p?.numberOfPitches ?? p?.pitchesThrown;
+  const st = p?.strikes;
+  return np != null && st != null ? `${np}-${st}` : "";
+}
 function buildStrikeZoneSVG(pitches) {
   const ink = svgInk();
+  const red = svgRed();
   const dW = DZ_RIGHT - DZ_LEFT, dH = DZ_BOT - DZ_TOP;
   const d3 = dW / 3, d3h = dH / 3;
   const dots = pitches.map((p, i) => {
@@ -525,26 +575,25 @@ function buildStrikeZoneSVG(pitches) {
     const pz = p.pitchData?.coordinates?.pZ;
     if (px == null || pz == null) return "";
     const cx = mapPx(px), cy = mapPz(pz);
-    const info = pitchInfo(p.details?.type?.code);
     const isLast = i === pitches.length - 1;
     return `<circle cx="${cx}" cy="${cy}" r="${isLast ? 7 : 5}"
-      fill="${info.color}" stroke="${isLast ? "#fff" : ink.faint}"
-      stroke-width="${isLast ? 2 : 1}" opacity="${isLast ? 1 : 0.65}"/>
+      fill="${pitchOutcomeColor(p)}" stroke="${isLast ? red.lastRing : ink.faint}"
+      stroke-width="${isLast ? 2 : 1}" opacity="${isLast ? 1 : red.dotOpacity}"/>
       <text x="${cx}" y="${cy + 0.5}" text-anchor="middle" dominant-baseline="middle"
       font-size="${isLast ? 7 : 6}" font-weight="700" fill="white"
       font-family="monospace" pointer-events="none">${i + 1}</text>`;
   }).join("");
   return `<svg viewBox="0 0 ${ZONE_W} ${ZONE_H}" xmlns="http://www.w3.org/2000/svg" style="overflow:visible;">
     <rect x="${DZ_LEFT}" y="${DZ_TOP}" width="${dW}" height="${dH}"
-      fill="rgba(191,13,61,0.04)" stroke="rgba(191,13,61,0.75)" stroke-width="1.5" rx="1"/>
+      fill="${red.zoneFill}" stroke="${red.zone}" stroke-width="1.5" rx="1"/>
     <line x1="${DZ_LEFT + d3}" y1="${DZ_TOP}" x2="${DZ_LEFT + d3}" y2="${DZ_BOT}"
-      stroke="rgba(191,13,61,0.22)" stroke-width="0.8" stroke-dasharray="3,2"/>
+      stroke="${red.zoneGrid}" stroke-width="0.8" stroke-dasharray="3,2"/>
     <line x1="${DZ_LEFT + d3 * 2}" y1="${DZ_TOP}" x2="${DZ_LEFT + d3 * 2}" y2="${DZ_BOT}"
-      stroke="rgba(191,13,61,0.22)" stroke-width="0.8" stroke-dasharray="3,2"/>
+      stroke="${red.zoneGrid}" stroke-width="0.8" stroke-dasharray="3,2"/>
     <line x1="${DZ_LEFT}" y1="${DZ_TOP + d3h}" x2="${DZ_RIGHT}" y2="${DZ_TOP + d3h}"
-      stroke="rgba(191,13,61,0.22)" stroke-width="0.8" stroke-dasharray="3,2"/>
+      stroke="${red.zoneGrid}" stroke-width="0.8" stroke-dasharray="3,2"/>
     <line x1="${DZ_LEFT}" y1="${DZ_TOP + d3h * 2}" x2="${DZ_RIGHT}" y2="${DZ_TOP + d3h * 2}"
-      stroke="rgba(191,13,61,0.22)" stroke-width="0.8" stroke-dasharray="3,2"/>
+      stroke="${red.zoneGrid}" stroke-width="0.8" stroke-dasharray="3,2"/>
     <polygon points="${DZ_LEFT},${DZ_BOT + 5} ${DZ_RIGHT},${DZ_BOT + 5} ${DZ_RIGHT},${DZ_BOT + 12} ${SZ_CX},${DZ_BOT + 20} ${DZ_LEFT},${DZ_BOT + 12}"
       fill="${ink.strong}" stroke="${ink.mid}" stroke-width="1"/>
     ${dots}
@@ -552,18 +601,19 @@ function buildStrikeZoneSVG(pitches) {
 }
 function buildBasesSVG(outs, onBase) {
   const ink = svgInk();
-  const outFill = (n) => outs >= n ? "#bf0d3d" : ink.empty;
-  const baseFill = (b) => b ? "#bf0d3d" : ink.empty;
+  const red = svgRed();
+  const outFill = (n) => outs >= n ? red.fill : ink.empty;
+  const baseFill = (b) => b ? red.fill : ink.empty;
   return `<svg width="60" height="60" viewBox="0 0 58 79" xmlns="http://www.w3.org/2000/svg">
-    <circle cx="13" cy="61" r="6" fill="${outFill(1)}" stroke="#bf0d3d" stroke-width="1.5"/>
-    <circle cx="30" cy="61" r="6" fill="${outFill(2)}" stroke="#bf0d3d" stroke-width="1.5"/>
-    <circle cx="47" cy="61" r="6" fill="${outFill(3)}" stroke="#bf0d3d" stroke-width="1.5"/>
+    <circle cx="13" cy="61" r="6" fill="${outFill(1)}" stroke="${red.stroke}" stroke-width="1.5"/>
+    <circle cx="30" cy="61" r="6" fill="${outFill(2)}" stroke="${red.stroke}" stroke-width="1.5"/>
+    <circle cx="47" cy="61" r="6" fill="${outFill(3)}" stroke="${red.stroke}" stroke-width="1.5"/>
     <rect x="17.6" y="29.7" width="14" height="14" transform="rotate(45 17.6 29.7)"
-      fill="${baseFill(onBase?.third)}" stroke="#bf0d3d" stroke-width="1.5"/>
+      fill="${baseFill(onBase?.third)}" stroke="${red.stroke}" stroke-width="1.5"/>
     <rect x="29.4" y="17.7" width="14" height="14" transform="rotate(45 29.4 17.7)"
-      fill="${baseFill(onBase?.second)}" stroke="#bf0d3d" stroke-width="1.5"/>
+      fill="${baseFill(onBase?.second)}" stroke="${red.stroke}" stroke-width="1.5"/>
     <rect x="41.6" y="29.7" width="14" height="14" transform="rotate(45 41.6 29.7)"
-      fill="${baseFill(onBase?.first)}" stroke="#bf0d3d" stroke-width="1.5"/>
+      fill="${baseFill(onBase?.first)}" stroke="${red.stroke}" stroke-width="1.5"/>
   </svg>`;
 }
 function getBatterSeasonStats(teamBox, batterId) {
@@ -837,13 +887,6 @@ function applyTheme(theme) {
   if (theme === "light") document.documentElement.setAttribute("data-theme", "light");
   else document.documentElement.removeAttribute("data-theme");
 }
-function systemTheme() {
-  try {
-    return window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
-  } catch {
-    return "dark";
-  }
-}
 function savedTheme() {
   try {
     const v = localStorage.getItem(THEME_KEY);
@@ -853,7 +896,7 @@ function savedTheme() {
   }
 }
 function resolveTheme() {
-  return savedTheme() ?? systemTheme();
+  return savedTheme() ?? "light";
 }
 function setupThemeToggle() {
   if (document.getElementById("theme-btn")) return;
@@ -954,13 +997,15 @@ function renderLiveContent(data) {
     return teamBox.players?.[`ID${playerId}`]?.position?.abbreviation || "";
   };
   $("live-away-role").textContent = awaySlotIsBatter ? "BATTER" : "PITCHER";
-  $("live-away-pos").textContent = awaySlotIsBatter ? getPlayerPos(teamsBox.away, awaySlotPlayer?.id) : "";
+  $("live-away-pos").textContent = awaySlotIsBatter ? getPlayerPos(teamsBox.away, awaySlotPlayer?.id) : slotPitchCount(teamsBox.away, awaySlotPlayer?.id);
+  $("live-away-hand").textContent = slotHand(awaySlotPlayer?.id, awaySlotIsBatter);
   $("live-away-name").textContent = awaySlotPlayer?.fullName || "\u2014";
   $("live-away-stats").textContent = awaySlotIsBatter ? getBatterSeasonStats(teamsBox.away, awaySlotPlayer?.id) : getPitcherInGameLine(teamsBox.away, awaySlotPlayer?.id);
   const awayLogoEl = $("live-away-team-logo");
   if (awayLogoEl && awayTeamId) loadLogo(awayLogoEl, awayTeamId);
   $("live-home-role").textContent = homeSlotIsBatter ? "BATTER" : "PITCHER";
-  $("live-home-pos").textContent = homeSlotIsBatter ? getPlayerPos(teamsBox.home, homeSlotPlayer?.id) : "";
+  $("live-home-pos").textContent = homeSlotIsBatter ? getPlayerPos(teamsBox.home, homeSlotPlayer?.id) : slotPitchCount(teamsBox.home, homeSlotPlayer?.id);
+  $("live-home-hand").textContent = slotHand(homeSlotPlayer?.id, homeSlotIsBatter);
   $("live-home-name").textContent = homeSlotPlayer?.fullName || "\u2014";
   $("live-home-stats").textContent = homeSlotIsBatter ? getBatterSeasonStats(teamsBox.home, homeSlotPlayer?.id) : getPitcherInGameLine(teamsBox.home, homeSlotPlayer?.id);
   const homeLogoEl = $("live-home-team-logo");
@@ -981,10 +1026,10 @@ function renderLiveContent(data) {
     let resCls = "live-pr-ball";
     let resLbl = "BALL";
     if (isInPlay) {
-      resCls = "live-pr-contact";
+      resCls = "live-pr-strike";
       resLbl = "IN PLAY";
     } else if (isFoul) {
-      resCls = "live-pr-foul";
+      resCls = "live-pr-strike";
       resLbl = "FOUL";
     } else if (isStrike) {
       resCls = "live-pr-strike";
@@ -1041,7 +1086,10 @@ function buildBattingRow(player, displayNum, s, isSub = false) {
   const hr = g.homeRuns ?? 0;
   const bb = g.baseOnBalls ?? 0;
   const so = g.strikeOuts ?? 0;
+  const lob = g.leftOnBase ?? 0;
   const avg = fmtAvg(s?.avg);
+  const obp = fmtAvg(s?.obp);
+  const slg = fmtAvg(s?.slg);
   const numCell = isSub ? "" : String(displayNum);
   const nameCell = isSub ? `<div class="bs-pname" style="padding-left:15px;opacity:.72">${name}</div>` : `<div class="bs-pname">${name}</div>`;
   return `<tr class="bs-row${isSub ? " bs-sub" : ""}" data-player-id="${player.person?.id ?? ""}">
@@ -1055,7 +1103,10 @@ function buildBattingRow(player, displayNum, s, isSub = false) {
     <td class="${hr > 0 ? "bs-hr" : ""}">${hr}</td>
     <td>${bb}</td>
     <td>${so}</td>
-    <td class="bs-avg">${avg}</td>
+    <td>${lob}</td>
+    <td class="bs-avg bs-slash">${avg}</td>
+    <td class="bs-avg bs-slash">${obp}</td>
+    <td class="bs-avg bs-slash">${slg}</td>
   </tr>`;
 }
 function buildPitchingRow(player, s) {
@@ -1068,6 +1119,9 @@ function buildPitchingRow(player, s) {
   const bb = g.baseOnBalls ?? 0;
   const so = g.strikeOuts ?? 0;
   const np = g.numberOfPitches ?? g.pitchesThrown ?? "";
+  const strikes = g.strikes;
+  const ps = np !== "" && strikes != null ? `${np}-${strikes}` : String(np);
+  const wp = g.wildPitches ?? 0;
   const era = s?.era ?? "-.--";
   const erHasRuns = er > 0;
   return `<tr class="bs-row" data-player-id="${player.person?.id ?? ""}">
@@ -1080,7 +1134,8 @@ function buildPitchingRow(player, s) {
     <td class="${erHasRuns ? "bs-er" : ""}">${er}</td>
     <td>${bb}</td>
     <td>${so}</td>
-    <td>${np}</td>
+    <td>${wp}</td>
+    <td class="bs-ps">${ps}</td>
     <td class="bs-avg">${era}</td>
   </tr>`;
 }
@@ -1143,10 +1198,10 @@ function buildBoxPanel(teamStats) {
           <th class="bs-th-num">#</th>
           <th class="bs-th-pos"></th>
           <th class="bs-th-player">Player</th>
-          <th>AB</th><th>H</th><th>R</th><th>RBI</th><th>HR</th><th>BB</th><th>K</th><th>AVG</th>
+          <th>AB</th><th>H</th><th>R</th><th>RBI</th><th>HR</th><th>BB</th><th>K</th><th>LOB</th><th class="bs-th-slash">AVG</th><th class="bs-th-slash">OBP</th><th class="bs-th-slash">SLG</th>
         </tr>
       </thead>
-      <tbody>${battingRows || `<tr><td colspan="11" class="bs-empty">Awaiting first AB</td></tr>`}</tbody>
+      <tbody>${battingRows || `<tr><td colspan="12" class="bs-empty">Awaiting first AB</td></tr>`}</tbody>
     </table>
     <div class="bs-section-hdr pitching"><span class="bs-dot"></span>Pitching</div>
     <table class="bs-table bs-table-pitching">
@@ -1155,12 +1210,22 @@ function buildBoxPanel(teamStats) {
           <th class="bs-th-num"></th>
           <th class="bs-th-pos"></th>
           <th class="bs-th-player">Pitcher</th>
-          <th>IP</th><th>H</th><th>R</th><th>ER</th><th>BB</th><th>K</th><th>NP</th><th>ERA</th>
+          <th>IP</th><th>H</th><th>R</th><th>ER</th><th>BB</th><th>K</th><th>WP</th><th>P-S</th><th>ERA</th>
         </tr>
       </thead>
-      <tbody>${pitchingRows || `<tr><td colspan="11" class="bs-empty">No pitching data yet</td></tr>`}</tbody>
+      <tbody>${pitchingRows || `<tr><td colspan="12" class="bs-empty">No pitching data yet</td></tr>`}</tbody>
     </table>
+    ${buildBoxNotes(teamStats)}
   `;
+}
+function buildBoxNotes(teamBox) {
+  const players = Object.values(teamBox?.players || {});
+  const notes = [];
+  const sb = players.filter((p) => (p?.stats?.batting?.stolenBases ?? 0) > 0).map((p) => `${shortName(p.person?.fullName || "")} ${p.stats.batting.stolenBases}`);
+  if (sb.length) notes.push(`<span class="bs-note"><b>SB</b> ${sb.join(", ")}</span>`);
+  const err = players.filter((p) => (p?.stats?.fielding?.errors ?? 0) > 0).map((p) => `${shortName(p.person?.fullName || "")} ${p.stats.fielding.errors}`);
+  if (err.length) notes.push(`<span class="bs-note"><b>E</b> ${err.join(", ")}</span>`);
+  return notes.length ? `<div class="bs-notes">${notes.join("")}</div>` : "";
 }
 function renderBoxScore(data) {
   const awayTeam = data.gameData?.teams?.away;
@@ -1245,20 +1310,21 @@ function buildPlayScorebug(play) {
     third: !!play.matchup?.postOnThird
   };
   const ink = svgInk();
-  const outFill = (n) => outs >= n ? "#bf0d3d" : ink.empty;
-  const baseFill = (b) => b ? "#bf0d3d" : ink.empty;
+  const red = svgRed();
+  const outFill = (n) => outs >= n ? red.fill : ink.empty;
+  const baseFill = (b) => b ? red.fill : ink.empty;
   return `<div class="play-scorebug">
     <div class="play-count-mini">${balls}-${strikes}</div>
     <svg width="48" height="48" viewBox="0 0 58 79" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="13" cy="61" r="5" fill="${outFill(1)}" stroke="#bf0d3d" stroke-width="1"/>
-      <circle cx="30" cy="61" r="5" fill="${outFill(2)}" stroke="#bf0d3d" stroke-width="1"/>
-      <circle cx="47" cy="61" r="5" fill="${outFill(3)}" stroke="#bf0d3d" stroke-width="1"/>
+      <circle cx="13" cy="61" r="5" fill="${outFill(1)}" stroke="${red.stroke}" stroke-width="1"/>
+      <circle cx="30" cy="61" r="5" fill="${outFill(2)}" stroke="${red.stroke}" stroke-width="1"/>
+      <circle cx="47" cy="61" r="5" fill="${outFill(3)}" stroke="${red.stroke}" stroke-width="1"/>
       <rect x="17.6" y="29.7" width="14" height="14" transform="rotate(45 17.6 29.7)"
-        fill="${baseFill(onBase.third)}"  stroke="#bf0d3d" stroke-width="1"/>
+        fill="${baseFill(onBase.third)}"  stroke="${red.stroke}" stroke-width="1"/>
       <rect x="29.4" y="17.7" width="14" height="14" transform="rotate(45 29.4 17.7)"
-        fill="${baseFill(onBase.second)}" stroke="#bf0d3d" stroke-width="1"/>
+        fill="${baseFill(onBase.second)}" stroke="${red.stroke}" stroke-width="1"/>
       <rect x="41.6" y="29.7" width="14" height="14" transform="rotate(45 41.6 29.7)"
-        fill="${baseFill(onBase.first)}"  stroke="#bf0d3d" stroke-width="1"/>
+        fill="${baseFill(onBase.first)}"  stroke="${red.stroke}" stroke-width="1"/>
     </svg>
   </div>`;
 }
@@ -1871,10 +1937,10 @@ function render(data) {
   hideAllStatePanes();
   if (isFinalState(statusText)) {
     badge.textContent = "FINAL";
-    badge.style.background = "#bf0d3d";
+    badge.style.background = "";
     const n = linescore?.currentInning || 9;
     inning.textContent = n !== 9 ? `F/${n}` : "";
-    inning.style.color = "#bf0d3d";
+    inning.style.color = "";
     countBlock.style.display = "none";
     $("dynamic-tab-label").textContent = "WRAP";
     const finEl = $("final-content");
@@ -1899,7 +1965,7 @@ function render(data) {
     }
   } else if (statusText === "Postponed") {
     badge.textContent = "POSTPONED";
-    badge.style.background = "#bf0d3d";
+    badge.style.background = "";
     const reason = game?.status?.reason || "";
     inning.textContent = reason ? reason.toUpperCase() : "";
     inning.style.color = "var(--text-secondary)";
@@ -1914,10 +1980,10 @@ function render(data) {
     }
   } else if (isSuspendedState(statusText)) {
     badge.textContent = "SUSPENDED";
-    badge.style.background = "#bf0d3d";
+    badge.style.background = "";
     const half = linescore?.inningHalf === "Top" ? "\u25B2" : "\u25BC";
     inning.textContent = linescore?.currentInning ? `${half} ${linescore.currentInning}` : "";
-    inning.style.color = "#bf0d3d";
+    inning.style.color = "";
     countBlock.style.display = "none";
     $("dynamic-tab-label").textContent = "SUSPENDED";
     const susEl = $("suspended-content");
@@ -1929,10 +1995,10 @@ function render(data) {
     }
   } else if (isLiveState(statusText)) {
     badge.textContent = "LIVE";
-    badge.style.background = "#bf0d3d";
+    badge.style.background = "";
     const half = linescore?.inningHalf === "Top" ? "\u25B2" : "\u25BC";
     inning.textContent = `${half} ${linescore?.currentInning || ""}`;
-    inning.style.color = "#bf0d3d";
+    inning.style.color = "";
     const cp = data.liveData?.plays?.currentPlay;
     const count = cp?.count;
     if (count) {
@@ -2087,6 +2153,7 @@ function setupTabs() {
       const targetTab = btn.dataset.tab;
       if (!targetTab) return;
       document.body.classList.toggle("on-box-tab", targetTab === "box");
+      document.body.classList.toggle("compact-top", targetTab !== "dynamic");
       document.body.classList.toggle("on-standings-tab", targetTab === "standings");
       document.querySelectorAll(".tab").forEach((t) => t.classList.remove("tab-active"));
       btn.classList.add("tab-active");
@@ -2546,10 +2613,10 @@ function standTeamRow(team, rank, isFirst, gb, clinchLine) {
   const abbr = standAbbr(team?.team);
   const p = parseFloat(team?.winningPercentage) || 0;
   const barPct = Math.max(0, Math.min(100, (p - 0.35) / 0.35 * 100));
-  return `<div class="stand-row${isFirst ? " leader" : ""}${clinchLine ? " playoff-line" : ""}"><span class="stand-pos${isFirst ? " first" : ""}">${rank}</span><span class="stand-team"><img class="stand-logo" src="${getLogoPath(id)}" onerror="${logoFallbackAttr(id)}" alt="${abbr}"><span class="stand-abbr">${abbr}</span></span><span class="stand-stat">${team?.wins ?? 0}</span><span class="stand-stat">${team?.losses ?? 0}</span><span class="stand-stat muted">${gb}</span><span class="stand-pct"><span class="stand-pct-val">${standPct(team?.winningPercentage)}</span><span class="stand-bar"><span class="stand-bar-fill" style="width:${barPct}%"></span></span></span></div>`;
+  return `<div class="stand-row${isFirst ? " leader" : ""}${clinchLine ? " playoff-line" : ""}"><span class="stand-pos${isFirst ? " first" : ""}">${rank}</span><span class="stand-team"><img class="stand-logo" src="${getLogoPath(id)}" onerror="${logoFallbackAttr(id)}" alt="${abbr}"><span class="stand-abbr">${abbr}</span></span><span class="stand-stat">${team?.wins ?? 0}</span><span class="stand-stat">${team?.losses ?? 0}</span><span class="stand-stat muted">${gb}</span><span class="stand-stat muted">${team?.runsScored ?? "\u2014"}</span><span class="stand-stat muted">${team?.runsAllowed ?? "\u2014"}</span><span class="stand-stat ${(team?.runDifferential ?? 0) > 0 ? "pos" : (team?.runDifferential ?? 0) < 0 ? "neg" : ""}">${(team?.runDifferential ?? 0) > 0 ? "+" : ""}${team?.runDifferential ?? "\u2014"}</span><span class="stand-pct"><span class="stand-pct-val">${standPct(team?.winningPercentage)}</span><span class="stand-bar"><span class="stand-bar-fill" style="width:${barPct}%"></span></span></span></div>`;
 }
 function standColHdr() {
-  return '<div class="stand-col-hdr"><span>#</span><span class="stand-col-team">Team</span><span>W</span><span>L</span><span>GB</span><span class="stand-col-pct">PCT</span></div>';
+  return '<div class="stand-col-hdr"><span>#</span><span class="stand-col-team">Team</span><span>W</span><span>L</span><span>GB</span><span>R</span><span>RA</span><span>DIFF</span><span class="stand-col-pct">PCT</span></div>';
 }
 function standDivisionCard(record) {
   const name = STAND_DIVISION_NAMES[record?.division?.id] || "Division";
@@ -2618,12 +2685,14 @@ var TEAM_DIVISION = {
 };
 var sbCache = null;
 async function fetchScoreboard() {
+  const od = lastGameData?.gameData?.datetime?.officialDate;
+  const date = typeof od === "string" && /^\d{4}-\d{2}-\d{2}$/.test(od) ? od : "";
   const now = Date.now();
-  if (sbCache && now - sbCache.ts < 6e4) return sbCache.data;
-  const res = await fetch("/api/scoreboard");
+  if (sbCache && sbCache.date === date && now - sbCache.ts < 6e4) return sbCache.data;
+  const res = await fetch(date ? `/api/scoreboard/${date}` : "/api/scoreboard");
   if (!res.ok) throw new Error("scoreboard fetch failed");
   const data = await res.json();
-  sbCache = { data, ts: now };
+  sbCache = { date, data, ts: now };
   return data;
 }
 function sbStatusHtml(g) {
@@ -2641,7 +2710,7 @@ function sbStatusHtml(g) {
   }
   let time = "";
   try {
-    time = new Date(g.gameDate).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/New_York" });
+    time = new Date(g.gameDate).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
   } catch {
     time = "";
   }
@@ -2656,16 +2725,24 @@ function sbTeamRow(side) {
 async function renderDivOpp() {
   const data = await fetchScoreboard();
   const games = data?.sched?.dates?.[0]?.games || [];
-  let myTeam = data?.teamId != null && /^\d+$/.test(String(data.teamId)) ? Number(data.teamId) : null;
-  if (myTeam == null) {
+  const cfgTeam = data?.teamId != null && /^\d+$/.test(String(data.teamId)) ? Number(data.teamId) : null;
+  const divs = /* @__PURE__ */ new Set();
+  const cfgDiv = cfgTeam != null ? TEAM_DIVISION[cfgTeam] : void 0;
+  if (cfgDiv != null) {
+    divs.add(cfgDiv);
+  } else {
+    const awayId = lastGameData?.gameData?.teams?.away?.id;
     const homeId = lastGameData?.gameData?.teams?.home?.id;
-    if (typeof homeId === "number") myTeam = homeId;
+    const da = typeof awayId === "number" ? TEAM_DIVISION[awayId] : void 0;
+    const dh = typeof homeId === "number" ? TEAM_DIVISION[homeId] : void 0;
+    if (da != null) divs.add(da);
+    if (dh != null) divs.add(dh);
   }
-  const myDiv = myTeam != null ? TEAM_DIVISION[myTeam] : void 0;
   const inDiv = (g) => {
-    if (myDiv == null) return true;
+    if (divs.size === 0) return true;
     const a = g?.teams?.away?.team?.id, hm = g?.teams?.home?.team?.id;
-    return TEAM_DIVISION[a] === myDiv || TEAM_DIVISION[hm] === myDiv;
+    const ga = TEAM_DIVISION[a], gh = TEAM_DIVISION[hm];
+    return ga != null && divs.has(ga) || gh != null && divs.has(gh);
   };
   const rows = games.filter((g) => g?.gamePk !== gamePk).filter(inDiv).map((g) => `<div class="sb-box"><div class="sb-status">${sbStatusHtml(g)}</div>${sbTeamRow(g.teams?.away)}${sbTeamRow(g.teams?.home)}</div>`).join("");
   return rows ? `<div class="sb-grid">${rows}</div>` : '<div class="stand-msg">No division games today.</div>';
