@@ -473,6 +473,22 @@ async function serveDelayedGame(
     console.error(`delay guard failed for ${pk}:`, e);
   }
 
+  // ── Diagnostic: only logs when the cursor is meaningfully BEHIND the newest
+  // published snapshot, which is exactly the inning-end-hold case. Tells us
+  // which of two things is happening when a 3rd out hangs:
+  //   behind is LARGE  -> our cursor is stuck; the resolved out exists upstream
+  //   behind is ~0     -> we're already serving the newest data and MLB simply
+  //                       hasn't published the resolution yet (nothing to fix)
+  // Gated so it can't spam the log at 500 viewers.
+  const behindMs = last.t - parseTimecodeToEpoch(selected);
+  if (behindMs > 15000) {
+    console.log(
+      `delay-diag pk=${pk} delay=${delaySeconds}s silent=${Math.round(feedSilentMs / 1000)}s ` +
+      `behind=${Math.round(behindMs / 1000)}s caught_up=${feedSilentMs >= catchUpAfterMs} ` +
+      `selected=${selected} newest=${last.tc}`,
+    );
+  }
+
   // The snapshot at a given timecode is immutable, so it caches cleanly by key.
   await proxyMlbJsonCached(
     `mlbcache:game:${pk}:tc:${selected}`,

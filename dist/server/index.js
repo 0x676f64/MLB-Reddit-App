@@ -9214,6 +9214,8 @@ function BaseContextFromMetadata(meta, postId, commentId) {
   let signedRequestContext;
   try {
     signedRequestContext = decodeSignedRequestContext(meta[Header.Context]?.values[0]);
+    postId = signedRequestContext?.post?.id || postId;
+    commentId = signedRequestContext?.comment?.id || commentId;
   } catch {
   }
   const loid = signedRequestContext?.user?.devvitLoid ?? // to-do: stop sending snake_case for some data inconsistently.
@@ -39689,6 +39691,212 @@ var GetRisingRequest = {
   }
 };
 messageTypeRegistry.set(GetRisingRequest.$type, GetRisingRequest);
+function createBaseSearchPostsRequest() {
+  return {
+    subreddit: "",
+    q: "",
+    sort: void 0,
+    t: void 0,
+    after: void 0,
+    before: void 0,
+    count: void 0,
+    limit: void 0,
+    restrictSr: void 0,
+    show: void 0,
+    type: void 0
+  };
+}
+var SearchPostsRequest = {
+  $type: "devvit.plugin.redditapi.listings.SearchPostsRequest",
+  encode(message, writer = import_minimal38.default.Writer.create()) {
+    if (message.subreddit !== "") {
+      writer.uint32(10).string(message.subreddit);
+    }
+    if (message.q !== "") {
+      writer.uint32(18).string(message.q);
+    }
+    if (message.sort !== void 0) {
+      StringValue.encode({ value: message.sort }, writer.uint32(26).fork()).ldelim();
+    }
+    if (message.t !== void 0) {
+      StringValue.encode({ value: message.t }, writer.uint32(34).fork()).ldelim();
+    }
+    if (message.after !== void 0) {
+      StringValue.encode({ value: message.after }, writer.uint32(42).fork()).ldelim();
+    }
+    if (message.before !== void 0) {
+      StringValue.encode({ value: message.before }, writer.uint32(50).fork()).ldelim();
+    }
+    if (message.count !== void 0) {
+      Int64Value.encode({ value: message.count }, writer.uint32(58).fork()).ldelim();
+    }
+    if (message.limit !== void 0) {
+      Int64Value.encode({ value: message.limit }, writer.uint32(66).fork()).ldelim();
+    }
+    if (message.restrictSr !== void 0) {
+      BoolValue.encode({ value: message.restrictSr }, writer.uint32(74).fork()).ldelim();
+    }
+    if (message.show !== void 0) {
+      StringValue.encode({ value: message.show }, writer.uint32(82).fork()).ldelim();
+    }
+    if (message.type !== void 0) {
+      StringValue.encode({ value: message.type }, writer.uint32(90).fork()).ldelim();
+    }
+    return writer;
+  },
+  decode(input, length) {
+    const reader = input instanceof import_minimal38.default.Reader ? input : import_minimal38.default.Reader.create(input);
+    let end = length === void 0 ? reader.len : reader.pos + length;
+    const message = createBaseSearchPostsRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1:
+          if (tag !== 10) {
+            break;
+          }
+          message.subreddit = reader.string();
+          continue;
+        case 2:
+          if (tag !== 18) {
+            break;
+          }
+          message.q = reader.string();
+          continue;
+        case 3:
+          if (tag !== 26) {
+            break;
+          }
+          message.sort = StringValue.decode(reader, reader.uint32()).value;
+          continue;
+        case 4:
+          if (tag !== 34) {
+            break;
+          }
+          message.t = StringValue.decode(reader, reader.uint32()).value;
+          continue;
+        case 5:
+          if (tag !== 42) {
+            break;
+          }
+          message.after = StringValue.decode(reader, reader.uint32()).value;
+          continue;
+        case 6:
+          if (tag !== 50) {
+            break;
+          }
+          message.before = StringValue.decode(reader, reader.uint32()).value;
+          continue;
+        case 7:
+          if (tag !== 58) {
+            break;
+          }
+          message.count = Int64Value.decode(reader, reader.uint32()).value;
+          continue;
+        case 8:
+          if (tag !== 66) {
+            break;
+          }
+          message.limit = Int64Value.decode(reader, reader.uint32()).value;
+          continue;
+        case 9:
+          if (tag !== 74) {
+            break;
+          }
+          message.restrictSr = BoolValue.decode(reader, reader.uint32()).value;
+          continue;
+        case 10:
+          if (tag !== 82) {
+            break;
+          }
+          message.show = StringValue.decode(reader, reader.uint32()).value;
+          continue;
+        case 11:
+          if (tag !== 90) {
+            break;
+          }
+          message.type = StringValue.decode(reader, reader.uint32()).value;
+          continue;
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skipType(tag & 7);
+    }
+    return message;
+  },
+  fromJSON(object) {
+    return {
+      subreddit: isSet33(object.subreddit) ? globalThis.String(object.subreddit) : "",
+      q: isSet33(object.q) ? globalThis.String(object.q) : "",
+      sort: isSet33(object.sort) ? String(object.sort) : void 0,
+      t: isSet33(object.t) ? String(object.t) : void 0,
+      after: isSet33(object.after) ? String(object.after) : void 0,
+      before: isSet33(object.before) ? String(object.before) : void 0,
+      count: isSet33(object.count) ? Number(object.count) : void 0,
+      limit: isSet33(object.limit) ? Number(object.limit) : void 0,
+      restrictSr: isSet33(object.restrictSr) ? Boolean(object.restrictSr) : void 0,
+      show: isSet33(object.show) ? String(object.show) : void 0,
+      type: isSet33(object.type) ? String(object.type) : void 0
+    };
+  },
+  toJSON(message) {
+    const obj = {};
+    if (message.subreddit !== "") {
+      obj.subreddit = message.subreddit;
+    }
+    if (message.q !== "") {
+      obj.q = message.q;
+    }
+    if (message.sort !== void 0) {
+      obj.sort = message.sort;
+    }
+    if (message.t !== void 0) {
+      obj.t = message.t;
+    }
+    if (message.after !== void 0) {
+      obj.after = message.after;
+    }
+    if (message.before !== void 0) {
+      obj.before = message.before;
+    }
+    if (message.count !== void 0) {
+      obj.count = message.count;
+    }
+    if (message.limit !== void 0) {
+      obj.limit = message.limit;
+    }
+    if (message.restrictSr !== void 0) {
+      obj.restrictSr = message.restrictSr;
+    }
+    if (message.show !== void 0) {
+      obj.show = message.show;
+    }
+    if (message.type !== void 0) {
+      obj.type = message.type;
+    }
+    return obj;
+  },
+  create(base) {
+    return SearchPostsRequest.fromPartial(base ?? {});
+  },
+  fromPartial(object) {
+    const message = createBaseSearchPostsRequest();
+    message.subreddit = object.subreddit ?? "";
+    message.q = object.q ?? "";
+    message.sort = object.sort ?? void 0;
+    message.t = object.t ?? void 0;
+    message.after = object.after ?? void 0;
+    message.before = object.before ?? void 0;
+    message.count = object.count ?? void 0;
+    message.limit = object.limit ?? void 0;
+    message.restrictSr = object.restrictSr ?? void 0;
+    message.show = object.show ?? void 0;
+    message.type = object.type ?? void 0;
+    return message;
+  }
+};
+messageTypeRegistry.set(SearchPostsRequest.$type, SearchPostsRequest);
 function createBaseListingResponse() {
   return { listings: [] };
 }
@@ -40602,6 +40810,190 @@ var ListingsDefinition = {
               104,
               111,
               119,
+              125
+            ])
+          ]
+        }
+      }
+    },
+    /**
+     * Search posts in a subreddit
+     *
+     * @see {@link https://www.reddit.com/dev/api#GET_search}
+     */
+    searchPosts: {
+      name: "SearchPosts",
+      requestType: SearchPostsRequest,
+      requestStream: false,
+      responseType: Listing,
+      responseStream: false,
+      options: {
+        _unknownFields: {
+          480010: [
+            new Uint8Array([5, 10, 3, 71, 69, 84]),
+            new Uint8Array([
+              161,
+              1,
+              18,
+              158,
+              1,
+              47,
+              114,
+              47,
+              123,
+              115,
+              117,
+              98,
+              114,
+              101,
+              100,
+              100,
+              105,
+              116,
+              125,
+              47,
+              115,
+              101,
+              97,
+              114,
+              99,
+              104,
+              46,
+              106,
+              115,
+              111,
+              110,
+              63,
+              97,
+              102,
+              116,
+              101,
+              114,
+              61,
+              123,
+              97,
+              102,
+              116,
+              101,
+              114,
+              125,
+              38,
+              98,
+              101,
+              102,
+              111,
+              114,
+              101,
+              61,
+              123,
+              98,
+              101,
+              102,
+              111,
+              114,
+              101,
+              125,
+              38,
+              99,
+              111,
+              117,
+              110,
+              116,
+              61,
+              123,
+              99,
+              111,
+              117,
+              110,
+              116,
+              125,
+              38,
+              108,
+              105,
+              109,
+              105,
+              116,
+              61,
+              123,
+              108,
+              105,
+              109,
+              105,
+              116,
+              125,
+              38,
+              113,
+              61,
+              123,
+              113,
+              125,
+              38,
+              114,
+              101,
+              115,
+              116,
+              114,
+              105,
+              99,
+              116,
+              95,
+              115,
+              114,
+              61,
+              123,
+              114,
+              101,
+              115,
+              116,
+              114,
+              105,
+              99,
+              116,
+              95,
+              115,
+              114,
+              125,
+              38,
+              115,
+              104,
+              111,
+              119,
+              61,
+              123,
+              115,
+              104,
+              111,
+              119,
+              125,
+              38,
+              115,
+              111,
+              114,
+              116,
+              61,
+              123,
+              115,
+              111,
+              114,
+              116,
+              125,
+              38,
+              116,
+              61,
+              123,
+              116,
+              125,
+              38,
+              116,
+              121,
+              112,
+              101,
+              61,
+              123,
+              116,
+              121,
+              112,
+              101,
               125
             ])
           ]
@@ -84117,6 +84509,31 @@ var Post = class _Post {
     });
   }
   /** @internal */
+  static searchPosts(opts) {
+    const client = getRedditApiPlugins().Listings;
+    return new Listing2({
+      hasMore: true,
+      before: opts.before,
+      after: opts.after,
+      pageSize: opts.pageSize,
+      limit: opts.limit,
+      fetch: async (fetchOpts) => {
+        const subredditName = opts.subredditName ?? "all";
+        const response = await client.SearchPosts({
+          q: opts.query,
+          restrictSr: subredditName.toLowerCase() !== "all",
+          show: "all",
+          sort: opts.sort ?? "relevance",
+          subreddit: subredditName,
+          t: opts.timeframe ?? "all",
+          type: "link",
+          ...fetchOpts
+        }, context.metadata);
+        return listingProtosToPosts(response);
+      }
+    });
+  }
+  /** @internal */
   static getPostsByUser(opts) {
     const client = getRedditApiPlugins().Users;
     return new Listing2({
@@ -86969,6 +87386,16 @@ var Subreddit2 = class {
       subredditName: __classPrivateFieldGet19(this, _Subreddit_name, "f")
     });
   }
+  /** Search for posts in this subreddit. */
+  searchPosts(options) {
+    if (!__classPrivateFieldGet19(this, _Subreddit_name, "f")) {
+      throw new Error("subreddit missing displayName - it might not have been fetched");
+    }
+    return Post.searchPosts({
+      ...options,
+      subredditName: __classPrivateFieldGet19(this, _Subreddit_name, "f")
+    });
+  }
   getApprovedUsers(options = {}) {
     return User2.getSubredditUsersByType({
       type: "contributors",
@@ -89428,6 +89855,31 @@ var RedditClient = class {
    */
   getRisingPosts(options) {
     return Post.getRisingPosts(options);
+  }
+  /**
+   * Search for posts in a subreddit.
+   *
+   * @param options - Options for the search
+   * @param options.query - The search query. e.g. 'developer platform'
+   * @param options.subredditName - The subreddit to search without 'r/' prefix. If specified, will restrict the search to posts in this subreddit
+   * @param options.sort - How to sort the results. Defaults to 'relevance'.
+   * @param options.timeframe - Limit results to a timeframe. Defaults to 'all'.
+   * @param options.limit - The maximum number of posts to return.
+   * @param options.pageSize - The number of posts to return per request.
+   * @returns A Listing of Post objects.
+   * @example
+   * ```ts
+   * const posts = await reddit.searchPosts({
+   *   query: 'developer platform',
+   *   subredditName: 'devvit',
+   *   sort: 'new',
+   *   timeframe: 'month',
+   *   limit: 100,
+   * }).all();
+   * ```
+   */
+  searchPosts(options) {
+    return Post.searchPosts(options);
   }
   /**
    * Get a list of posts from a specific user.
@@ -92477,28 +92929,24 @@ async function serveDelayedGame(pk, delaySeconds, rsp) {
     if (prevTc && parseTimecodeToEpoch(prevTc) > parseTimecodeToEpoch(selected)) {
       selected = prevTc;
     }
-<<<<<<< HEAD
     if (prevTc !== selected) {
       await redis.set(guardKey, selected, {
         expiration: new Date(Date.now() + 6 * 3600 * 1e3)
       });
     }
-=======
-    await redis.set(guardKey, selected, {
-      expiration: new Date(Date.now() + 6 * 3600 * 1e3)
-    });
->>>>>>> 0ec28675c275524c6a295a36a0efdc4b16969fb0
   } catch (e) {
     console.error(`delay guard failed for ${pk}:`, e);
+  }
+  const behindMs = last.t - parseTimecodeToEpoch(selected);
+  if (behindMs > 15e3) {
+    console.log(
+      `delay-diag pk=${pk} delay=${delaySeconds}s silent=${Math.round(feedSilentMs / 1e3)}s behind=${Math.round(behindMs / 1e3)}s caught_up=${feedSilentMs >= catchUpAfterMs} selected=${selected} newest=${last.tc}`
+    );
   }
   await proxyMlbJsonCached(
     `mlbcache:game:${pk}:tc:${selected}`,
     `${liveUrl}?timecode=${selected}`,
-<<<<<<< HEAD
     TIMECODE_CACHE_TTL_S,
-=======
-    GAME_CACHE_TTL_S,
->>>>>>> 0ec28675c275524c6a295a36a0efdc4b16969fb0
     rsp
   );
 }
