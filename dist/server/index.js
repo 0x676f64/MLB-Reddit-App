@@ -92301,6 +92301,25 @@ var TEAM_NAMES = {
   "147": "New York Yankees",
   "158": "Milwaukee Brewers"
 };
+async function claimPostgame(subId, pk) {
+  const claimKey = `pgclaim:${subId}:${pk}`;
+  try {
+    const n = await redis.incrBy(claimKey, 1);
+    if (n !== 1) return false;
+    await redis.expire(claimKey, 600);
+    return true;
+  } catch (e) {
+    console.error("claimPostgame error:", e);
+    return true;
+  }
+}
+async function releasePostgameClaim(subId, pk) {
+  try {
+    await redis.del(`pgclaim:${subId}:${pk}`);
+  } catch (e) {
+    console.error("releasePostgameClaim error:", e);
+  }
+}
 function dedupExpiresAt() {
   return new Date(Date.now() + 1e3 * 60 * 60 * 24 * 3);
 }
@@ -92329,11 +92348,39 @@ async function onRequest(req, rsp) {
     return;
   }
   if (pathname.startsWith("/api/game/")) {
-    await onGame(pathname.slice("/api/game/".length), rsp);
+    await onGame(pathname.slice("/api/game/".length), urlObj, rsp);
     return;
   }
   if (pathname.startsWith("/api/winprob/")) {
     await onWinProb(pathname.slice("/api/winprob/".length), rsp);
+    return;
+  }
+  if (pathname.startsWith("/api/broadcasts/")) {
+    await onBroadcasts(pathname.slice("/api/broadcasts/".length), rsp);
+    return;
+  }
+  if (pathname.startsWith("/api/clips/")) {
+    await onClips(pathname.slice("/api/clips/".length), rsp);
+    return;
+  }
+  if (pathname.startsWith("/api/statcast/")) {
+    await onStatcast(pathname.slice("/api/statcast/".length), rsp);
+    return;
+  }
+  if (pathname.startsWith("/api/highlights/")) {
+    await onHighlights(pathname.slice("/api/highlights/".length), rsp);
+    return;
+  }
+  if (pathname.startsWith("/api/scoreboard")) {
+    await onScoreboard(pathname.slice("/api/scoreboard".length).replace(/^\//, ""), rsp);
+    return;
+  }
+  if (pathname.startsWith("/api/standings")) {
+    await onStandings(rsp);
+    return;
+  }
+  if (pathname.startsWith("/api/player-recent/")) {
+    await onPlayerRecent(pathname.slice("/api/player-recent/".length), rsp);
     return;
   }
   if (pathname === "/api/post-game") {
@@ -92402,6 +92449,7 @@ async function readJSON(req) {
   }
 }
 var GAME_CACHE_TTL_S = 8;
+var TIMECODE_CACHE_TTL_S = 90;
 var SCHEDULE_CACHE_TTL_S = 30;
 var WINPROB_CACHE_TTL_S = 12;
 function writeRawJSON(status, body, rsp) {
@@ -92457,9 +92505,347 @@ async function onSchedule(urlObj, rsp) {
     rsp
   );
 }
-async function onGame(pk, rsp) {
+function parseTimecodeToEpoch(tc) {
+  if (!/^\d{8}_\d{6}$/.test(tc)) return NaN;
+  const y = Number(tc.slice(0, 4));
+  const mo = Number(tc.slice(4, 6));
+  const d = Number(tc.slice(6, 8));
+  const h = Number(tc.slice(9, 11));
+  const mi = Number(tc.slice(11, 13));
+  const s = Number(tc.slice(13, 15));
+  return Date.UTC(y, mo - 1, d, h, mi, s);
+}
+async function fetchGameTimestamps(pk) {
+  const key = `mlbcache:tstamps:${pk}`;
+  try {
+    const cached = await redis.get(key);
+    if (cached) return JSON.parse(cached);
+  } catch (e) {
+    console.error(`timestamps cache read failed for ${pk}:`, e);
+  }
+  try {
+    const r = await fetch(`https://statsapi.mlb.com/api/v1.1/game/${pk}/feed/live/timestamps`);
+    if (!r.ok) return [];
+    const data = await r.json();
+    const list = Array.isArray(data) ? data.map(String) : Array.isArray(data?.timestamps) ? data.timestamps.map(String) : [];
+    try {
+      await redis.set(key, JSON.stringify(list), {
+        expiration: new Date(Date.now() + GAME_CACHE_TTL_S * 1e3)
+      });
+    } catch (e) {
+      console.error(`timestamps cache write failed for ${pk}:`, e);
+    }
+    return list;
+  } catch (e) {
+    console.error(`timestamps fetch failed for ${pk}:`, e);
+    return [];
+  }
+}
+async function serveDelayedGame(pk, delaySeconds, rsp) {
+  const liveUrl = `https://statsapi.mlb.com/api/v1.1/game/${pk}/feed/live`;
+  const parsed = (await fetchGameTimestamps(pk)).map((tc) => ({ tc, t: parseTimecodeToEpoch(tc) })).filter((x) => !Number.isNaN(x.t)).sort((a, b) => a.t - b.t);
+  const first = parsed[0];
+  const last = parsed[parsed.length - 1];
+  if (!first || !last) {
+    await proxyMlbJsonCached(`mlbcache:game:${pk}`, liveUrl, GAME_CACHE_TTL_S, rsp);
+    return;
+  }
+  let target = last.t - delaySeconds * 1e3;
+  const feedSilentMs = Date.now() - last.t;
+  const catchUpAfterMs = Math.max(delaySeconds * 1e3 + 8e3, 18e3);
+  if (feedSilentMs >= catchUpAfterMs) {
+    target = last.t;
+  }
+  let selected = first.tc;
+  for (const p of parsed) {
+    if (p.t <= target) selected = p.tc;
+    else break;
+  }
+  const guardKey = `mlbcache:lasttc:${pk}:${delaySeconds}`;
+  try {
+    const prevTc = await redis.get(guardKey);
+    if (prevTc && parseTimecodeToEpoch(prevTc) > parseTimecodeToEpoch(selected)) {
+      selected = prevTc;
+    }
+    if (prevTc !== selected) {
+      await redis.set(guardKey, selected, {
+        expiration: new Date(Date.now() + 6 * 3600 * 1e3)
+      });
+    }
+  } catch (e) {
+    console.error(`delay guard failed for ${pk}:`, e);
+  }
+  await proxyMlbJsonCached(
+    `mlbcache:game:${pk}:tc:${selected}`,
+    `${liveUrl}?timecode=${selected}`,
+    TIMECODE_CACHE_TTL_S,
+    rsp
+  );
+}
+async function gameIsFinalCached(pk) {
+  const key = `mlbcache:game:${pk}`;
+  try {
+    const cached = await redis.get(key);
+    if (cached) return JSON.parse(cached)?.gameData?.status?.abstractGameState === "Final";
+  } catch (e) {
+    console.error(`final-check cache read failed for ${pk}:`, e);
+  }
+  try {
+    const r = await fetch(`https://statsapi.mlb.com/api/v1.1/game/${pk}/feed/live`);
+    if (!r.ok) return false;
+    const text = await r.text();
+    try {
+      await redis.set(key, text, { expiration: new Date(Date.now() + GAME_CACHE_TTL_S * 1e3) });
+    } catch (e) {
+      console.error(`final-check cache write failed for ${pk}:`, e);
+    }
+    return JSON.parse(text)?.gameData?.status?.abstractGameState === "Final";
+  } catch (e) {
+    console.error(`final-check fetch failed for ${pk}:`, e);
+    return false;
+  }
+}
+async function onPlayerRecent(idGroup, rsp) {
+  const parts = idGroup.split("/");
+  const id = parts[0] || "";
+  const group = parts[1] === "pitching" ? "pitching" : "hitting";
+  if (!/^\d+$/.test(id)) {
+    writeJSON(400, { error: "Invalid player id", status: 400 }, rsp);
+    return;
+  }
+  const limit = group === "pitching" ? 3 : 5;
+  const yr = (/* @__PURE__ */ new Date()).getFullYear();
+  await proxyMlbJsonCached(
+    `mlbcache:precent:${id}:${group}`,
+    `https://statsapi.mlb.com/api/v1/people/${id}/stats?stats=gameLog&group=${group}&season=${yr}&gameType=R&limit=${limit}`,
+    600,
+    rsp
+  );
+}
+async function getCommentSortSetting() {
+  try {
+    const v = await settings.get("commentSort");
+    return typeof v === "string" ? v : Array.isArray(v) && typeof v[0] === "string" ? v[0] : "";
+  } catch (e) {
+    console.error("commentSort setting read failed:", e);
+    return "";
+  }
+}
+async function applyCommentSort(post) {
+  const sort = await getCommentSortSetting();
+  if (!sort) return;
+  try {
+    await post.setSuggestedCommentSort(sort);
+  } catch (e) {
+    console.error(`setSuggestedCommentSort(${sort}) failed:`, e);
+  }
+}
+async function onStandings(rsp) {
+  const yr = (/* @__PURE__ */ new Date()).getFullYear();
+  await proxyMlbJsonCached(
+    `mlbcache:standings:${yr}`,
+    `https://statsapi.mlb.com/api/v1/standings?leagueId=103,104&season=${yr}&standingsTypes=regularSeason`,
+    300,
+    rsp
+  );
+}
+async function onBroadcasts(pk, rsp) {
   if (!/^\d+$/.test(pk)) {
     writeJSON(400, { error: "Invalid gamePk", status: 400 }, rsp);
+    return;
+  }
+  await proxyMlbJsonCached(
+    `mlbcache:broadcasts:${pk}`,
+    `https://statsapi.mlb.com/api/v1/schedule?sportId=1&gamePk=${pk}&hydrate=broadcasts(all)`,
+    60,
+    rsp
+  );
+}
+function bestClipUrl(item) {
+  const playbacks = item?.playbacks || [];
+  const mp4s = playbacks.filter((p) => {
+    const name = String(p?.name || "").toLowerCase();
+    const purl = String(p?.url || "").toLowerCase();
+    return (name.includes("mp4avc") || purl.includes(".mp4")) && !name.includes("m3u8") && !purl.includes(".m3u8");
+  });
+  if (mp4s.length === 0) return null;
+  const prefer = ["2500K", "1800K", "1200K", "800K", "600K", "450K"];
+  for (const q of prefer) {
+    const hit = mp4s.find((p) => String(p?.name || "").includes(q));
+    if (hit && hit.url) return String(hit.url);
+  }
+  const first = mp4s[0];
+  return first && first.url ? String(first.url) : null;
+}
+async function onStatcast(pk, rsp) {
+  if (!/^\d+$/.test(pk)) {
+    writeJSON(400, { error: "Invalid gamePk", status: 400 }, rsp);
+    return;
+  }
+  const key = `mlbcache:statcast:${pk}`;
+  try {
+    const cached = await redis.get(key);
+    if (cached) {
+      writeJSON(200, JSON.parse(cached), rsp);
+      return;
+    }
+  } catch (e) {
+    console.error(`statcast cache read failed for ${pk}:`, e);
+  }
+  const map = {};
+  try {
+    const r = await fetch(`https://baseballsavant.mlb.com/gf?game_pk=${pk}`, {
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; mlb-scoreboard/1.0)" }
+    });
+    if (r.ok) {
+      const data = await r.json();
+      const bip = data?.exit_velocity || [];
+      for (const e of bip) {
+        const id = e?.play_id;
+        if (!id || typeof id !== "string") continue;
+        map[id] = {
+          xba: String(e?.xba ?? ""),
+          ev: String(e?.hit_speed ?? ""),
+          la: String(e?.hit_angle ?? ""),
+          dist: String(e?.hit_distance ?? ""),
+          barrel: Number(e?.is_barrel) || 0
+        };
+      }
+    }
+  } catch (e) {
+    console.error(`statcast fetch failed for ${pk}:`, e);
+  }
+  try {
+    await redis.set(key, JSON.stringify(map), { expiration: new Date(Date.now() + 60 * 1e3) });
+  } catch (e) {
+    console.error(`statcast cache write failed for ${pk}:`, e);
+  }
+  writeJSON(200, map, rsp);
+}
+async function onHighlights(pk, rsp) {
+  if (!/^\d+$/.test(pk)) {
+    writeJSON(400, { error: "Invalid gamePk", status: 400 }, rsp);
+    return;
+  }
+  const key = `mlbcache:hl:${pk}`;
+  try {
+    const cached = await redis.get(key);
+    if (cached) {
+      writeJSON(200, JSON.parse(cached), rsp);
+      return;
+    }
+  } catch (e) {
+    console.error(`highlights cache read failed for ${pk}:`, e);
+  }
+  const list = [];
+  try {
+    const r = await fetch(`https://statsapi.mlb.com/api/v1/game/${pk}/content`);
+    if (r.ok) {
+      const data = await r.json();
+      const items = data?.highlights?.highlights?.items || [];
+      const junk = /(interview|press conference|availability|postgame|pregame|manager|clubhouse|warm.?up)/i;
+      for (const it of items) {
+        if (!it?.guid || typeof it.guid !== "string") continue;
+        const title = String(it?.headline || it?.title || "").trim();
+        const clip = bestClipUrl(it);
+        if (!title || !clip) continue;
+        if (junk.test(title)) continue;
+        list.push({ t: title, u: clip });
+        if (list.length >= 20) break;
+      }
+    }
+  } catch (e) {
+    console.error(`highlights fetch failed for ${pk}:`, e);
+  }
+  try {
+    await redis.set(key, JSON.stringify(list), { expiration: new Date(Date.now() + 60 * 1e3) });
+  } catch (e) {
+    console.error(`highlights cache write failed for ${pk}:`, e);
+  }
+  writeJSON(200, list, rsp);
+}
+async function onScoreboard(dateArg, rsp) {
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(dateArg) ? dateArg : (/* @__PURE__ */ new Date()).toLocaleDateString("sv-SE", { timeZone: "America/New_York" });
+  const key = `mlbcache:sb:${date}`;
+  let sched = null;
+  try {
+    const cached = await redis.get(key);
+    if (cached) sched = JSON.parse(cached);
+  } catch (e) {
+    console.error("scoreboard cache read failed:", e);
+  }
+  if (!sched) {
+    try {
+      const r = await fetch(`https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${date}&hydrate=linescore`);
+      if (r.ok) {
+        sched = await r.json();
+        try {
+          await redis.set(key, JSON.stringify(sched), { expiration: new Date(Date.now() + 60 * 1e3) });
+        } catch (e) {
+          console.error("scoreboard cache write failed:", e);
+        }
+      }
+    } catch (e) {
+      console.error("scoreboard fetch failed:", e);
+    }
+  }
+  const teamId = await getTeamIdFilter();
+  writeJSON(200, { teamId, sched }, rsp);
+}
+async function onClips(pk, rsp) {
+  if (!/^\d+$/.test(pk)) {
+    writeJSON(400, { error: "Invalid gamePk", status: 400 }, rsp);
+    return;
+  }
+  const key = `mlbcache:clips:${pk}`;
+  try {
+    const cached = await redis.get(key);
+    if (cached) {
+      writeJSON(200, JSON.parse(cached), rsp);
+      return;
+    }
+  } catch (e) {
+    console.error(`clips cache read failed for ${pk}:`, e);
+  }
+  const map = {};
+  try {
+    const r = await fetch(`https://statsapi.mlb.com/api/v1/game/${pk}/content`);
+    if (r.ok) {
+      const data = await r.json();
+      const items = data?.highlights?.highlights?.items || [];
+      for (const it of items) {
+        const guid = it?.guid;
+        if (!guid || typeof guid !== "string") continue;
+        const clip = bestClipUrl(it);
+        if (clip) map[guid] = clip;
+      }
+    }
+  } catch (e) {
+    console.error(`clips fetch failed for ${pk}:`, e);
+  }
+  try {
+    await redis.set(key, JSON.stringify(map), { expiration: new Date(Date.now() + 60 * 1e3) });
+  } catch (e) {
+    console.error(`clips cache write failed for ${pk}:`, e);
+  }
+  writeJSON(200, map, rsp);
+}
+var ALLOWED_VIEWER_DELAYS = [0, 5, 8, 10, 12, 15, 20, 30, 45, 60];
+function viewerDelayFrom(urlObj) {
+  const raw = urlObj.searchParams.get("delay");
+  if (raw == null) return null;
+  const n = Number(raw);
+  return Number.isFinite(n) && ALLOWED_VIEWER_DELAYS.includes(n) ? n : null;
+}
+async function onGame(pk, urlObj, rsp) {
+  if (!/^\d+$/.test(pk)) {
+    writeJSON(400, { error: "Invalid gamePk", status: 400 }, rsp);
+    return;
+  }
+  const viewerDelay = viewerDelayFrom(urlObj);
+  const delay = viewerDelay ?? await getBroadcastDelaySetting();
+  if (delay > 0 && !await gameIsFinalCached(pk)) {
+    await serveDelayedGame(pk, delay, rsp);
     return;
   }
   await proxyMlbJsonCached(
@@ -92508,7 +92894,11 @@ async function onPostgameCheck(rsp) {
     writeJSON(200, { created: false }, rsp);
     return;
   }
-  const enabled = await getAutoPostgameSetting();
+  if (await redis.get(`broadcast-game:${subId}:${gamePkStr}`)) {
+    writeJSON(200, { created: false }, rsp);
+    return;
+  }
+  const enabled = await autoPostgameEnabled();
   if (!enabled) {
     writeJSON(200, { created: false }, rsp);
     return;
@@ -92544,10 +92934,15 @@ async function onPostgameCheck(rsp) {
   }
   const teamId = await getTeamIdFilter();
   const customTitles = await getCustomPostgameTitles();
+  if (!await claimPostgame(subId, gamePkStr)) {
+    writeJSON(200, { created: false }, rsp);
+    return;
+  }
   try {
     const post = await reddit.submitCustomPost({
       title: buildPostgameTitleFromFeed(feed, teamId, customTitles)
     });
+    await applyCommentSort(post);
     await redis.set(`post-game:${post.id}`, gamePkStr, { expiration: renderExpiresAt() });
     await redis.set(`post-type:${post.id}`, "postgame", { expiration: renderExpiresAt() });
     await redis.set(pgKey, post.id, { expiration: dedupExpiresAt() });
@@ -92555,6 +92950,7 @@ async function onPostgameCheck(rsp) {
     writeJSON(200, { created: true }, rsp);
   } catch (e) {
     console.error("postgame-check submit failed:", e);
+    await releasePostgameClaim(subId, gamePkStr);
     writeJSON(200, { created: false }, rsp);
   }
 }
@@ -92590,6 +92986,45 @@ async function getAutoPostgameSetting() {
     console.error("getAutoPostgameSetting error:", e);
     return true;
   }
+}
+async function getThreadTypeSetting() {
+  try {
+    const raw = await settings.get("threadType");
+    if (Array.isArray(raw)) return (raw[0] ?? "game").toString();
+    if (typeof raw === "string") return raw;
+    return "game";
+  } catch (e) {
+    console.error("getThreadTypeSetting error:", e);
+    return "game";
+  }
+}
+async function isBroadcastMode() {
+  return await getThreadTypeSetting() === "broadcast";
+}
+async function getBroadcastLabel() {
+  try {
+    const raw = await settings.get("broadcastLabel");
+    const val = Array.isArray(raw) ? raw[0] ?? "" : typeof raw === "string" ? raw : "";
+    return val.toString().trim() || "Broadcast Thread";
+  } catch (e) {
+    console.error("getBroadcastLabel error:", e);
+    return "Broadcast Thread";
+  }
+}
+async function getBroadcastDelaySetting() {
+  try {
+    const raw = await settings.get("broadcastDelay");
+    const val = Array.isArray(raw) ? raw[0] ?? "0" : raw ?? "0";
+    const n = parseInt(String(val), 10);
+    return Number.isFinite(n) && n > 0 ? n : 0;
+  } catch (e) {
+    console.error("getBroadcastDelaySetting error:", e);
+    return 0;
+  }
+}
+async function autoPostgameEnabled() {
+  if (await isBroadcastMode()) return false;
+  return getAutoPostgameSetting();
 }
 async function getCustomPostgameTitles() {
   const normalize = (raw) => {
@@ -92754,12 +93189,12 @@ function doubleHeaderSuffix(game) {
   }
   return "";
 }
-function buildGameThreadTitle(game, teamId) {
+function buildGameThreadTitle(game, teamId, broadcastLabel) {
   const away = game?.teams?.away?.team?.name || "Away";
   const home = game?.teams?.home?.team?.name || "Home";
   const homeId = String(game?.teams?.home?.team?.id ?? "");
   const time = formatGameTimeET(game?.gameDate || (/* @__PURE__ */ new Date()).toISOString());
-  const prefix = getGamePrefix(game, false);
+  const prefix = broadcastLabel && broadcastLabel.trim() ? broadcastLabel.trim() : getGamePrefix(game, false);
   const dhSuffix = doubleHeaderSuffix(game);
   if (teamId && teamId === homeId) {
     return `${prefix}: ${home} vs ${away}${dhSuffix} - ${time}`;
@@ -92958,6 +93393,7 @@ async function maybePostOffDayThread(subredditId, subredditName, teamId) {
 async function handlePostgameOrPostponement(game, subredditId, teamId, customTitles) {
   const pk = game?.gamePk;
   if (!pk) return "skipped";
+  if (await redis.get(`broadcast-game:${subredditId}:${pk}`)) return "skipped";
   const gameDedupKey = `posted:${subredditId}:${pk}`;
   if (!await redis.get(gameDedupKey)) return "skipped";
   const codedState = game?.status?.codedGameState;
@@ -92969,6 +93405,7 @@ async function handlePostgameOrPostponement(game, subredditId, teamId, customTit
       const post = await reddit.submitCustomPost({
         title: buildPostponedThreadTitle(game, teamId)
       });
+      await applyCommentSort(post);
       await redis.set(`post-game:${post.id}`, String(pk), { expiration: renderExpiresAt() });
       await redis.set(`post-type:${post.id}`, "postponed", { expiration: renderExpiresAt() });
       await redis.set(postponedKey, post.id, { expiration: dedupExpiresAt() });
@@ -92989,10 +93426,12 @@ async function handlePostgameOrPostponement(game, subredditId, teamId, customTit
   }
   const pgKey = `postgame:${subredditId}:${pk}`;
   if (await redis.get(pgKey)) return "skipped";
+  if (!await claimPostgame(subredditId, String(pk))) return "skipped";
   try {
     const post = await reddit.submitCustomPost({
       title: buildPostgameThreadTitle(game, teamId, customTitles)
     });
+    await applyCommentSort(post);
     await redis.set(`post-game:${post.id}`, String(pk), { expiration: renderExpiresAt() });
     await redis.set(`post-type:${post.id}`, "postgame", { expiration: renderExpiresAt() });
     await redis.set(pgKey, post.id, { expiration: dedupExpiresAt() });
@@ -93000,6 +93439,7 @@ async function handlePostgameOrPostponement(game, subredditId, teamId, customTit
     return "postgame";
   } catch (e) {
     console.error(`postgame post failed for gamePk ${pk}:`, e);
+    await releasePostgameClaim(subredditId, String(pk));
     return "failed";
   }
 }
@@ -93010,9 +93450,10 @@ async function onMenuPostAllGames() {
     return { showToast: { text: "No subreddit context.", appearance: "neutral" } };
   }
   const teamId = await getTeamIdFilter();
+  const broadcastLabel = await isBroadcastMode() ? await getBroadcastLabel() : null;
   const games = await fetchGamesForDate(todayDateStr(), teamId);
   if (!games.length) {
-    if (teamId) {
+    if (teamId && !broadcastLabel) {
       const posted = await maybePostOffDayThread(subredditId, subredditName, teamId);
       if (posted) {
         return {
@@ -93044,11 +93485,15 @@ async function onMenuPostAllGames() {
     }
     try {
       const post = await reddit.submitCustomPost({
-        title: buildGameThreadTitle(game, teamId)
+        title: buildGameThreadTitle(game, teamId, broadcastLabel)
       });
+      await applyCommentSort(post);
       await redis.set(`post-game:${post.id}`, String(pk), { expiration: renderExpiresAt() });
       await redis.set(`post-type:${post.id}`, "game", { expiration: renderExpiresAt() });
       await redis.set(dedupKey, post.id, { expiration: dedupExpiresAt() });
+      if (broadcastLabel) {
+        await redis.set(`broadcast-game:${subredditId}:${pk}`, "1", { expiration: dedupExpiresAt() });
+      }
       await redis.del(`postponed:${subredditId}:${pk}`);
       created++;
     } catch (e) {
@@ -93107,6 +93552,8 @@ async function onMenuPostPostgame() {
 async function onCronPostgameSweep() {
   const subredditId = context.subredditId;
   if (!subredditId) return;
+  console.log("postgame-sweep: tick");
+  if (await isBroadcastMode()) return;
   const enabled = await getAutoPostgameSetting();
   const teamId = await getTeamIdFilter();
   const customTitles = await getCustomPostgameTitles();
@@ -93219,6 +93666,17 @@ Plus, on off days for team-specific subs:
 
 If you prefer single-thread style, disable **Auto-post postgame threads** in the settings \u2014 postponement notices will still fire, since they're informational.
 
+## Thread type: Game Thread or Broadcast
+
+The **Thread type** setting controls how the app fits into your subreddit:
+
+- **Game Thread** (default) \u2014 the standard mode described above. The app posts a Game Thread for each game and, when enabled, an automatic Postgame Thread. Choose this if you want the app to be your subreddit's game threads.
+- **Broadcast Thread** \u2014 an advanced/analytics **companion** that runs *alongside* your existing game threads rather than replacing them. In this mode:
+  - Threads post with your **Broadcast label** (e.g. "Broadcast Thread", "Advanced View", "Live Scoreboard") in place of "Game Thread".
+  - The app **never auto-posts anything** \u2014 no automatic Postgame Threads and no postponement notices. It only posts the threads you create from the menu.
+
+  This is ideal for subreddits that want to keep their existing GameDay thread exactly as it is and simply *add* a live, interactive scoreboard as a second screen for the stats crowd. Set your wording in the **Broadcast label** setting.
+
 ## Custom postgame titles (optional)
 
 If your subreddit has a signature postgame phrase \u2014 "Theeee Yankees Win!", "Lets Go Mets!", "It's right there in front of us!" \u2014 you can set these as custom titles in the app settings:
@@ -93256,9 +93714,10 @@ This keeps the subreddit active on off days. Off-day threads aren't created for 
    - **Your team** \u2014 for team subreddits like r/Reds, r/Yankees, or r/Dodgers.
    - **All Teams (post every game)** \u2014 for league-wide subreddits.
 3. Confirm **Auto-post postgame threads** is set to your preference (on by default).
-4. (Optional) Set custom **Postgame Win Title** and **Postgame Loss Title** if your sub has signature phrases.
-5. Click **Save**.
-6. When you're ready to post today's threads, open the moderator menu on your subreddit and select **"Post today's MLB game threads."** Postgame threads, postponement notices, and off-day discussions will follow automatically based on context.
+4. Under **Thread type**, choose **Game Thread** (standard) or **Broadcast Thread** (advanced companion \u2014 see the "Thread type" section above). Most subs leave this on Game Thread.
+5. (Optional) Set custom **Postgame Win Title** and **Postgame Loss Title** if your sub has signature phrases.
+6. Click **Save**.
+7. When you're ready to post today's threads, open the moderator menu on your subreddit and select **"Post today's MLB game threads."** Postgame threads, postponement notices, and off-day discussions will follow automatically based on context.
 
 ## Recovering removed threads
 

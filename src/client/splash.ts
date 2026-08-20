@@ -17,7 +17,7 @@
 // build runs esbuild with platform:"browser" (or conditions:["browser"]) so the
 // import resolves to the browser entry rather than the server-panic stub.
 
-import { requestExpandedMode, getWebViewMode } from "@devvit/web/client";
+import { requestExpandedMode, getWebViewMode, navigateTo } from "@devvit/web/client";
 
 // ── Constants ─────────────────────────────────────────────────────────────
 
@@ -110,8 +110,64 @@ function svgInk(): SvgInk {
         chartBg: "rgba(255,255,255,0.04)", dotFill: "#fff", dotRing: "rgba(255,255,255,0.6)" };
 }
 
+// Soft-red palette for inline SVG. No hard #bf0d3d anywhere — the red is
+// carried at alpha in both themes, and DARK gets the softer end (a saturated
+// crimson on navy is what the mods kept flagging as harsh).
+interface SvgRed {
+  fill: string; fillDim: string; stroke: string; strokeDim: string;
+  zone: string; zoneGrid: string; zoneFill: string;
+  // Pitch dots run stronger than the rest of the red in light mode, and the
+  // CURRENT pitch needs a ring that actually separates it from the surface —
+  // white works on navy but vanishes on white, so light mode rings in navy.
+  dot: string; dotBall: string; lastRing: string; dotOpacity: string;
+}
+function svgRed(): SvgRed {
+  const light = document.documentElement.getAttribute("data-theme") === "light";
+  return light
+    ? { fill: "#bf0d3ca6", fillDim: "#bf0d3c8c", stroke: "#bf0d3c92", strokeDim: "#bf0d3c72",
+        zone: "#bf0d3c85", zoneGrid: "#bf0d3c2e", zoneFill: "#bf0d3c0d",
+        dot: "#bf0d3ce0", dotBall: "#2a9d5cf0", lastRing: "#002D72", dotOpacity: "0.82" }
+    // Dark mode uses a LIGHTER red, not a fainter one: #bf0d3c at low alpha over
+    // navy composites toward black, so the bases/zone went muddy and unreadable.
+    : { fill: "#ff5c7fb3", fillDim: "#ff5c7f8a", stroke: "#ff5c7fa6", strokeDim: "#ff5c7f70",
+        zone: "#ff5c7f8f", zoneGrid: "#ff5c7f38", zoneFill: "#ff5c7f12",
+        dot: "#ff5c7fdb", dotBall: "#3fd18ae0", lastRing: "#ffffff", dotOpacity: "0.7" };
+}
+
+// Pitch dots are colored by RESULT, not pitch type. A fastball two feet off the
+// plate was rendering red (the four-seam color) and reading as a strike; fans
+// expect broadcast convention — red strike, green ball, gray foul, blue in play.
+// The pitch TYPE is still shown as the abbreviation badge next to the velo.
+function pitchOutcomeColor(p: any): string {
+  // Two colors only, per Joe: green = ball, red = everything else (strike,
+  // foul, in play). The pitch TYPE keeps its own color on the badge.
+  const r = svgRed();
+  return p?.details?.isBall ? r.dotBall : r.dot;
+}
+
+// Live matchup meta: handedness for both slots (RHB/LHB, RHP/LHP) plus the
+// pitcher's running pitch count as {pitches}-{strikes}.
+function slotHand(playerId: number | undefined, isBatter: boolean): string {
+  if (playerId == null) return "";
+  const bio: any = lastGameData?.gameData?.players?.["ID" + playerId];
+  if (isBatter) {
+    const side = bio?.batSide?.code;
+    return side === "S" ? "SWH" : (side === "L" || side === "R") ? side + "HB" : "";
+  }
+  const hand = bio?.pitchHand?.code;
+  return (hand === "L" || hand === "R") ? hand + "HP" : "";
+}
+function slotPitchCount(teamBox: any, playerId: number | undefined): string {
+  if (playerId == null) return "";
+  const p: any = teamBox?.players?.["ID" + playerId]?.stats?.pitching;
+  const np = p?.numberOfPitches ?? p?.pitchesThrown;
+  const st = p?.strikes;
+  return np != null && st != null ? `${np}-${st}` : "";
+}
+
 function buildStrikeZoneSVG(pitches: any[]): string {
   const ink = svgInk();
+  const red = svgRed();
   const dW = DZ_RIGHT - DZ_LEFT, dH = DZ_BOT - DZ_TOP;
   const d3 = dW / 3, d3h = dH / 3;
   const dots = pitches.map((p: any, i: number) => {
@@ -119,26 +175,25 @@ function buildStrikeZoneSVG(pitches: any[]): string {
     const pz = p.pitchData?.coordinates?.pZ;
     if (px == null || pz == null) return "";
     const cx = mapPx(px), cy = mapPz(pz);
-    const info = pitchInfo(p.details?.type?.code);
     const isLast = i === pitches.length - 1;
     return `<circle cx="${cx}" cy="${cy}" r="${isLast ? 7 : 5}"
-      fill="${info.color}" stroke="${isLast ? "#fff" : ink.faint}"
-      stroke-width="${isLast ? 2 : 1}" opacity="${isLast ? 1 : 0.65}"/>
+      fill="${pitchOutcomeColor(p)}" stroke="${isLast ? red.lastRing : ink.faint}"
+      stroke-width="${isLast ? 2 : 1}" opacity="${isLast ? 1 : red.dotOpacity}"/>
       <text x="${cx}" y="${cy + 0.5}" text-anchor="middle" dominant-baseline="middle"
       font-size="${isLast ? 7 : 6}" font-weight="700" fill="white"
       font-family="monospace" pointer-events="none">${i + 1}</text>`;
   }).join("");
   return `<svg viewBox="0 0 ${ZONE_W} ${ZONE_H}" xmlns="http://www.w3.org/2000/svg" style="overflow:visible;">
     <rect x="${DZ_LEFT}" y="${DZ_TOP}" width="${dW}" height="${dH}"
-      fill="rgba(191,13,61,0.04)" stroke="rgba(191,13,61,0.75)" stroke-width="1.5" rx="1"/>
+      fill="${red.zoneFill}" stroke="${red.zone}" stroke-width="1.5" rx="1"/>
     <line x1="${DZ_LEFT + d3}" y1="${DZ_TOP}" x2="${DZ_LEFT + d3}" y2="${DZ_BOT}"
-      stroke="rgba(191,13,61,0.22)" stroke-width="0.8" stroke-dasharray="3,2"/>
+      stroke="${red.zoneGrid}" stroke-width="0.8" stroke-dasharray="3,2"/>
     <line x1="${DZ_LEFT + d3 * 2}" y1="${DZ_TOP}" x2="${DZ_LEFT + d3 * 2}" y2="${DZ_BOT}"
-      stroke="rgba(191,13,61,0.22)" stroke-width="0.8" stroke-dasharray="3,2"/>
+      stroke="${red.zoneGrid}" stroke-width="0.8" stroke-dasharray="3,2"/>
     <line x1="${DZ_LEFT}" y1="${DZ_TOP + d3h}" x2="${DZ_RIGHT}" y2="${DZ_TOP + d3h}"
-      stroke="rgba(191,13,61,0.22)" stroke-width="0.8" stroke-dasharray="3,2"/>
+      stroke="${red.zoneGrid}" stroke-width="0.8" stroke-dasharray="3,2"/>
     <line x1="${DZ_LEFT}" y1="${DZ_TOP + d3h * 2}" x2="${DZ_RIGHT}" y2="${DZ_TOP + d3h * 2}"
-      stroke="rgba(191,13,61,0.22)" stroke-width="0.8" stroke-dasharray="3,2"/>
+      stroke="${red.zoneGrid}" stroke-width="0.8" stroke-dasharray="3,2"/>
     <polygon points="${DZ_LEFT},${DZ_BOT + 5} ${DZ_RIGHT},${DZ_BOT + 5} ${DZ_RIGHT},${DZ_BOT + 12} ${SZ_CX},${DZ_BOT + 20} ${DZ_LEFT},${DZ_BOT + 12}"
       fill="${ink.strong}" stroke="${ink.mid}" stroke-width="1"/>
     ${dots}
@@ -149,20 +204,21 @@ function buildStrikeZoneSVG(pitches: any[]): string {
 
 function buildBasesSVG(outs: number, onBase: any): string {
   const ink = svgInk();
+  const red = svgRed();
   const outFill = (n: number): string =>
-    outs >= n ? "#bf0d3d" : ink.empty;
+    outs >= n ? red.fill : ink.empty;
   const baseFill = (b: any): string =>
-    b ? "#bf0d3d" : ink.empty;
+    b ? red.fill : ink.empty;
   return `<svg width="60" height="60" viewBox="0 0 58 79" xmlns="http://www.w3.org/2000/svg">
-    <circle cx="13" cy="61" r="6" fill="${outFill(1)}" stroke="#bf0d3d" stroke-width="1.5"/>
-    <circle cx="30" cy="61" r="6" fill="${outFill(2)}" stroke="#bf0d3d" stroke-width="1.5"/>
-    <circle cx="47" cy="61" r="6" fill="${outFill(3)}" stroke="#bf0d3d" stroke-width="1.5"/>
+    <circle cx="13" cy="61" r="6" fill="${outFill(1)}" stroke="${red.stroke}" stroke-width="1.5"/>
+    <circle cx="30" cy="61" r="6" fill="${outFill(2)}" stroke="${red.stroke}" stroke-width="1.5"/>
+    <circle cx="47" cy="61" r="6" fill="${outFill(3)}" stroke="${red.stroke}" stroke-width="1.5"/>
     <rect x="17.6" y="29.7" width="14" height="14" transform="rotate(45 17.6 29.7)"
-      fill="${baseFill(onBase?.third)}" stroke="#bf0d3d" stroke-width="1.5"/>
+      fill="${baseFill(onBase?.third)}" stroke="${red.stroke}" stroke-width="1.5"/>
     <rect x="29.4" y="17.7" width="14" height="14" transform="rotate(45 29.4 17.7)"
-      fill="${baseFill(onBase?.second)}" stroke="#bf0d3d" stroke-width="1.5"/>
+      fill="${baseFill(onBase?.second)}" stroke="${red.stroke}" stroke-width="1.5"/>
     <rect x="41.6" y="29.7" width="14" height="14" transform="rotate(45 41.6 29.7)"
-      fill="${baseFill(onBase?.first)}" stroke="#bf0d3d" stroke-width="1.5"/>
+      fill="${baseFill(onBase?.first)}" stroke="${red.stroke}" stroke-width="1.5"/>
   </svg>`;
 }
 
@@ -496,7 +552,7 @@ function setupExpand(): void {
   btn.setAttribute("aria-label", "Open full screen");
   btn.innerHTML = EXPAND_ICON;
   btn.style.cssText =
-    "position:absolute;top:10px;right:12px;z-index:40;width:32px;height:32px;" +
+    "position:absolute;top:10px;right:12px;z-index:40;width:25px;height:25px;" +
     "display:flex;align-items:center;justify-content:center;padding:0;" +
     "background:var(--bg-elev-2);color:var(--text-primary);border:1px solid var(--border-medium);" +
     "border-radius:6px;cursor:pointer;-webkit-tap-highlight-color:transparent;" +
@@ -558,6 +614,35 @@ const MOON_ICON =
   '<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>';
 
 const THEME_KEY = "mlb-scores-theme";
+const DELAY_KEY = "mlb-scores-delay";
+
+// Per-viewer broadcast delay. Cable is ~5-10s behind live, streaming 30-60s, so
+// one sub-wide number always fails someone. null = follow the mod's setting.
+const VIEWER_DELAYS: Array<{ v: number; label: string; sub: string }> = [
+  { v: -1, label: "Match the subreddit", sub: "Use the mod's setting" },
+  { v: 0, label: "No delay", sub: "Fastest — matches the data feed" },
+  { v: 5, label: "5 seconds", sub: "Cable / antenna" },
+  { v: 10, label: "10 seconds", sub: "Cable with a slight lag" },
+  { v: 20, label: "20 seconds", sub: "Streaming (YouTube TV, Hulu)" },
+  { v: 30, label: "30 seconds", sub: "Streaming, slower" },
+  { v: 45, label: "45 seconds", sub: "Gotham / Fubo-type feeds" },
+  { v: 60, label: "60 seconds", sub: "Slowest streams" },
+];
+function viewerDelay(): number | null {
+  try {
+    const v = localStorage.getItem(DELAY_KEY);
+    if (v == null) return null;
+    const n = Number(v);
+    return VIEWER_DELAYS.some((d) => d.v === n) && n >= 0 ? n : null;
+  } catch { return null; }
+}
+function setViewerDelay(n: number): void {
+  try {
+    if (n < 0) localStorage.removeItem(DELAY_KEY);
+    else localStorage.setItem(DELAY_KEY, String(n));
+  } catch { /* storage unavailable — session only */ }
+  if (gamePk != null) void fetchAndRender(gamePk);
+}
 
 function applyTheme(theme: string): void {
   if (theme === "light") document.documentElement.setAttribute("data-theme", "light");
@@ -581,8 +666,11 @@ function savedTheme(): string | null {
 }
 
 function resolveTheme(): string {
-  // Manual override wins; otherwise follow Reddit's / the OS color scheme.
-  return savedTheme() ?? systemTheme();
+  // Manual override wins. Otherwise LIGHT is the default view — the app is
+  // designed light-first now (navy chrome + light content), so we no longer
+  // inherit Reddit's dark scheme by default. systemTheme() is kept for the
+  // toggle's reference point.
+  return savedTheme() ?? "light";
 }
 
 function setupThemeToggle(): void {
@@ -597,7 +685,7 @@ function setupThemeToggle(): void {
   btn.id = "theme-btn";
   btn.type = "button";
   btn.style.cssText =
-    "position:absolute;top:10px;left:12px;z-index:40;width:32px;height:32px;" +
+    "position:absolute;top:10px;left:12px;z-index:40;width:25px;height:25px;" +
     "display:flex;align-items:center;justify-content:center;padding:0;" +
     "background:var(--bg-elev-2);color:var(--text-primary);border:1px solid var(--border-medium);" +
     "border-radius:6px;cursor:pointer;-webkit-tap-highlight-color:transparent;" +
@@ -703,7 +791,8 @@ function renderLiveContent(data: any): void {
   $("live-away-role")!.textContent = awaySlotIsBatter ? "BATTER" : "PITCHER";
   $("live-away-pos")!.textContent = awaySlotIsBatter
     ? getPlayerPos(teamsBox.away, awaySlotPlayer?.id)
-    : "";
+    : slotPitchCount(teamsBox.away, awaySlotPlayer?.id);
+  $("live-away-hand")!.textContent = slotHand(awaySlotPlayer?.id, awaySlotIsBatter);
   $("live-away-name")!.textContent = awaySlotPlayer?.fullName || "—";
   $("live-away-stats")!.textContent = awaySlotIsBatter
     ? getBatterSeasonStats(teamsBox.away, awaySlotPlayer?.id)
@@ -714,7 +803,8 @@ function renderLiveContent(data: any): void {
   $("live-home-role")!.textContent = homeSlotIsBatter ? "BATTER" : "PITCHER";
   $("live-home-pos")!.textContent = homeSlotIsBatter
     ? getPlayerPos(teamsBox.home, homeSlotPlayer?.id)
-    : "";
+    : slotPitchCount(teamsBox.home, homeSlotPlayer?.id);
+  $("live-home-hand")!.textContent = slotHand(homeSlotPlayer?.id, homeSlotIsBatter);
   $("live-home-name")!.textContent = homeSlotPlayer?.fullName || "—";
   $("live-home-stats")!.textContent = homeSlotIsBatter
     ? getBatterSeasonStats(teamsBox.home, homeSlotPlayer?.id)
@@ -737,10 +827,11 @@ function renderLiveContent(data: any): void {
     const isInPlay = lastPitch.details?.isInPlay;
     const isStrike = lastPitch.details?.isStrike;
     const isFoul = (lastPitch.details?.description || "").toLowerCase().includes("foul");
+    // Label still tells the full story; the COLOR is only green/red.
     let resCls = "live-pr-ball";
     let resLbl = "BALL";
-    if (isInPlay) { resCls = "live-pr-contact"; resLbl = "IN PLAY"; }
-    else if (isFoul) { resCls = "live-pr-foul"; resLbl = "FOUL"; }
+    if (isInPlay) { resCls = "live-pr-strike"; resLbl = "IN PLAY"; }
+    else if (isFoul) { resCls = "live-pr-strike"; resLbl = "FOUL"; }
     else if (isStrike) { resCls = "live-pr-strike"; resLbl = "STRIKE"; }
     pitchEl.innerHTML = `
       <span class="live-pitch-num">PITCH ${pitches.length}</span>
@@ -753,11 +844,35 @@ function renderLiveContent(data: any): void {
     pitchEl.innerHTML = '<span style="font-family:var(--font-mono);font-size:10px;color:var(--text-muted);">Waiting for first pitch…</span>';
   }
 
-  const resultEvent = currentPlay.result?.event || "";
-  const resultDesc = currentPlay.result?.description || "";
+  // The description must come from the last COMPLETED play, not currentPlay.
+  // currentPlay resets the instant the next batter steps in, so reading it
+  // directly meant a play's description was only on screen during the short gap
+  // between resolving and the next at-bat — if a poll didn't land in that
+  // window, the description was never shown at all. allPlays is cumulative, so
+  // pulling from it also means a skipped snapshot no longer loses anything.
+  let resultEvent = currentPlay.result?.event || "";
+  let resultDesc = currentPlay.result?.description || "";
+  // ...but only until the next at-bat is actually UNDERWAY. Holding it through
+  // live pitches made a finished play look current. So: show it during the
+  // between-batter gap (the window that was being missed), and clear it the
+  // moment the new batter sees a pitch.
+  if (!resultEvent && !resultDesc && pitches.length === 0) {
+    const all: any[] = data.liveData?.plays?.allPlays || [];
+    for (let i = all.length - 1; i >= 0; i--) {
+      const p = all[i];
+      if (p?.about?.isComplete && p?.result?.description) {
+        resultEvent = p.result.event || "";
+        resultDesc = p.result.description || "";
+        break;
+      }
+    }
+  }
   const resultEl = $("live-result")!;
   if (resultEvent || resultDesc) {
+    // Labeled so a finished play never reads as the live one — it's shown during
+    // the between-batter gap on purpose, and the label is what keeps that clear.
     resultEl.innerHTML = `
+      <div class="live-last-label">Last Play</div>
       ${resultEvent ? `<div class="live-event">${resultEvent}</div>` : ""}
       ${resultDesc ? `<div class="live-desc">${resultDesc}</div>` : ""}
     `;
@@ -789,7 +904,7 @@ function fmtAvg(v: any): string {
   return f < 1 ? "." + String(Math.round(f * 1000)).padStart(3, "0") : String(v);
 }
 
-function buildBattingRow(player: any, displayNum: number, s: any): string {
+function buildBattingRow(player: any, displayNum: number, s: any, isSub: boolean = false): string {
   const g = player.stats?.batting || {};
   const name = shortName(player.person?.fullName || "Unknown");
   const pos = player.position?.abbreviation || "";
@@ -800,11 +915,21 @@ function buildBattingRow(player: any, displayNum: number, s: any): string {
   const hr = g.homeRuns ?? 0;
   const bb = g.baseOnBalls ?? 0;
   const so = g.strikeOuts ?? 0;
+  const lob = g.leftOnBase ?? 0;
   const avg = fmtAvg(s?.avg);
-  return `<tr class="bs-row">
-    <td class="bs-num">${displayNum}</td>
+  const obp = fmtAvg(s?.obp);
+  const slg = fmtAvg(s?.slg);
+  // Substitutes share their slot's number: blank the number cell and indent the
+  // name so the sub reads as nested under the starter it replaced (like a real box
+  // score), instead of getting its own number and pushing the lineup past 9.
+  const numCell = isSub ? "" : String(displayNum);
+  const nameCell = isSub
+    ? `<div class="bs-pname" style="padding-left:15px;opacity:.72">${name}</div>`
+    : `<div class="bs-pname">${name}</div>`;
+  return `<tr class="bs-row${isSub ? " bs-sub" : ""}" data-player-id="${player.person?.id ?? ""}">
+    <td class="bs-num">${numCell}</td>
     <td class="bs-pos-cell"><span class="bs-pos">${pos}</span></td>
-    <td class="bs-player"><div class="bs-pname">${name}</div></td>
+    <td class="bs-player">${nameCell}</td>
     <td>${ab}</td>
     <td class="${h > 0 ? "bs-hit" : ""}">${h}</td>
     <td>${r}</td>
@@ -812,7 +937,10 @@ function buildBattingRow(player: any, displayNum: number, s: any): string {
     <td class="${hr > 0 ? "bs-hr" : ""}">${hr}</td>
     <td>${bb}</td>
     <td>${so}</td>
-    <td class="bs-avg">${avg}</td>
+    <td>${lob}</td>
+    <td class="bs-avg bs-slash">${avg}</td>
+    <td class="bs-avg bs-slash">${obp}</td>
+    <td class="bs-avg bs-slash">${slg}</td>
   </tr>`;
 }
 
@@ -825,9 +953,13 @@ function buildPitchingRow(player: any, s: any): string {
   const er = g.earnedRuns ?? 0;
   const bb = g.baseOnBalls ?? 0;
   const so = g.strikeOuts ?? 0;
+  const np = g.numberOfPitches ?? g.pitchesThrown ?? "";
+  const strikes = g.strikes;
+  const ps = np !== "" && strikes != null ? `${np}-${strikes}` : String(np);
+  const wp = g.wildPitches ?? 0;
   const era = s?.era ?? "-.--";
   const erHasRuns = er > 0;
-  return `<tr class="bs-row">
+  return `<tr class="bs-row" data-player-id="${player.person?.id ?? ""}">
     <td class="bs-num"></td>
     <td class="bs-pos-cell"><span class="bs-pos p">P</span></td>
     <td class="bs-player"><div class="bs-pname">${name}</div></td>
@@ -837,7 +969,9 @@ function buildPitchingRow(player: any, s: any): string {
     <td class="${erHasRuns ? "bs-er" : ""}">${er}</td>
     <td>${bb}</td>
     <td>${so}</td>
-    <td colspan="2" class="bs-avg">${era}</td>
+    <td>${wp}</td>
+    <td class="bs-ps">${ps}</td>
+    <td class="bs-avg">${era}</td>
   </tr>`;
 }
 
@@ -857,12 +991,49 @@ function buildBoxPanel(teamStats: any): string {
     return '<div class="bs-empty">Lineups not yet available</div>';
   }
 
-  const battingRows = batters.map((id: number, i: number) => {
+  // Group batters into the 9 lineup slots using battingOrder. MLB encodes it as
+  // slot*100 for starters (100, 200, … 900) and slot*100 + a sequence for subs who
+  // entered that slot (e.g. 401, 402 in the 4-hole). Render nine numbered slots with
+  // any substitutes nested under the slot they came into, so a game with 3 subs still
+  // reads 1–9 instead of 10, 11, 12. Falls back to sequential numbering if the data
+  // has no usable battingOrder, so the box score always renders.
+  const slots: Record<number, any[]> = {};
+  let haveOrder = false;
+  for (const id of batters) {
     const player = teamStats.players?.[`ID${id}`];
-    if (!player) return "";
-    const s = player.seasonStats?.batting;
-    return buildBattingRow(player, i + 1, s);
-  }).filter(Boolean).join("");
+    if (!player) continue;
+    const bo = parseInt(String(player.battingOrder ?? ""), 10);
+    if (!Number.isFinite(bo) || bo <= 0) continue;
+    haveOrder = true;
+    const slot = Math.floor(bo / 100);
+    (slots[slot] = slots[slot] || []).push(player);
+  }
+
+  let battingRows: string;
+  if (haveOrder) {
+    const rows: string[] = [];
+    for (let slot = 1; slot <= 9; slot++) {
+      const group = slots[slot];
+      if (!group || !group.length) continue;
+      group.sort(
+        (a: any, b: any) =>
+          parseInt(String(a.battingOrder), 10) - parseInt(String(b.battingOrder), 10),
+      );
+      group.forEach((player: any, idx: number) => {
+        rows.push(buildBattingRow(player, slot, player.seasonStats?.batting, idx > 0));
+      });
+    }
+    battingRows = rows.join("");
+  } else {
+    battingRows = batters
+      .map((id: number, i: number) => {
+        const player = teamStats.players?.[`ID${id}`];
+        if (!player) return "";
+        return buildBattingRow(player, i + 1, player.seasonStats?.batting, false);
+      })
+      .filter(Boolean)
+      .join("");
+  }
 
   const pitchingRows = pitchers.map((id: number) => {
     const player = teamStats.players?.[`ID${id}`];
@@ -879,10 +1050,10 @@ function buildBoxPanel(teamStats: any): string {
           <th class="bs-th-num">#</th>
           <th class="bs-th-pos"></th>
           <th class="bs-th-player">Player</th>
-          <th>AB</th><th>H</th><th>R</th><th>RBI</th><th>HR</th><th>BB</th><th>K</th><th>AVG</th>
+          <th>AB</th><th>H</th><th>R</th><th>RBI</th><th>HR</th><th>BB</th><th>K</th><th>LOB</th><th class="bs-th-slash">AVG</th><th class="bs-th-slash">OBP</th><th class="bs-th-slash">SLG</th>
         </tr>
       </thead>
-      <tbody>${battingRows || `<tr><td colspan="11" class="bs-empty">Awaiting first AB</td></tr>`}</tbody>
+      <tbody>${battingRows || `<tr><td colspan="12" class="bs-empty">Awaiting first AB</td></tr>`}</tbody>
     </table>
     <div class="bs-section-hdr pitching"><span class="bs-dot"></span>Pitching</div>
     <table class="bs-table bs-table-pitching">
@@ -891,12 +1062,29 @@ function buildBoxPanel(teamStats: any): string {
           <th class="bs-th-num"></th>
           <th class="bs-th-pos"></th>
           <th class="bs-th-player">Pitcher</th>
-          <th>IP</th><th>H</th><th>R</th><th>ER</th><th>BB</th><th>K</th><th colspan="2">ERA</th>
+          <th>IP</th><th>H</th><th>R</th><th>ER</th><th>BB</th><th>K</th><th>WP</th><th>P-S</th><th>ERA</th>
         </tr>
       </thead>
-      <tbody>${pitchingRows || `<tr><td colspan="11" class="bs-empty">No pitching data yet</td></tr>`}</tbody>
+      <tbody>${pitchingRows || `<tr><td colspan="12" class="bs-empty">No pitching data yet</td></tr>`}</tbody>
     </table>
+    ${buildBoxNotes(teamStats)}
   `;
+}
+
+// TB / SB / E don't earn their own columns — real box scores carry them as a
+// notes line under the tables, which also keeps the grid from overflowing.
+function buildBoxNotes(teamBox: any): string {
+  const players: any[] = Object.values(teamBox?.players || {});
+  const notes: string[] = [];
+  const sb = players
+    .filter((p: any) => (p?.stats?.batting?.stolenBases ?? 0) > 0)
+    .map((p: any) => `${shortName(p.person?.fullName || "")} ${p.stats.batting.stolenBases}`);
+  if (sb.length) notes.push(`<span class="bs-note"><b>SB</b> ${sb.join(", ")}</span>`);
+  const err = players
+    .filter((p: any) => (p?.stats?.fielding?.errors ?? 0) > 0)
+    .map((p: any) => `${shortName(p.person?.fullName || "")} ${p.stats.fielding.errors}`);
+  if (err.length) notes.push(`<span class="bs-note"><b>E</b> ${err.join(", ")}</span>`);
+  return notes.length ? `<div class="bs-notes">${notes.join("")}</div>` : "";
 }
 
 function renderBoxScore(data: any): void {
@@ -981,21 +1169,22 @@ function buildPlayScorebug(play: any): string {
     third:  !!play.matchup?.postOnThird,
   };
   const ink = svgInk();
-  const outFill  = (n: number): string => outs >= n ? "#bf0d3d" : ink.empty;
-  const baseFill = (b: boolean): string => b ? "#bf0d3d" : ink.empty;
+  const red = svgRed();
+  const outFill  = (n: number): string => outs >= n ? red.fill : ink.empty;
+  const baseFill = (b: boolean): string => b ? red.fill : ink.empty;
 
   return `<div class="play-scorebug">
     <div class="play-count-mini">${balls}-${strikes}</div>
     <svg width="48" height="48" viewBox="0 0 58 79" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="13" cy="61" r="5" fill="${outFill(1)}" stroke="#bf0d3d" stroke-width="1"/>
-      <circle cx="30" cy="61" r="5" fill="${outFill(2)}" stroke="#bf0d3d" stroke-width="1"/>
-      <circle cx="47" cy="61" r="5" fill="${outFill(3)}" stroke="#bf0d3d" stroke-width="1"/>
+      <circle cx="13" cy="61" r="5" fill="${outFill(1)}" stroke="${red.stroke}" stroke-width="1"/>
+      <circle cx="30" cy="61" r="5" fill="${outFill(2)}" stroke="${red.stroke}" stroke-width="1"/>
+      <circle cx="47" cy="61" r="5" fill="${outFill(3)}" stroke="${red.stroke}" stroke-width="1"/>
       <rect x="17.6" y="29.7" width="14" height="14" transform="rotate(45 17.6 29.7)"
-        fill="${baseFill(onBase.third)}"  stroke="#bf0d3d" stroke-width="1"/>
+        fill="${baseFill(onBase.third)}"  stroke="${red.stroke}" stroke-width="1"/>
       <rect x="29.4" y="17.7" width="14" height="14" transform="rotate(45 29.4 17.7)"
-        fill="${baseFill(onBase.second)}" stroke="#bf0d3d" stroke-width="1"/>
+        fill="${baseFill(onBase.second)}" stroke="${red.stroke}" stroke-width="1"/>
       <rect x="41.6" y="29.7" width="14" height="14" transform="rotate(45 41.6 29.7)"
-        fill="${baseFill(onBase.first)}"  stroke="#bf0d3d" stroke-width="1"/>
+        fill="${baseFill(onBase.first)}"  stroke="${red.stroke}" stroke-width="1"/>
     </svg>
   </div>`;
 }
@@ -1026,13 +1215,13 @@ function buildPlayCard(play: any, awayAbbr: string, homeAbbr: string, showScore:
   let statcastHtml = "";
   if (hasStatcast) {
     const chips: string[] = [];
-    if (exitVelo) chips.push(`<div class="play-chip"><span class="play-chip-l">EV</span><span class="play-chip-v">${exitVelo}</span></div>`);
-    if (launchAngle) chips.push(`<div class="play-chip"><span class="play-chip-l">LA</span><span class="play-chip-v">${launchAngle}</span></div>`);
-    if (distance) chips.push(`<div class="play-chip"><span class="play-chip-l">DIST</span><span class="play-chip-v">${distance}</span></div>`);
+    if (exitVelo) chips.push(`<div class="play-chip"><span class="play-chip-l">Exit Velo</span><span class="play-chip-v">${exitVelo}</span></div>`);
+    if (launchAngle) chips.push(`<div class="play-chip"><span class="play-chip-l">Angle</span><span class="play-chip-v">${launchAngle}</span></div>`);
+    if (distance) chips.push(`<div class="play-chip"><span class="play-chip-l">Distance</span><span class="play-chip-v">${distance}</span></div>`);
     statcastHtml = `<div class="play-statcast">${chips.join("")}</div>`;
   }
 
-  return `<div class="play-card">
+  return `<div class="play-card" data-clip-key="${playClipId(play)}">
     <div class="play-main">
       <div class="play-header">
         <span class="play-inning">${inningTxt}</span>
@@ -1164,6 +1353,26 @@ function renderFinalContent(data: any): void {
   homeDecEl.classList.remove("win", "loss");
   if (homeDecision === "W") homeDecEl.classList.add("win");
   else if (homeDecision === "L") homeDecEl.classList.add("loss");
+
+  // Save pitcher (upside-down pyramid slot): center on wide, wraps below W/L on narrow.
+  const save = decisions.save;
+  const saveSlot = $("final-pitcher-save");
+  const decGrid = document.querySelector(".final-decisions");
+  if (saveSlot) {
+    if (save?.id) {
+      const saveTeamBox = awayWon ? teamsBox.away : teamsBox.home;
+      const saveTeamId = awayWon ? awayTeamId : homeTeamId;
+      const saveLogoEl = $("final-save-team-logo") as HTMLImageElement | null;
+      if (saveLogoEl && saveTeamId) loadLogo(saveLogoEl, saveTeamId);
+      $("final-save-pitcher-name")!.textContent = save.fullName || "—";
+      $("final-save-pitcher-stats")!.textContent = getFinalPitcherLine(saveTeamBox, save.id);
+      saveSlot.style.display = "";
+      decGrid?.classList.add("has-save");
+    } else {
+      saveSlot.style.display = "none";
+      decGrid?.classList.remove("has-save");
+    }
+  }
 
   const performers = data.liveData?.boxscore?.topPerformers || [];
   for (let i = 0; i < 3; i++) {
@@ -1615,7 +1824,8 @@ function renderEndedState(): void {
 
 async function fetchAndRender(pk: number): Promise<void> {
   try {
-    const res = await fetch(`/api/game/${pk}`);
+    const vd = viewerDelay();
+    const res = await fetch(`/api/game/${pk}` + (vd == null ? "" : `?delay=${vd}`));
     const data = await res.json();
     if (!data?.gameData || !data?.liveData) {
       console.error("Game data unavailable");
@@ -1694,10 +1904,10 @@ function render(data: any): void {
 
   if (isFinalState(statusText)) {
     badge.textContent = "FINAL";
-    badge.style.background = "#bf0d3d";
+    badge.style.background = "";
     const n = linescore?.currentInning || 9;
     inning.textContent = n !== 9 ? `F/${n}` : "";
-    inning.style.color = "#bf0d3d";
+    inning.style.color = "";
     countBlock.style.display = "none";
     $("dynamic-tab-label")!.textContent = "WRAP";
     const finEl = $("final-content");
@@ -1714,7 +1924,7 @@ function render(data: any): void {
     try { renderPregameContent(data, awayTeam, homeTeam); } catch (e) { reportError("renderPregameContent", e); }
   } else if (statusText === "Postponed") {
     badge.textContent = "POSTPONED";
-    badge.style.background = "#bf0d3d";
+    badge.style.background = "";
     const reason = game?.status?.reason || "";
     inning.textContent = reason ? reason.toUpperCase() : "";
     inning.style.color = "var(--text-secondary)";
@@ -1725,12 +1935,12 @@ function render(data: any): void {
     try { renderPostponedContent(data); } catch (e) { reportError("renderPostponedContent", e); }
   } else if (isSuspendedState(statusText)) {
     badge.textContent = "SUSPENDED";
-    badge.style.background = "#bf0d3d";
+    badge.style.background = "";
     const half = linescore?.inningHalf === "Top" ? "▲" : "▼";
     inning.textContent = linescore?.currentInning
       ? `${half} ${linescore.currentInning}`
       : "";
-    inning.style.color = "#bf0d3d";
+    inning.style.color = "";
     countBlock.style.display = "none";
     $("dynamic-tab-label")!.textContent = "SUSPENDED";
     const susEl = $("suspended-content");
@@ -1738,10 +1948,10 @@ function render(data: any): void {
     try { renderSuspendedContent(data); } catch (e) { reportError("renderSuspendedContent", e); }
   } else if (isLiveState(statusText)) {
     badge.textContent = "LIVE";
-    badge.style.background = "#bf0d3d";
+    badge.style.background = "";
     const half = linescore?.inningHalf === "Top" ? "▲" : "▼";
     inning.textContent = `${half} ${linescore?.currentInning || ""}`;
-    inning.style.color = "#bf0d3d";
+    inning.style.color = "";
 
     const cp = data.liveData?.plays?.currentPlay;
     const count = cp?.count;
@@ -1765,17 +1975,25 @@ function render(data: any): void {
     $("dynamic-tab-label")!.textContent = statusText.toUpperCase();
   }
 
+  try { renderWeather(data); } catch (e) { reportError("renderWeather", e); }
+
   try { renderLinescore(linescore, awayTeam, homeTeam, isFinalState(statusText)); }
   catch (e) { reportError("renderLinescore", e); }
 
-  try { renderBoxScore(data); }
-  catch (e) { reportError("renderBoxScore", e); }
+  if ($("tab-box")?.classList.contains("tab-content-active")) {
+    try { renderBoxScore(data); }
+    catch (e) { reportError("renderBoxScore", e); }
+  }
 
-  try { renderScoringPlays(data); }
-  catch (e) { reportError("renderScoringPlays", e); }
-
-  try { renderAllPlays(data); }
-  catch (e) { reportError("renderAllPlays", e); }
+  if ($("tab-plays")?.classList.contains("tab-content-active")) {
+    try { renderScoringPlays(data); }
+    catch (e) { reportError("renderScoringPlays", e); }
+    void augmentScoringVideos();
+    void augmentStatcast();
+    void renderHighlights();
+    try { renderAllPlays(data); }
+    catch (e) { reportError("renderAllPlays", e); }
+  }
 
   if ($("tab-winprob")?.classList.contains("tab-content-active")) {
     void renderWinProb();
@@ -1850,12 +2068,50 @@ function renderLinescore(linescore: any, awayTeam: any, homeTeam: any, isFinal: 
 
 // ── Tab switching ─────────────────────────────────────────────────────────
 
+// Plays tab: a sliding Scoring / All toggle over the two play lists (merged from
+// the old separate tabs). Scoring is the default. Switching slides the thumb and
+// animates the newly-shown list in.
+function setPlaysView(which: "highlights" | "scoring" | "all"): void {
+  const toggle = $("plays-toggle");
+  const lists: Record<string, HTMLElement | null> = {
+    highlights: $("highlights-list"),
+    scoring: $("scoring-plays-list"),
+    all: $("all-plays-list"),
+  };
+  const show = lists[which];
+  if (!toggle || !show) return;
+  toggle.setAttribute("data-active", which);
+  toggle.querySelectorAll<HTMLElement>(".plays-seg").forEach((seg) => {
+    seg.classList.toggle("is-active", seg.getAttribute("data-plays") === which);
+  });
+  Object.keys(lists).forEach((k) => { const l = lists[k]; if (l) l.hidden = k !== which; });
+  show.classList.remove("plays-list-enter");
+  void show.offsetWidth; // reflow so the enter animation replays each switch
+  show.classList.add("plays-list-enter");
+}
+
+function setupPlaysToggle(): void {
+  const toggle = $("plays-toggle");
+  if (!toggle) return;
+  toggle.querySelectorAll<HTMLElement>(".plays-seg").forEach((seg) => {
+    seg.addEventListener("click", () => {
+      const which = seg.getAttribute("data-plays");
+      if (which === "highlights" || which === "scoring" || which === "all") setPlaysView(which);
+      if (which === "highlights") void renderHighlights();
+    });
+  });
+}
+
 function setupTabs(): void {
   document.querySelectorAll(".tab").forEach((btn) => {
     btn.addEventListener("click", () => {
       const targetTab = (btn as HTMLElement).dataset.tab;
       if (!targetTab) return;
       document.body.classList.toggle("on-box-tab", targetTab === "box");
+      // Every tab except the live one condenses the scorebug (animated) so the
+      // data gets the vertical room. "dynamic" is the live/game-info tab.
+      document.body.classList.toggle("compact-top", targetTab !== "dynamic");
+      document.body.classList.toggle("on-standings-tab", targetTab === "standings");
       document.querySelectorAll(".tab").forEach((t) => t.classList.remove("tab-active"));
       btn.classList.add("tab-active");
       document.querySelectorAll(".tab-content").forEach((c) => c.classList.remove("tab-content-active"));
@@ -1871,8 +2127,23 @@ function setupTabs(): void {
       const region = inlinePagerRegion();
       if (region) region.scrollTop = 0;
 
+      if (targetTab === "box" && lastGameData) {
+        try { renderBoxScore(lastGameData); } catch (e) { reportError("renderBoxScore", e); }
+      }
+      if (targetTab === "plays") {
+        if (lastGameData) {
+          try { renderScoringPlays(lastGameData); } catch (e) { reportError("renderScoringPlays", e); }
+          try { renderAllPlays(lastGameData); } catch (e) { reportError("renderAllPlays", e); }
+          void augmentScoringVideos();
+          void augmentStatcast();
+        }
+        setPlaysView("scoring");
+      }
       if (targetTab === "winprob") {
         void renderWinProb();
+      }
+      if (targetTab === "standings") {
+        setStandLeague("AL");
       }
     });
   });
@@ -1911,12 +2182,676 @@ async function maybeNotifyPostgame(statusText: string): Promise<void> {
 
 // ── Init ──────────────────────────────────────────────────────────────────
 
+// ═══ Restored features: top-bar buttons + overlay, weather, scoring videos ═══
+
+const GRAPH_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18 L9 12 L13 16 L21 6"/><polyline points="15 6 21 6 21 12"/></svg>';
+const TV_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="13" rx="2"/><path d="M8 3l4 4 4-4"/></svg>';
+const FEED_TV_ICON = TV_ICON;
+const FEED_RADIO_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="14" r="2.5"/><path d="M4.9 9.9a10 10 0 0 1 14.2 0"/><path d="M7.8 12.8a6 6 0 0 1 8.4 0"/></svg>';
+const CHEV_UP_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 15l6-6 6 6"/></svg>';
+const CHEV_DOWN_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>';
+const SYNC_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>';
+const OVERLAY_CLOSE_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6L6 18"/></svg>';
+const VIDEO_ICON = '<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M8 5v14l11-7z"/></svg>';
+const WX_SUN_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v2M12 20v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M2 12h2M20 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/></svg>';
+const WX_CLOUD_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 19a4.5 4.5 0 0 0 .5-8.97A6 6 0 0 0 6.34 9.5 4 4 0 0 0 7 19z"/></svg>';
+const WX_PARTLY_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8.5" r="2.6"/><path d="M8 3.4v1.2M4.1 4.6l.8.8M3 8.5h1.2M11.9 4.6l-.8.8"/><path d="M17 19a4 4 0 0 0 .4-7.98A5.2 5.2 0 0 0 7.6 12 4 4 0 0 0 8 19z"/></svg>';
+const WX_RAIN_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 14a4.5 4.5 0 0 0 .5-8.97A6 6 0 0 0 6.34 4.5 4 4 0 0 0 7 14z"/><path d="M8 18v1.5M12 18v2.5M16 18v1.5"/></svg>';
+const WX_SNOW_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 14a4.5 4.5 0 0 0 .5-8.97A6 6 0 0 0 6.34 4.5 4 4 0 0 0 7 14z"/><path d="M8 18.5v.01M12 20v.01M16 18.5v.01"/></svg>';
+const WX_ROOF_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 18 0"/><path d="M2 12h20M6 12v6M18 12v6M6 18h12"/></svg>';
+
+interface OverlayItem { label: string; sub?: string; url?: string; img?: string; icon?: string; delay?: number; active?: boolean; }
+let infoOverlayEl: HTMLElement | null = null;
+
+function overlayRowsHtml(items: OverlayItem[]): string {
+  return items.map((it, i) => {
+    const visual = it.img ? `<img class="info-row-logo" src="${it.img}" alt="">` : it.icon ? `<span class="info-row-icon">${it.icon}</span>` : "";
+    const inner = visual + '<span class="info-row-text"><span class="info-row-label">' + it.label + "</span>" + (it.sub ? '<span class="info-row-sub">' + it.sub + "</span>" : "") + "</span>";
+    const style = `animation-delay:${50 + i * 55}ms`;
+    if (it.url) return `<button class="info-row" type="button" data-url="${it.url}" style="${style}">${inner}</button>`;
+    if (it.delay !== undefined) return `<button class="info-row${it.active ? " is-picked" : ""}" type="button" data-delay="${it.delay}" style="${style}">${inner}</button>`;
+    return `<div class="info-row is-static" style="${style}">${inner}</div>`;
+  }).join("");
+}
+function wireOverlayRows(ov: HTMLElement): void {
+  ov.querySelectorAll<HTMLElement>(".info-row[data-url]").forEach((row) => {
+    row.addEventListener("click", () => { const url = row.getAttribute("data-url"); if (!url) return; try { navigateTo(url); } catch (e) { reportError("navigateTo", e); } });
+  });
+  ov.querySelectorAll<HTMLElement>(".info-row[data-delay]").forEach((row) => {
+    row.addEventListener("click", () => {
+      const d = Number(row.getAttribute("data-delay"));
+      if (!Number.isFinite(d)) return;
+      if (d === -2) { openDelayOverlay(); return; }
+      setViewerDelay(d);
+      openDelayOverlay();
+    });
+  });
+  ov.querySelectorAll<HTMLImageElement>(".info-row-logo").forEach((img) => { img.addEventListener("error", () => { img.style.display = "none"; }); });
+}
+function closeInfoOverlay(): void {
+  const ov = infoOverlayEl; if (!ov) return;
+  ov.classList.remove("is-open");
+  window.setTimeout(() => { if (ov && !ov.classList.contains("is-open")) ov.style.display = "none"; }, 220);
+}
+function openInfoOverlay(title: string, items: OverlayItem[]): void {
+  const host = $("scorebug-content") || document.body;
+  let ov = infoOverlayEl;
+  if (!ov) { ov = document.createElement("div"); ov.className = "info-overlay"; ov.addEventListener("click", (e) => { if (e.target === ov) closeInfoOverlay(); }); host.appendChild(ov); infoOverlayEl = ov; }
+  ov.innerHTML = '<div class="info-panel"><div class="info-panel-head"><span class="info-panel-title">' + title + '</span><button class="info-panel-close" type="button" aria-label="Close">' + OVERLAY_CLOSE_ICON + '</button></div><div class="info-panel-body">' + overlayRowsHtml(items) + "</div></div>";
+  ov.querySelector(".info-panel-close")?.addEventListener("click", closeInfoOverlay);
+  wireOverlayRows(ov);
+  ov.style.display = "flex"; void ov.offsetWidth; ov.classList.add("is-open");
+  syncOverlayScroll();
+}
+function setOverlayRows(items: OverlayItem[]): void {
+  const ov = infoOverlayEl; if (!ov) return;
+  const body = ov.querySelector(".info-panel-body"); if (!body) return;
+  body.innerHTML = overlayRowsHtml(items); wireOverlayRows(ov);
+  syncOverlayScroll();
+}
+// Guardrail for long overlay lists (e.g. teams with many TV/radio feeds): the
+// panel is capped to the overlay's padding, and when the list overflows we add
+// paging arrows in INLINE mode (touch scroll doesn't reach the web view there —
+// same trap as the main card, and scrollBy from a button is the proven fix).
+// Expanded mode scrolls natively, so no arrows.
+function syncOverlayScroll(): void {
+  const ov = infoOverlayEl; if (!ov) return;
+  const panel = ov.querySelector<HTMLElement>(".info-panel");
+  const body = ov.querySelector<HTMLElement>(".info-panel-body, .pl-scroll");
+  if (!panel || !body) return;
+  panel.querySelector(".info-scroll")?.remove();
+  window.requestAnimationFrame(() => {
+    if (!document.body.classList.contains("is-inline")) return;
+    if (body.scrollHeight <= body.clientHeight + 4) return;
+    const bar = document.createElement("div");
+    bar.className = "info-scroll";
+    bar.innerHTML =
+      '<button class="info-scroll-btn" type="button" aria-label="Scroll up" data-dir="-1">' + CHEV_UP_ICON + "</button>" +
+      '<button class="info-scroll-btn" type="button" aria-label="Scroll down" data-dir="1">' + CHEV_DOWN_ICON + "</button>";
+    bar.querySelectorAll<HTMLElement>(".info-scroll-btn").forEach((b) => {
+      b.addEventListener("click", () => {
+        const dir = Number(b.getAttribute("data-dir")) || 1;
+        body.scrollBy({ top: dir * 150, behavior: "smooth" });
+      });
+    });
+    panel.appendChild(bar);
+  });
+}
+
+function mkTopMiniButton(id: string, label: string, icon: string, side: "left" | "right", offsetPx: number): HTMLButtonElement {
+  const b = document.createElement("button");
+  b.id = id; b.type = "button"; b.className = "topbar-mini-btn"; b.setAttribute("aria-label", label); b.innerHTML = icon;
+  b.style.cssText = "position:absolute;top:10px;" + side + ":" + offsetPx + "px;z-index:40;width:25px;height:25px;display:flex;align-items:center;justify-content:center;padding:0;background:var(--bg-elev-2);color:var(--text-primary);border:1px solid var(--border-medium);border-radius:6px;cursor:pointer;-webkit-tap-highlight-color:transparent;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);";
+  return b;
+}
+function setupGraphButton(): void {
+  if (document.getElementById("graph-btn")) return;
+  const host = $("scorebug-content") || document.body;
+  const btn = mkTopMiniButton("graph-btn", "Analytics links", GRAPH_ICON, "right", 44);
+  btn.addEventListener("click", () => {
+    if (gamePk == null) return;
+    const od = lastGameData?.gameData?.datetime?.officialDate;
+    const date = typeof od === "string" && od ? od : new Date().toISOString().slice(0, 10);
+    openInfoOverlay("Analytics", [
+      { label: "Baseball Savant", sub: "Statcast game feed", img: "assets/logos/savant.png", url: `https://baseballsavant.mlb.com/gamefeed?gamePk=${gamePk}` },
+      { label: "MLB.com Gameday", sub: "Official game page", img: "assets/logos/mlb.png", url: `https://www.mlb.com/gameday/${gamePk}` },
+      { label: "FanGraphs", sub: "Live scoreboard for the day", img: "assets/logos/fangraphs.png", url: `https://www.fangraphs.com/scores?date=${date}` },
+      { label: "Baseball-Reference", sub: "Box scores (posts next day)", img: "assets/logos/baseball-reference.png", url: "https://www.baseball-reference.com/boxes/index.fcgi" },
+    ]);
+  });
+  host.appendChild(btn);
+}
+async function fetchBroadcastItems(pk: number): Promise<OverlayItem[]> {
+  try {
+    const res = await fetch(`/api/broadcasts/${pk}`);
+    if (!res.ok) return [{ label: "Broadcast info unavailable" }];
+    const data: any = await res.json();
+    const game: any = data?.dates?.[0]?.games?.[0];
+    const casts: any[] = game?.broadcasts || [];
+    if (casts.length === 0) return [{ label: "No listed broadcasts" }];
+    const tier = (b: any): string => { if (b?.isNational) return "National"; const ha = String(b?.homeAway || "").toLowerCase(); if (ha === "away") return "Away feed"; if (ha === "home") return "Home feed"; return "Broadcast"; };
+    const rank = (b: any): number => { const t = tier(b); return t === "National" ? 0 : t === "Away feed" ? 1 : t === "Home feed" ? 2 : 3; };
+    const seen = new Set<string>();
+    const items: OverlayItem[] = [];
+    casts.slice().sort((a, b) => rank(a) - rank(b)).forEach((b) => {
+      const name = String(b?.name || b?.callSign || "").trim();
+      if (!name) return;
+      const kind = String(b?.type || "").toUpperCase();
+      const dedup = name + "|" + kind + "|" + tier(b);
+      if (seen.has(dedup)) return; seen.add(dedup);
+      const isTv = kind.includes("TV");
+      items.push({ label: name, sub: kind ? `${tier(b)} · ${kind}` : tier(b), icon: isTv ? FEED_TV_ICON : FEED_RADIO_ICON });
+    });
+    return items.length ? items : [{ label: "No listed broadcasts" }];
+  } catch (e) { reportError("fetchBroadcastItems", e); return [{ label: "Broadcast info unavailable" }]; }
+}
+function openDelayOverlay(): void {
+  const cur = viewerDelay();
+  openInfoOverlay("Sync To Your Feed", VIEWER_DELAYS.map((d) => ({
+    label: d.label,
+    sub: d.sub,
+    delay: d.v,
+    active: d.v === -1 ? cur == null : cur === d.v,
+  })));
+}
+
+function setupTvButton(): void {
+  if (document.getElementById("tv-btn")) return;
+  const host = $("scorebug-content") || document.body;
+  const btn = mkTopMiniButton("tv-btn", "Where to watch", TV_ICON, "left", 44);
+  btn.addEventListener("click", async () => {
+    if (gamePk == null) return;
+    openInfoOverlay("Where to Watch", [{ label: "Loading…" }]);
+    const items = await fetchBroadcastItems(gamePk);
+    const cur = viewerDelay();
+    const curLabel = cur == null ? "Matching the subreddit" : cur === 0 ? "No delay" : `${cur} seconds`;
+    setOverlayRows([
+      { label: "Sync to your feed", sub: curLabel, delay: -2, icon: SYNC_ICON },
+      ...items,
+    ]);
+  });
+  host.appendChild(btn);
+}
+
+function weatherCategory(cond: string): string {
+  const c = cond.toLowerCase();
+  if (/(rain|drizzle|shower|thunder)/.test(c)) return "rain";
+  if (/(snow|flurr|wintry)/.test(c)) return "snow";
+  if (/(partly|mostly cloudy|partly sunny)/.test(c)) return "partly";
+  if (/(cloud|overcast|hazy|fog|mist)/.test(c)) return "cloud";
+  if (/(clear|sunny|fair)/.test(c)) return "sun";
+  return "cloud";
+}
+function weatherIconFor(cat: string): string {
+  switch (cat) { case "rain": return WX_RAIN_ICON; case "snow": return WX_SNOW_ICON; case "partly": return WX_PARTLY_ICON; case "sun": return WX_SUN_ICON; default: return WX_CLOUD_ICON; }
+}
+function renderWeather(data: any): void {
+  const lineEl = $("linescore-container");
+  const parent = lineEl?.parentElement;
+  if (!lineEl || !parent) return;
+  let strip = $("weather-strip");
+  if (!strip) { strip = document.createElement("div"); strip.id = "weather-strip"; strip.className = "weather-strip"; parent.insertBefore(strip, lineEl); }
+  const w = data?.gameData?.weather;
+  const cond = String(w?.condition || "").trim();
+  const temp = String(w?.temp || "").trim();
+  if (!cond && !temp) { strip.style.display = "none"; return; }
+  strip.style.display = "";
+  if (/dome|roof|indoor/i.test(cond)) { strip.innerHTML = '<span class="weather-pill wx-roof"><span class="weather-icon">' + WX_ROOF_ICON + '</span><span class="weather-text">Roof Closed</span></span>'; return; }
+  const cat = weatherCategory(cond);
+  const tempTxt = temp ? `${temp}°` : "";
+  const sep = cond && tempTxt ? " · " : "";
+  strip.innerHTML = `<span class="weather-pill wx-${cat}"><span class="weather-icon">${weatherIconFor(cat)}</span><span class="weather-text">${cond}${sep}${tempTxt}</span></span>`;
+}
+
+let clipMapCache: { pk: number; map: Record<string, string>; ts: number } | null = null;
+async function getClipMap(pk: number): Promise<Record<string, string>> {
+  const now = Date.now();
+  if (clipMapCache && clipMapCache.pk === pk && now - clipMapCache.ts < 30000) return clipMapCache.map;
+  try { const res = await fetch(`/api/clips/${pk}`); if (!res.ok) return clipMapCache?.map || {}; const map = (await res.json()) as Record<string, string>; clipMapCache = { pk, map, ts: now }; return map; } catch (e) { reportError("getClipMap", e); return clipMapCache?.map || {}; }
+}
+function playClipId(play: any): string {
+  const evs = play?.playEvents;
+  if (!Array.isArray(evs)) return "";
+  for (let i = evs.length - 1; i >= 0; i--) { const pid = evs[i]?.playId; if (pid) return String(pid); }
+  return "";
+}
+interface StatcastEntry { xba: string; ev: string; la: string; dist: string; barrel: number; }
+let statcastCache: { pk: number; map: Record<string, StatcastEntry>; ts: number } | null = null;
+async function getStatcastMap(pk: number): Promise<Record<string, StatcastEntry>> {
+  const now = Date.now();
+  if (statcastCache && statcastCache.pk === pk && now - statcastCache.ts < 30000) return statcastCache.map;
+  try {
+    const res = await fetch(`/api/statcast/${pk}`);
+    if (!res.ok) return statcastCache?.map || {};
+    const map = (await res.json()) as Record<string, StatcastEntry>;
+    statcastCache = { pk, map, ts: now };
+    return map;
+  } catch (e) { reportError("getStatcastMap", e); return statcastCache?.map || {}; }
+}
+async function augmentStatcast(): Promise<void> {
+  if (gamePk == null) return;
+  const lists = [$("scoring-plays-list"), $("all-plays-list")].filter((x): x is HTMLElement => !!x);
+  if (!lists.length) return;
+  const cards: HTMLElement[] = [];
+  lists.forEach((l) => l.querySelectorAll<HTMLElement>(".play-card[data-clip-key]").forEach((c) => cards.push(c)));
+  if (!cards.length) return;
+  const map = await getStatcastMap(gamePk);
+  cards.forEach((card) => {
+    const keyId = card.getAttribute("data-clip-key");
+    if (!keyId) return;
+    const sc = map[keyId];
+    if (!sc || !sc.xba) return;
+    if (card.querySelector(".play-statcast")) return;
+    const bits: string[] = [];
+    if (sc.ev) bits.push(`<span class="sc-ev${sc.barrel ? " sc-barrel" : ""}">${sc.ev} mph</span>`);
+    if (sc.la) bits.push(`<span class="sc-la">${sc.la}°</span>`);
+    bits.push(`<span class="sc-xba">xBA ${sc.xba}</span>`);
+    const strip = document.createElement("div");
+    strip.className = "play-statcast";
+    strip.innerHTML = bits.join("");
+    (card.querySelector(".play-main") || card).appendChild(strip);
+  });
+}
+
+// ═══ Highlights (curated MLB clips — same content feed as the scoring videos) ═══
+interface HlItem { t: string; u: string; }
+let hlCache: { pk: number; items: HlItem[]; ts: number } | null = null;
+async function fetchHighlights(pk: number): Promise<HlItem[]> {
+  const now = Date.now();
+  if (hlCache && hlCache.pk === pk && now - hlCache.ts < 60000) return hlCache.items;
+  try {
+    const res = await fetch(`/api/highlights/${pk}`);
+    if (!res.ok) return hlCache?.items || [];
+    const items = (await res.json()) as HlItem[];
+    hlCache = { pk, items: Array.isArray(items) ? items : [], ts: now };
+    return hlCache.items;
+  } catch (e) { reportError("fetchHighlights", e); return hlCache?.items || []; }
+}
+async function renderHighlights(): Promise<void> {
+  if (gamePk == null) return;
+  const list = $("highlights-list");
+  if (!list) return;
+  const items = await fetchHighlights(gamePk);
+  if (!items.length) {
+    list.innerHTML = '<div class="hl-empty">No highlights yet — they appear here as MLB posts them.</div>';
+    return;
+  }
+  list.innerHTML = items.map((it, i) =>
+    `<button class="hl-row" type="button" data-i="${i}"><span class="hl-play">` +
+    VIDEO_ICON + `</span><span class="hl-title"></span></button>`).join("");
+  list.querySelectorAll<HTMLElement>(".hl-row").forEach((row) => {
+    const i = Number(row.getAttribute("data-i"));
+    const it = items[i];
+    if (!it) return;
+    const titleEl = row.querySelector(".hl-title");
+    if (titleEl) titleEl.textContent = it.t; // textContent — titles are external text
+    row.addEventListener("click", () => { try { navigateTo(it.u); } catch (e) { reportError("navigateTo(hl)", e); } });
+  });
+}
+
+async function augmentScoringVideos(): Promise<void> {
+  if (gamePk == null) return;
+  const container = $("scoring-plays-list");
+  if (!container) return;
+  const cards = container.querySelectorAll<HTMLElement>(".play-card[data-clip-key]");
+  if (cards.length === 0) return;
+  const map = await getClipMap(gamePk);
+  cards.forEach((card) => {
+    const key = card.getAttribute("data-clip-key");
+    if (!key) return;
+    const url = map[key];
+    if (!url) return;
+    if (card.querySelector(".play-video-btn")) return;
+    const btn = document.createElement("button");
+    btn.type = "button"; btn.className = "play-video-btn"; btn.setAttribute("aria-label", "Watch this play");
+    btn.innerHTML = VIDEO_ICON + "<span>VIDEO</span>";
+    btn.addEventListener("click", (e) => { e.stopPropagation(); try { navigateTo(url); } catch (err) { reportError("navigateTo(video)", err); } });
+    (card.querySelector(".play-main") || card).appendChild(btn);
+  });
+}
+
+// ═══ Standings tab (AL / NL / Wild Card / Bracket) ═══
+const STAND_DIVISION_NAMES: Record<number, string> = { 201: "AL East", 202: "AL Central", 200: "AL West", 204: "NL East", 205: "NL Central", 203: "NL West" };
+const STAND_TEAM_ABBR: Record<number, string> = { 108:"LAA",109:"ARI",110:"BAL",111:"BOS",112:"CHC",113:"CIN",114:"CLE",115:"COL",116:"DET",117:"HOU",118:"KC",119:"LAD",120:"WSH",121:"NYM",133:"OAK",134:"PIT",135:"SD",136:"SEA",137:"SF",138:"STL",139:"TB",140:"TEX",141:"TOR",142:"MIN",143:"PHI",144:"ATL",145:"CWS",146:"MIA",147:"NYY",158:"MIL" };
+
+let standCache: any = null;
+let standCacheTs = 0;
+let standActiveLeague = "AL";
+let standLoaded = false;
+
+async function fetchStandingsData(): Promise<any> {
+  const now = Date.now();
+  if (standCache && now - standCacheTs < 120000) return standCache;
+  const res = await fetch("/api/standings");
+  if (!res.ok) throw new Error("standings fetch failed");
+  const data = await res.json();
+  standCache = data; standCacheTs = now;
+  return data;
+}
+function standAbbr(team: any): string {
+  const id = team?.id;
+  return (id != null && STAND_TEAM_ABBR[id]) || String(team?.abbreviation || team?.name?.split(" ").pop() || "").toUpperCase();
+}
+function standPct(p: any): string {
+  if (!p || p === "0") return ".000";
+  const f = parseFloat(p);
+  return f < 1 ? "." + String(Math.round(f * 1000)).padStart(3, "0") : f.toFixed(3);
+}
+function standGB(leadW: number, leadL: number, w: number, l: number): string {
+  if (w === leadW && l === leadL) return "—";
+  const gb = ((leadW - w) + (l - leadL)) / 2;
+  return gb % 1 === 0 ? String(gb) : gb.toFixed(1);
+}
+function standTeamRow(team: any, rank: number, isFirst: boolean, gb: string, clinchLine: boolean): string {
+  const id = team?.team?.id;
+  const abbr = standAbbr(team?.team);
+  const p = parseFloat(team?.winningPercentage) || 0;
+  const barPct = Math.max(0, Math.min(100, ((p - 0.35) / 0.35) * 100));
+  return `<div class="stand-row${isFirst ? " leader" : ""}${clinchLine ? " playoff-line" : ""}">` +
+    `<span class="stand-pos${isFirst ? " first" : ""}">${rank}</span>` +
+    `<span class="stand-team"><img class="stand-logo" src="${getLogoPath(id)}" onerror="${logoFallbackAttr(id)}" alt="${abbr}"><span class="stand-abbr">${abbr}</span></span>` +
+    `<span class="stand-stat">${team?.wins ?? 0}</span>` +
+    `<span class="stand-stat">${team?.losses ?? 0}</span>` +
+    `<span class="stand-stat muted">${gb}</span>` +
+    `<span class="stand-stat muted">${team?.runsScored ?? "—"}</span>` +
+    `<span class="stand-stat muted">${team?.runsAllowed ?? "—"}</span>` +
+    `<span class="stand-stat ${(team?.runDifferential ?? 0) > 0 ? "pos" : (team?.runDifferential ?? 0) < 0 ? "neg" : ""}">${(team?.runDifferential ?? 0) > 0 ? "+" : ""}${team?.runDifferential ?? "—"}</span>` +
+    `<span class="stand-pct"><span class="stand-pct-val">${standPct(team?.winningPercentage)}</span><span class="stand-bar"><span class="stand-bar-fill" style="width:${barPct}%"></span></span></span>` +
+    `</div>`;
+}
+function standColHdr(): string {
+  return '<div class="stand-col-hdr"><span>#</span><span class="stand-col-team">Team</span><span>W</span><span>L</span><span>GB</span><span>R</span><span>RA</span><span>DIFF</span><span class="stand-col-pct">PCT</span></div>';
+}
+function standDivisionCard(record: any): string {
+  const name = STAND_DIVISION_NAMES[record?.division?.id] || "Division";
+  const teams = [...(record?.teamRecords || [])].sort((a: any, b: any) => parseFloat(b.winningPercentage) - parseFloat(a.winningPercentage));
+  const lead = teams[0];
+  const rows = teams.map((t: any, i: number) => standTeamRow(t, i + 1, i === 0, standGB(lead?.wins || 0, lead?.losses || 0, t.wins, t.losses), false)).join("");
+  return `<div class="stand-card"><div class="stand-card-hdr"><span class="stand-card-dot"></span><span class="stand-card-name">${name}</span></div>${standColHdr()}${rows}</div>`;
+}
+function standWildcardCards(data: any): string {
+  return ["AL", "NL"].map((lg) => {
+    const leagueId = lg === "AL" ? 103 : 104;
+    const wc: any[] = [];
+    (data?.records || []).forEach((rec: any) => { if (rec?.league?.id !== leagueId) return; (rec.teamRecords || []).forEach((t: any) => { if (t.wildCardRank && parseInt(t.wildCardRank) <= 8) wc.push(t); }); });
+    wc.sort((a, b) => parseInt(a.wildCardRank) - parseInt(b.wildCardRank));
+    const rows = wc.map((t) => { const rank = parseInt(t.wildCardRank); const gbRaw = t.wildCardGamesBack || t.gamesBack; const gb = !gbRaw || gbRaw === "-" || gbRaw === "0.0" || gbRaw === 0 ? "—" : gbRaw; return standTeamRow(t, rank, rank <= 3, gb, rank === 4); }).join("");
+    return `<div class="stand-card"><div class="stand-card-hdr"><span class="stand-card-dot"></span><span class="stand-card-name">${lg} Wild Card</span><span class="stand-wc-badge">3 spots</span></div>${standColHdr()}${rows}</div>`;
+  }).join("");
+}
+const TEAM_DIVISION: Record<number, number> = {
+  110:201,111:201,147:201,139:201,141:201,          // AL East
+  145:202,114:202,116:202,118:202,142:202,          // AL Central
+  117:200,108:200,133:200,136:200,140:200,          // AL West
+  144:204,146:204,121:204,143:204,120:204,          // NL East
+  112:205,113:205,158:205,134:205,138:205,          // NL Central
+  109:203,115:203,119:203,135:203,137:203,          // NL West
+};
+let sbCache: { date: string; data: any; ts: number } | null = null;
+async function fetchScoreboard(): Promise<any> {
+  // Pin the slate to THIS thread's game date — an old thread should keep
+  // showing its own day's division games, not drift to today's.
+  const od = lastGameData?.gameData?.datetime?.officialDate;
+  const date = typeof od === "string" && /^\d{4}-\d{2}-\d{2}$/.test(od) ? od : "";
+  const now = Date.now();
+  if (sbCache && sbCache.date === date && now - sbCache.ts < 60000) return sbCache.data;
+  const res = await fetch(date ? `/api/scoreboard/${date}` : "/api/scoreboard");
+  if (!res.ok) throw new Error("scoreboard fetch failed");
+  const data = await res.json();
+  sbCache = { date, data, ts: now };
+  return data;
+}
+function sbStatusHtml(g: any): string {
+  const abstract = String(g?.status?.abstractGameState || "");
+  if (abstract === "Live") {
+    const ls = g?.linescore || {};
+    const inn = ls.currentInning ?? "";
+    const st = String(ls.inningState || "");
+    const mark = st === "Top" ? "\u25B2" : st === "Bottom" ? "\u25BC" : st === "Middle" ? "M" : st === "End" ? "E" : "";
+    return `<span class="sb-live-dot"></span><span class="sb-inn">${mark}${inn}</span>`;
+  }
+  if (abstract === "Final") {
+    const inn = g?.linescore?.currentInning;
+    return `<span class="sb-final">F${typeof inn === "number" && inn > 9 ? "/" + inn : ""}</span>`;
+  }
+  let time = "";
+  // No timeZone option — this runs on the viewer's device, so the start time
+  // renders in THEIR local zone (Central user sees Central, etc.).
+  try { time = new Date(g.gameDate).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }); } catch { time = ""; }
+  return `<span class="sb-time">${time}</span>`;
+}
+function sbTeamRow(side: any): string {
+  const id = side?.team?.id;
+  const abbr = (id != null && STAND_TEAM_ABBR[id]) || String(side?.team?.abbreviation || "").toUpperCase() || "—";
+  const score = side?.score ?? "";
+  return `<div class="sb-team"><img class="sb-logo" src="${getLogoPath(id)}" onerror="${logoFallbackAttr(id)}" alt=""><span class="sb-abbr">${abbr}</span><span class="sb-score">${score}</span></div>`;
+}
+async function renderDivOpp(): Promise<string> {
+  const data = await fetchScoreboard();
+  const games: any[] = data?.sched?.dates?.[0]?.games || [];
+  const cfgTeam: number | null = data?.teamId != null && /^\d+$/.test(String(data.teamId)) ? Number(data.teamId) : null;
+  const divs = new Set<number>();
+  const cfgDiv = cfgTeam != null ? TEAM_DIVISION[cfgTeam] : undefined;
+  if (cfgDiv != null) {
+    // A configured sub team owns the view: its division only.
+    divs.add(cfgDiv);
+  } else {
+    // No team configured (an all-games sub): show BOTH clubs' divisions.
+    const awayId = lastGameData?.gameData?.teams?.away?.id;
+    const homeId = lastGameData?.gameData?.teams?.home?.id;
+    const da = typeof awayId === "number" ? TEAM_DIVISION[awayId] : undefined;
+    const dh = typeof homeId === "number" ? TEAM_DIVISION[homeId] : undefined;
+    if (da != null) divs.add(da);
+    if (dh != null) divs.add(dh);
+  }
+  const inDiv = (g: any): boolean => {
+    if (divs.size === 0) return true; // nothing derivable — whole slate
+    const a = g?.teams?.away?.team?.id, hm = g?.teams?.home?.team?.id;
+    const ga = TEAM_DIVISION[a], gh = TEAM_DIVISION[hm];
+    return (ga != null && divs.has(ga)) || (gh != null && divs.has(gh));
+  };
+  const rows = games
+    .filter((g) => g?.gamePk !== gamePk)
+    .filter(inDiv)
+    .map((g) => `<div class="sb-box"><div class="sb-status">${sbStatusHtml(g)}</div>${sbTeamRow(g.teams?.away)}${sbTeamRow(g.teams?.home)}</div>`)
+    .join("");
+  return rows ? `<div class="sb-grid">${rows}</div>` : '<div class="stand-msg">No division games today.</div>';
+}
+
+async function loadStandingsView(): Promise<void> {
+  standLoaded = true;
+  const body = $("stand-body");
+  if (!body) return;
+  const lg = standActiveLeague;
+  body.innerHTML = '<div class="stand-msg">Loading…</div>';
+  if (lg === "DIV") {
+    try { body.innerHTML = await renderDivOpp(); }
+    catch (e) { reportError("renderDivOpp", e); body.innerHTML = '<div class="stand-msg">Could not load the scoreboard.</div>'; }
+    return;
+  }
+  try {
+    const data = await fetchStandingsData();
+    if (lg === "WC") { body.innerHTML = standWildcardCards(data); return; }
+    const divIds = lg === "AL" ? [201, 202, 200] : [204, 205, 203];
+    const cards = divIds.map((id) => { const rec = (data?.records || []).find((r: any) => r?.division?.id === id); return rec ? standDivisionCard(rec) : ""; }).join("");
+    body.innerHTML = cards || '<div class="stand-msg">No standings available.</div>';
+  } catch (e) {
+    reportError("loadStandingsView", e);
+    body.innerHTML = '<div class="stand-msg">Could not load standings.</div>';
+  }
+}
+function setStandLeague(lg: string): void {
+  standActiveLeague = lg;
+  const nav = $("stand-nav");
+  if (nav) { nav.setAttribute("data-active", lg); nav.querySelectorAll<HTMLElement>(".stand-seg").forEach((s) => s.classList.toggle("is-active", s.getAttribute("data-league") === lg)); }
+  void loadStandingsView();
+}
+function setupStandings(): void {
+  const nav = $("stand-nav");
+  if (!nav) return;
+  nav.querySelectorAll<HTMLElement>(".stand-seg").forEach((seg) => { seg.addEventListener("click", () => { const lg = seg.getAttribute("data-league"); if (lg) setStandLeague(lg); }); });
+  // Re-render on theme change so team logos swap to the correct light/dark variant.
+  const obs = new MutationObserver(() => { if (standLoaded) void loadStandingsView(); });
+  obs.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+}
+
+// ═══ Tap-a-player → season stat box (Stage 1: bio + season stats, no fetch) ═══
+interface PlStat { name: string; label: string; fmt?: (v: any) => string; }
+const PL_RATE = (v: any): string => { const f = parseFloat(v); return isNaN(f) ? "-" : f.toFixed(3).replace(/^0+/, ""); };
+const PL_F2 = (v: any): string => { const f = parseFloat(v); return isNaN(f) ? "-" : f.toFixed(2); };
+const PL_F1 = (v: any): string => { const f = parseFloat(v); return isNaN(f) ? "-" : f.toFixed(1); };
+const PLAYER_HITTING_STATS: PlStat[] = [
+  { name: "avg", label: "AVG", fmt: PL_RATE }, { name: "homeRuns", label: "HR" }, { name: "rbi", label: "RBI" },
+  { name: "ops", label: "OPS", fmt: PL_RATE }, { name: "obp", label: "OBP", fmt: PL_RATE }, { name: "slg", label: "SLG", fmt: PL_RATE },
+  { name: "hits", label: "H" }, { name: "runs", label: "R" }, { name: "doubles", label: "2B" }, { name: "triples", label: "3B" },
+  { name: "stolenBases", label: "SB" }, { name: "baseOnBalls", label: "BB" }, { name: "strikeOuts", label: "SO" }, { name: "plateAppearances", label: "PA" }, { name: "totalBases", label: "TB" },
+];
+const PLAYER_PITCHING_STATS: PlStat[] = [
+  { name: "era", label: "ERA", fmt: PL_F2 }, { name: "whip", label: "WHIP", fmt: PL_RATE }, { name: "strikeOuts", label: "K" }, { name: "wins", label: "W" }, { name: "losses", label: "L" },
+  { name: "saves", label: "SV" }, { name: "holds", label: "HLD" }, { name: "inningsPitched", label: "IP", fmt: PL_F1 },
+  { name: "strikeoutWalkRatio", label: "K/BB", fmt: PL_F2 }, { name: "hits", label: "H" }, { name: "runs", label: "R" }, { name: "homeRuns", label: "HR" },
+  { name: "baseOnBalls", label: "BB" }, { name: "gamesPlayed", label: "G" }, { name: "gamesStarted", label: "GS" },
+];
+
+function plAdvancedCells(stats: any, isPitcher: boolean): string {
+  if (!stats) return "";
+  const num = (v: any): number => parseFloat(v);
+  const cell = (val: string, lbl: string): string => `<div class="pl-adv-i"><span class="pl-adv-v">${val}</span><span class="pl-adv-l">${lbl}</span></div>`;
+  const out: string[] = [];
+  if (isPitcher) {
+    const ip = num(stats.inningsPitched), so = num(stats.strikeOuts), bb = num(stats.baseOnBalls), hr = num(stats.homeRuns);
+    if (ip > 0) {
+      if (!isNaN(so)) out.push(cell(((so * 9) / ip).toFixed(1), "K/9"));
+      if (!isNaN(bb)) out.push(cell(((bb * 9) / ip).toFixed(1), "BB/9"));
+      if (!isNaN(hr)) out.push(cell(((hr * 9) / ip).toFixed(1), "HR/9"));
+    }
+  } else {
+    const slg = num(stats.slg), avg = num(stats.avg), pa = num(stats.plateAppearances), bb = num(stats.baseOnBalls), so = num(stats.strikeOuts);
+    if (!isNaN(slg) && !isNaN(avg)) out.push(cell((slg - avg).toFixed(3).replace(/^0+/, ""), "ISO"));
+    if (pa > 0 && !isNaN(bb)) out.push(cell(((bb / pa) * 100).toFixed(1) + "%", "BB%"));
+    if (pa > 0 && !isNaN(so)) out.push(cell(((so / pa) * 100).toFixed(1) + "%", "K%"));
+  }
+  return out.join("");
+}
+
+function buildPlayerBox(playerId: string): string {
+  const data = lastGameData;
+  if (!data) return '<div class="pl-box"><div class="pl-msg">No player data available.</div></div>';
+  const bio: any = data.gameData?.players?.["ID" + playerId] || {};
+  let seasonBat: any = null, seasonPit: any = null, teamId: any = null, teamName = "";
+  const teams: any = data.liveData?.boxscore?.teams || {};
+  for (const side of ["away", "home"]) {
+    const p: any = teams[side]?.players?.["ID" + playerId];
+    if (p) { seasonBat = p.seasonStats?.batting; seasonPit = p.seasonStats?.pitching; teamId = teams[side]?.team?.id; teamName = teams[side]?.team?.name || ""; break; }
+  }
+  const name = bio.fullName || "Player";
+  const pos = bio.primaryPosition?.abbreviation || "";
+  const posName = bio.primaryPosition?.name || pos;
+  const isPitcher = pos === "P";
+  const stats: any = isPitcher ? seasonPit : seasonBat;
+  let logoSrc = "";
+  if (teamId != null) logoSrc = MLB_TEAM_IDS.has(teamId) ? `/teams/dark/${teamId}.svg` : `/teams/${teamId}.svg`;
+  const logo = teamId != null ? `<img class="pl-team-logo" src="${logoSrc}" onerror="${logoFallbackAttr(teamId)}" alt="">` : "";
+  const details: string[] = [];
+  if (bio.primaryNumber) details.push(`<span>#${bio.primaryNumber}</span>`);
+  if (bio.currentAge) details.push(`<span>Age ${bio.currentAge}</span>`);
+  if (bio.batSide?.code && bio.pitchHand?.code) details.push(`<span>B/T ${bio.batSide.code}/${bio.pitchHand.code}</span>`);
+  const sv = (statName: string, fmt?: (v: any) => string): string => {
+    const raw = stats ? stats[statName] : null;
+    if (raw == null || raw === "") return "\u2014";
+    return fmt ? fmt(raw) : String(raw);
+  };
+  let body = '<div class="pl-msg">No season stats yet.</div>';
+  if (stats) {
+    const trio: Array<[string, string]> = isPitcher
+      ? [["ERA", sv("era", PL_F2)], ["IP", sv("inningsPitched", PL_F1)], ["K", sv("strikeOuts")]]
+      : [["AVG", sv("avg", PL_RATE)], ["OBP", sv("obp", PL_RATE)], ["SLG", sv("slg", PL_RATE)]];
+    const tiles: Array<[string, string]> = isPitcher
+      ? [["W", sv("wins")], ["L", sv("losses")], ["SV", sv("saves")], ["HLD", sv("holds")]]
+      : [["HR", sv("homeRuns")], ["RBI", sv("rbi")], ["R", sv("runs")], ["SB", sv("stolenBases")]];
+    const rows: Array<[string, string]> = isPitcher
+      ? [["WHIP", sv("whip", PL_RATE)], ["Hits", sv("hits")], ["Runs", sv("runs")], ["Home Runs", sv("homeRuns")], ["Walks", sv("baseOnBalls")], ["K/BB", sv("strikeoutWalkRatio", PL_F2)], ["Games", sv("gamesPlayed")], ["Starts", sv("gamesStarted")]]
+      : [["Hits", sv("hits")], ["Doubles", sv("doubles")], ["Triples", sv("triples")], ["Walks", sv("baseOnBalls")], ["Strikeouts", sv("strikeOuts")], ["Plate App.", sv("plateAppearances")], ["Total Bases", sv("totalBases")], ["OPS", sv("ops", PL_RATE)]];
+    const adv = plAdvancedCells(stats, isPitcher);
+    body =
+      `<div class="pl-trio">${trio.map(([l, v]) => `<div class="pl-trio-i"><div class="pl-trio-v">${v}</div><div class="pl-trio-l">${l}</div></div>`).join("")}</div>` +
+      `<div class="pl-tiles">${tiles.map(([l, v]) => `<div class="pl-tile"><div class="pl-tile-v">${v}</div><div class="pl-tile-l">${l}</div></div>`).join("")}</div>` +
+      `<div class="pl-rows">${rows.map(([l, v]) => `<div class="pl-r"><span class="pl-r-l">${l}</span><span class="pl-r-v">${v}</span></div>`).join("")}</div>` +
+      (adv ? `<div class="pl-adv">${adv}</div>` : "");
+  }
+  // Header sits OUTSIDE the scroller (pinned by flex, no position:sticky — sticky
+  // inside a programmatically scrolled container is a known WebKit blank trigger).
+  return `<div class="pl-box"><div class="pl-hdr"><button class="info-panel-close" type="button" aria-label="Close">${OVERLAY_CLOSE_ICON}</button><div class="pl-name">${name}</div>` +
+    `<div class="pl-meta"><span>${posName}</span><span class="pl-dot"></span>${logo}<span>${teamName}</span></div>` +
+    (details.length ? `<div class="pl-meta pl-details">${details.join('<span class="pl-dot"></span>')}</div>` : "") +
+    `</div><div class="pl-scroll"><div class="pl-form" id="pl-form"></div>` + body + "</div></div>";
+}
+
+let plCurrentId = "";
+async function fetchPlayerRecent(id: string, group: string): Promise<{ label: string; sub: string; cls: string } | null> {
+  try {
+    const res = await fetch(`/api/player-recent/${id}/${group}`);
+    if (!res.ok) return null;
+    const data: any = await res.json();
+    const games: any[] = data?.stats?.[0]?.splits || [];
+    if (!games.length) return null;
+    if (group === "hitting") {
+      let ab = 0, h = 0;
+      games.forEach((g) => { ab += Number(g.stat?.atBats) || 0; h += Number(g.stat?.hits) || 0; });
+      if (ab <= 0) return null;
+      const avg = h / ab;
+      const disp = avg.toFixed(3).replace(/^0+/, "");
+      const cls = avg > 0.285 ? "hot" : avg >= 0.225 ? "steady" : "cold";
+      const word = cls === "hot" ? "Hot" : cls === "steady" ? "Steady" : "Cold";
+      return { label: `${word} · last ${games.length}`, sub: `${disp} AVG`, cls };
+    } else {
+      let er = 0, ip = 0;
+      games.forEach((g) => {
+        er += Number(g.stat?.earnedRuns) || 0;
+        const s = String(g.stat?.inningsPitched || "0");
+        if (s.includes(".")) { const p = s.split("."); ip += (Number(p[0]) || 0) + (Number(p[1]) || 0) / 3; }
+        else ip += Number(s) || 0;
+      });
+      if (ip <= 0) return null;
+      const era = (er / ip) * 9;
+      const disp = era.toFixed(2);
+      const cls = era < 3.0 ? "hot" : era <= 3.9 ? "steady" : "cold";
+      const word = cls === "hot" ? "Hot" : cls === "steady" ? "Steady" : "Cold";
+      return { label: `${word} · last ${games.length}`, sub: `${disp} ERA`, cls };
+    }
+  } catch (e) { reportError("fetchPlayerRecent", e); return null; }
+}
+async function openPlayer(playerId: string): Promise<void> {
+  plCurrentId = playerId;
+  openPlayerOverlay(buildPlayerBox(playerId));
+  const data = lastGameData;
+  if (!data) return;
+  const bio: any = data.gameData?.players?.["ID" + playerId];
+  const group = bio?.primaryPosition?.abbreviation === "P" ? "pitching" : "hitting";
+  const loadEl = $("pl-form");
+  if (loadEl) loadEl.innerHTML = '<span class="pl-form-load">Checking recent form…</span>';
+  const form = await fetchPlayerRecent(playerId, group);
+  if (plCurrentId !== playerId) return; // user tapped a different player mid-fetch
+  const el = $("pl-form");
+  if (!el) return;
+  if (!form) { el.innerHTML = ""; return; }
+  el.innerHTML = `<span class="pl-badge pl-${form.cls}"><span class="pl-badge-word">${form.label}</span><span class="pl-badge-val">${form.sub}</span></span>`;
+}
+
+function openPlayerOverlay(html: string): void {
+  const host = $("scorebug-content") || document.body;
+  let ov = infoOverlayEl;
+  if (!ov) { ov = document.createElement("div"); ov.className = "info-overlay"; ov.addEventListener("click", (e) => { if (e.target === ov) closeInfoOverlay(); }); host.appendChild(ov); infoOverlayEl = ov; }
+  ov.innerHTML = '<div class="info-panel pl-panel">' + html + "</div>";
+  ov.querySelector(".info-panel-close")?.addEventListener("click", closeInfoOverlay);
+  ov.style.display = "flex"; void ov.offsetWidth; ov.classList.add("is-open");
+  syncOverlayScroll();
+}
+
+function setupPlayerTaps(): void {
+  const box = $("tab-box");
+  if (!box) return;
+  box.addEventListener("click", (e) => {
+    const target = e.target as HTMLElement | null;
+    const row = target?.closest?.(".bs-row[data-player-id]") as HTMLElement | null;
+    if (!row) return;
+    const id = row.getAttribute("data-player-id");
+    if (!id) return;
+    void openPlayer(id);
+  });
+}
+
 (async (): Promise<void> => {
   setupTabs();
+  setupPlaysToggle();
   setupBoxScoreTeamTabs();
   setupWinProbDismiss();
   setupThemeToggle();
   setupExpand();
+  setupGraphButton();
+  setupTvButton();
+  setupStandings();
+  setupPlayerTaps();
   setupInlinePager();
 
   // When the post returns to view, refresh immediately (only while the poll is

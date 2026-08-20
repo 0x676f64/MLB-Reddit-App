@@ -1,11 +1,9 @@
 {
   "$schema": "https://developers.reddit.com/schema/config-file.v1.json",
   "name": "mlb-scores",
-
   "marketingAssets": {
     "icon": "assets/mlb-scores-logo.png"
   },
-
   "permissions": {
     "http": {
       "enable": true,
@@ -24,7 +22,6 @@
       "enable": true
     }
   },
-
   "post": {
     "dir": "public",
     "entrypoints": {
@@ -37,12 +34,10 @@
       }
     }
   },
-
   "server": {
     "dir": "dist/server",
     "entry": "index.js"
   },
-
   "settings": {
     "subreddit": {
       "teamId": {
@@ -50,39 +45,167 @@
         "label": "MLB Team Filter",
         "helpText": "Pick the team this subreddit follows. Game threads will only post for that team's games. Choose 'All Teams' for sport-wide subs that cover every game.",
         "options": [
-          { "label": "All Teams (post every game)", "value": "" },
-          { "label": "Arizona Diamondbacks",   "value": "109" },
-          { "label": "Athletics",              "value": "133" },
-          { "label": "Atlanta Braves",         "value": "144" },
-          { "label": "Baltimore Orioles",      "value": "110" },
-          { "label": "Boston Red Sox",         "value": "111" },
-          { "label": "Chicago Cubs",           "value": "112" },
-          { "label": "Chicago White Sox",      "value": "145" },
-          { "label": "Cincinnati Reds",        "value": "113" },
-          { "label": "Cleveland Guardians",    "value": "114" },
-          { "label": "Colorado Rockies",       "value": "115" },
-          { "label": "Detroit Tigers",         "value": "116" },
-          { "label": "Houston Astros",         "value": "117" },
-          { "label": "Kansas City Royals",     "value": "118" },
-          { "label": "Los Angeles Angels",     "value": "108" },
-          { "label": "Los Angeles Dodgers",    "value": "119" },
-          { "label": "Miami Marlins",          "value": "146" },
-          { "label": "Milwaukee Brewers",      "value": "158" },
-          { "label": "Minnesota Twins",        "value": "142" },
-          { "label": "New York Mets",          "value": "121" },
-          { "label": "New York Yankees",       "value": "147" },
-          { "label": "Philadelphia Phillies",  "value": "143" },
-          { "label": "Pittsburgh Pirates",     "value": "134" },
-          { "label": "San Diego Padres",       "value": "135" },
-          { "label": "San Francisco Giants",   "value": "137" },
-          { "label": "Seattle Mariners",       "value": "136" },
-          { "label": "St. Louis Cardinals",    "value": "138" },
-          { "label": "Tampa Bay Rays",         "value": "139" },
-          { "label": "Texas Rangers",          "value": "140" },
-          { "label": "Toronto Blue Jays",      "value": "141" },
-          { "label": "Washington Nationals",   "value": "120" }
+          {
+            "label": "All Teams (post every game)",
+            "value": ""
+          },
+          {
+            "label": "Arizona Diamondbacks",
+            "value": "109"
+          },
+          {
+            "label": "Athletics",
+            "value": "133"
+          },
+          {
+            "label": "Atlanta Braves",
+            "value": "144"
+          },
+          {
+            "label": "Baltimore Orioles",
+            "value": "110"
+          },
+          {
+            "label": "Boston Red Sox",
+            "value": "111"
+          },
+          {
+            "label": "Chicago Cubs",
+            "value": "112"
+          },
+          {
+            "label": "Chicago White Sox",
+            "value": "145"
+          },
+          {
+            "label": "Cincinnati Reds",
+            "value": "113"
+          },
+          {
+            "label": "Cleveland Guardians",
+            "value": "114"
+          },
+          {
+            "label": "Colorado Rockies",
+            "value": "115"
+          },
+          {
+            "label": "Detroit Tigers",
+            "value": "116"
+          },
+          {
+            "label": "Houston Astros",
+            "value": "117"
+          },
+          {
+            "label": "Kansas City Royals",
+            "value": "118"
+          },
+          {
+            "label": "Los Angeles Angels",
+            "value": "108"
+          },
+          {
+            "label": "Los Angeles Dodgers",
+            "value": "119"
+          },
+          {
+            "label": "Miami Marlins",
+            "value": "146"
+          },
+          {
+            "label": "Milwaukee Brewers",
+            "value": "158"
+          },
+          {
+            "label": "Minnesota Twins",
+            "value": "142"
+          },
+          {
+            "label": "New York Mets",
+            "value": "121"
+          },
+          {
+            "label": "New York Yankees",
+            "value": "147"
+          },
+          {
+            "label": "Philadelphia Phillies",
+            "value": "143"
+          },
+          {
+            "label": "Pittsburgh Pirates",
+            "value": "134"
+          },
+          {
+            "label": "San Diego Padres",
+            "value": "135"
+          },
+          {
+            "label": "San Francisco Giants",
+            "value": "137"
+          },
+          {
+            "label": "Seattle Mariners",
+            "value": "136"
+          },
+          {
+            "label": "St. Louis Cardinals",
+            "value": "138"
+          },
+          {
+            "label": "Tampa Bay Rays",
+            "value": "139"
+          },
+          {
+            "label": "Texas Rangers",
+            "value": "140"
+          },
+          {
+            "label": "Toronto Blue Jays",
+            "value": "141"
+          },
+          {
+            "label": "Washington Nationals",
+            "value": "120"
+          }
         ],
         "defaultValue": ""
+      },
+      "commentSort": {
+        "type": "select",
+        "label": "Comment Sort for App Threads",
+        "helpText": "Suggested comment sort for the game and postgame threads this app posts. 'Reddit default' leaves Reddit's own sort in place.",
+        "options": [
+          {
+            "label": "Reddit default",
+            "value": ""
+          },
+          {
+            "label": "New",
+            "value": "NEW"
+          },
+          {
+            "label": "Top",
+            "value": "TOP"
+          },
+          {
+            "label": "Best",
+            "value": "CONFIDENCE"
+          },
+          {
+            "label": "Old",
+            "value": "OLD"
+          },
+          {
+            "label": "Q&A",
+            "value": "QA"
+          },
+          {
+            "label": "Controversial",
+            "value": "CONTROVERSIAL"
+          }
+        ]
       },
       "autoPostgame": {
         "type": "boolean",
@@ -107,8 +230,14 @@
         "label": "Thread type",
         "helpText": "\"Game Thread\" is the standard mode — posts a Game Thread for each game, plus an automatic Postgame Thread if enabled above. \"Broadcast Thread\" runs the app as an advanced/analytics companion to your existing game threads: posts use the Broadcast label below instead of \"Game Thread\", and NO automatic postgame or postponement threads are posted (the app only posts the threads you create from the menu).",
         "options": [
-          { "label": "Game Thread (standard — posts game + postgame threads)", "value": "game" },
-          { "label": "Broadcast Thread (companion — no automatic posts)", "value": "broadcast" }
+          {
+            "label": "Game Thread (standard — posts game + postgame threads)",
+            "value": "game"
+          },
+          {
+            "label": "Broadcast Thread (companion — no automatic posts)",
+            "value": "broadcast"
+          }
         ],
         "defaultValue": "game"
       },
@@ -123,19 +252,39 @@
         "label": "Broadcast delay",
         "helpText": "Delay the live scoreboard by a few seconds so fans following along on a TV or streaming feed aren't spoiled by seeing plays before they happen on their screen. Off shows real-time data. Pick the delay that best matches how far behind your feed runs. No plays are skipped — the game just runs this far behind.",
         "options": [
-          { "label": "Off (real-time)", "value": "0" },
-          { "label": "5 seconds", "value": "5" },
-          { "label": "8 seconds", "value": "8" },
-          { "label": "10 seconds", "value": "10" },
-          { "label": "12 seconds", "value": "12" },
-          { "label": "15 seconds", "value": "15" },
-          { "label": "20 seconds", "value": "20" }
+          {
+            "label": "Off (real-time)",
+            "value": "0"
+          },
+          {
+            "label": "5 seconds",
+            "value": "5"
+          },
+          {
+            "label": "8 seconds",
+            "value": "8"
+          },
+          {
+            "label": "10 seconds",
+            "value": "10"
+          },
+          {
+            "label": "12 seconds",
+            "value": "12"
+          },
+          {
+            "label": "15 seconds",
+            "value": "15"
+          },
+          {
+            "label": "20 seconds",
+            "value": "20"
+          }
         ],
         "defaultValue": "0"
       }
     }
   },
-
   "menu": {
     "items": [
       {
@@ -161,13 +310,11 @@
       }
     ]
   },
-
   "triggers": {
     "onAppInstall": "/internal/triggers/on-app-install",
     "onPostDelete": "/internal/triggers/on-post-delete",
     "onModAction": "/internal/triggers/on-mod-action"
   },
-
   "scheduler": {
     "tasks": {
       "postgame-sweep": {
@@ -176,12 +323,10 @@
       }
     }
   },
-
   "scripts": {
     "dev": "node --experimental-strip-types ./tools/build.ts --watch",
     "build": "node --experimental-strip-types ./tools/build.ts --minify"
   },
-
   "dev": {
     "subreddit": "mlb_scores_dev"
   }
